@@ -1,0 +1,165 @@
+# 02 · Roadmap por fases
+
+Cada fase tiene **objetivo, tareas, entregable y criterio de salida**. No se pasa a la siguiente hasta cumplir el criterio. Las duraciones asumen ~8–10 h/semana y son orientativas.
+
+Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Issue*.
+
+---
+
+## Fase 0 · Decisiones, setup y cuentas (≈1 semana)
+
+**Objetivo:** dejar el terreno listo y arrancar los trámites que tardan.
+
+- [ ] Elegir mecánica del MVP (recomendada: rotar tuberías) y nombre provisional
+- [ ] Decidir audiencia declarada (A: 13+ · B: incluye niños), ver `01`
+- [ ] Crear repo, ramas (`main`, `dev`) y convención de commits
+- [ ] Proyecto base: Vite + TypeScript + Phaser 3
+- [ ] Añadir Capacitor y generar proyecto `android/`; correr "hola mundo" en un teléfono real
+- [ ] Configurar Vitest y un primer test
+- [ ] **Registrar cuenta de desarrollador de Google Play** (la verificación de identidad puede tardar días) y verificar acceso desde un dispositivo Android con la app Play Console
+- [ ] Crear cuenta de AdMob y registrar la app (sin publicar aún)
+- [ ] Redactar borrador de política de privacidad (hospedable en GitHub Pages)
+
+**Entregable:** app "hola mundo" corriendo en navegador y en teléfono; cuentas creadas.
+**Criterio de salida:** `npm run dev` y `npx cap run android` funcionan.
+
+---
+
+## Fase 1 · Prototipo jugable (≈1–2 semanas)
+
+**Objetivo:** comprobar que la mecánica es divertida con un nivel fijo.
+
+- [ ] Rejilla 4×4 con piezas dibujadas con formas simples (sin arte final)
+- [ ] Tocar una pieza la rota 90° con animación corta
+- [ ] Detección de victoria (todo conectado a la fuente)
+- [ ] Pantalla de victoria y botón "otra vez" (aún con el mismo nivel)
+- [ ] Contador de toques y cronómetro internos (aún no visibles)
+- [ ] Probar con 5 personas, incluyendo alguien joven y alguien mayor, **sin explicarles nada**
+
+**Entregable:** versión jugable en web.
+**Criterio de salida:** al menos 4 de 5 personas entienden qué hacer en menos de 10 segundos. Si no, ajustar la mecánica antes de seguir.
+
+---
+
+## Fase 2 · Generador procedural (≈1–2 semanas)
+
+**Objetivo:** niveles nuevos y siempre resolubles. Detalle en `03`.
+
+- [ ] RNG con semilla (mulberry32 o similar) para reproducir cualquier nivel
+- [ ] Generador por árbol de expansión aleatorio
+- [ ] Parámetros: tamaño, ramas, ciclos, señuelos
+- [ ] Solver/validador: confirma solución y calcula mínimo de toques
+- [ ] Función de puntuación de dificultad `d(nivel)`
+- [ ] Tests: 10 000 niveles por configuración → todos resolubles, ninguno nace resuelto, misma semilla = mismo nivel
+- [ ] Generación en < 50 ms en un teléfono de gama baja
+
+**Entregable:** módulo `core/` independiente de Phaser, con tests en verde.
+**Criterio de salida:** la suite de tests pasa y se puede jugar una racha de niveles distintos.
+
+---
+
+## Fase 3 · Dificultad adaptativa, modos y accesibilidad (≈1–2 semanas)
+
+**Objetivo:** que el juego se ajuste solo al jugador.
+
+- [ ] Registrar por partida: tiempo, toques, pistas, abandono (local)
+- [ ] Algoritmo de ajuste v1 (escalera simple) y, si hace falta, v2 (tipo Elo)
+- [ ] Modos elegibles por el jugador: **Relajado / Normal / Reto**
+- [ ] Opciones de accesibilidad: tamaño de piezas, alto contraste, modo daltónico (patrones además de color), velocidad de animación, vibración on/off
+- [ ] Tutorial de 1 nivel guiado, sin texto largo
+- [ ] Guardado local de progreso (`@capacitor/preferences` en móvil, `localStorage` en web)
+- [ ] Probar el ajuste con 3 tipos de jugador (niño, adulto, persona mayor) y afinar parámetros
+
+**Entregable:** el juego sube y baja la dificultad según el desempeño.
+**Criterio de salida:** en pruebas, nadie se atora más de 3 niveles seguidos sin que baje la dificultad, y nadie resuelve 5 seguidos sin que suba.
+
+---
+
+## Fase 4 · Pulido y "enganche" (≈1–2 semanas)
+
+**Objetivo:** que dé ganas de jugar "una más".
+
+- [ ] Arte final simple y coherente (paleta, tipografía, icono)
+- [ ] Sonido y vibración al rotar, conectar y ganar (con opción de silencio)
+- [ ] Efecto de "energía fluyendo" al completar el circuito
+- [ ] **Reto diario:** semilla derivada de la fecha, igual para todos
+- [ ] **Racha diaria** y estadísticas (mejor tiempo, partidas resueltas)
+- [ ] Reinicio instantáneo tras ganar
+- [ ] Pistas: resaltar una pieza mal colocada (esto será el gancho de los anuncios recompensados en la Fase 5)
+
+**Entregable:** versión "bonita" y con bucle de retención.
+**Criterio de salida:** en pruebas con amigos, varios piden "otra partida" sin que se les sugiera.
+
+---
+
+## Fase 5 · Anuncios y consentimiento (≈1 semana)
+
+**Objetivo:** monetizar sin arruinar la experiencia ni violar políticas. Detalle en `04`.
+
+- [ ] Crear `AdService` (interfaz) con implementaciones `WebAdService` y `NativeAdService`
+- [ ] Instalar plugin de AdMob compatible con tu versión de Capacitor
+- [ ] Integrar con **IDs de anuncios de prueba**
+- [ ] Rewarded: "ver anuncio para obtener una pista" (con descripción clara de la recompensa)
+- [ ] Intersticial: solo entre partidas, con enfriamiento y frecuencia limitada
+- [ ] Flujo de consentimiento (UMP) según regiones donde se publique
+- [ ] Configurar etiqueta de audiencia/clasificación de contenido de anuncios según lo decidido en Fase 0
+- [ ] Web: solicitar acceso a H5 Games Ads (requiere aprobación) o, mientras tanto, anuncios de display alrededor del juego
+- [ ] Revisar la lista de cumplimiento de `04` antes de cada release
+
+**Entregable:** anuncios de prueba funcionando en Android y en web.
+**Criterio de salida:** ningún anuncio aparece durante el juego, al abrir la app ni dos seguidos.
+
+---
+
+## Fase 6 · Build Android y pruebas cerradas (≈3 semanas calendario)
+
+**Objetivo:** cumplir el requisito de Play Store para cuentas personales nuevas. Detalle en `05`.
+
+> **Importante:** esta fase empieza **en cuanto exista una primera build estable** (puede ser al terminar la Fase 3 o 4) y corre **en paralelo** con las Fases 4–5. Los 14 días de pruebas cerradas son tiempo de reloj, no de trabajo.
+
+- [ ] Generar AAB firmado (Play App Signing)
+- [ ] Crear ficha de la app en Play Console (borrador)
+- [ ] Declaraciones: audiencia, anuncios, seguridad de datos, clasificación de contenido
+- [ ] Subir build a **pruebas cerradas** y reclutar testers (≥12, continuos 14 días)
+- [ ] Mantener a los testers activos; publicar actualizaciones durante la prueba
+- [ ] Recoger feedback y corregir bugs
+- [ ] Al cumplirse el plazo, solicitar acceso a producción
+
+**Entregable:** acceso a producción aprobado.
+**Criterio de salida:** Play Console permite solicitar/publicar en producción.
+
+---
+
+## Fase 7 · Producción y versión web (≈1 semana + revisión)
+
+- [ ] Reemplazar IDs de prueba por IDs reales de anuncios (solo en la build de release)
+- [ ] Capturas, icono 512×512, gráfico de funciones, descripción corta y larga
+- [ ] Publicar con **despliegue escalonado** (porcentaje creciente de usuarios)
+- [ ] Publicar la versión web (GitHub Pages / Cloudflare Pages / Netlify)
+- [ ] Publicar política de privacidad y enlazarla en la ficha
+- [ ] Monitorear crashes y reseñas los primeros días
+
+**Entregable:** juego público en Play Store y en la web.
+
+---
+
+## Fase 8 · Post-lanzamiento (continuo)
+
+- [ ] Revisar métricas: duración de sesión, retención, ingresos por anuncio, tasa de opt-in a recompensados
+- [ ] Ajustar frecuencia de intersticiales con datos reales
+- [ ] Segundo módulo de puzzle (`PuzzleModule`)
+- [ ] Opción "quitar anuncios" con compra única (Google Play Billing)
+- [ ] Evaluar iOS (requiere Mac y cuenta de Apple Developer)
+- [ ] Localización (español/inglés al menos)
+
+---
+
+## Riesgos principales
+
+| Riesgo | Mitigación |
+|---|---|
+| Los 12 testers abandonan y se reinicia el plazo | Reclutar 15–20, avisarles del calendario, recordatorios semanales |
+| Suspensión de AdMob por prácticas de anuncios | Seguir la lista de `04`, nunca hacer clic en tus propios anuncios, usar IDs de prueba |
+| El puzzle se siente genérico | Prototipar rápido (Fase 1) y invertir en "juice" y arte (Fase 4) |
+| Dificultad mal calibrada | Probar con gente real de distintas edades en Fase 3 y registrar métricas |
+| Alcance que crece sin parar | Nuevas ideas van a la Fase 8; el MVP es una mecánica |
