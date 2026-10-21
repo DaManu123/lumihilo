@@ -1,24 +1,26 @@
 # 🧠 PROJECT CONTEXT & MASTER ARCHITECTURE MEMORY
-**Proyecto:** Puzzle Adaptativo (Nombre en desarrollo: *Lumen Loop* / *Synapse Flow*)  
+**Proyecto:** Puzzle Adaptativo (Nombre de trabajo provisional; *Lumen Loop* y *Synapse Flow* descartados por colisión en Play Store)  
 **Repositorio GitHub:** [DaManu123/puzzle-adaptativo](https://github.com/DaManu123/puzzle-adaptativo)  
+**Rama activa de trabajo:** `dev`  
 **Última actualización:** Fase 0 (Planificación y Setup)
 
 ---
 
 ## 🎯 1. Visión y Pilares del Juego
 
-Un juego de puzzle minimalista, visualmente cautivador y altamente satisfactorio (*juicy*), donde **cada partida es un nivel único generado proceduralmente** y la dificultad se modula en tiempo real según el desempeño del jugador (sin importar edad ni experiencia previa).
+Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por algoritmo** (siempre resoluble) y la dificultad se adapta al comportamiento del jugador, no a su edad. Se publicará en Google Play Store y en la web, con anuncios.
 
 ### Pilares Fundamentales:
-1. **Comprensión Instantánea (5 segundos):** Cero tutoriales de texto aburridos. Las reglas son intuitivas desde el primer toque.
-2. **Ciclo de Partida Ultrarrápido (30–90s):** Ideal para momentos cotidianos (esperas, descansos). Reinicio inmediato ("un nivel más").
-3. **Estética y "Juice" Hipnótico:** En vez de simples "tuberías de agua", usamos **Circuitos de Luz / Energía Neón (Lumen / Synapse)** con efectos de brillo (bloom), partículas sutiles, respuesta háptica suave y notas pentatónicas relajantes (cada rotación y conexión suena armoniosa).
-4. **Dificultad Justa y Adaptativa:** Mantener al jugador en el estado de *Flow* (tasa de éxito ~70-80%). El motor ajusta el tamaño, bifurcaciones y señuelos de forma invisible.
-5. **Privacidad Total (Cero Datos Personales):** Sin cuentas, sin rastreo invasivo, sin chat. Toda la progresión se almacena localmente.
+1. **Comprensión Instantánea (5 segundos):** Cero tutoriales de texto largos. Reglas evidentes desde el primer toque.
+2. **Ciclo de Partida Corto (30–90 s):** Para pausas cotidianas. Reinicio inmediato ("un nivel más") sin fricción.
+3. **Temática "Capa de Piel":** Circuitos de luz / flujo neón sobre fondo oscuro minimalista, centralizados en `src/game/theme.ts` para poder mutar la estética sin tocar la lógica si las pruebas lo sugieren.
+4. **Juice (Diferido a Fase 4):** Audio pentatónico (cada giro es una nota armónica), micro-háptica y brillo óptimo. No se invierte en bloom ni audio hasta validar en Fase 1 que la mecánica engancha con piezas simples.
+5. **Dificultad Justa y Adaptativa (Fase 3):** Zona de flow (~70–80 % de resolución sin ayuda).
+6. **Privacidad y Legal:** Sin cuentas ni datos personales propios (nunca decir "privacidad total" porque AdMob recoge IDs de publicidad). Declaración provisional 13+.
 
 ---
 
-## 🛠️ 2. Stack Tecnológico y Arquitectura Modular
+## 🛠️ 2. Stack Tecnológico y Arquitectura en 3 Capas Estrictas
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -28,59 +30,50 @@ Un juego de puzzle minimalista, visualmente cautivador y altamente satisfactorio
                             │
 ┌───────────────────────────▼────────────────────────────┐
 │                    PHASER 3 (UI/Game)                  │
-│       (Escenas, Render WebGL, Partículas, Audio FX)    │
+│       (Escenas, Render WebGL, Tweens, Audio FX)        │
 └───────────────────────────┬────────────────────────────┘
                             │
 ┌───────────────────────────▼────────────────────────────┐
 │                 CORE MOTOR (TypeScript)                │
-│    (Generador Procedural, Solver BFS, Evaluador Diff)  │
-│         *100% Independiente del motor gráfico*         │
+│    (RNG con semilla, Generador, Solver, Dificultad)    │
+│    *100% TS puro, sin Phaser, sin DOM, sin Capacitor*  │
 └────────────────────────────────────────────────────────┘
 ```
 
-- **Lenguaje & Build:** TypeScript + Vite.
-- **Motor 2D:** Phaser 3 (liviano, rápido, aceleración WebGL).
-- **Capa Móvil:** Capacitor (código web único empaquetado a Android AAB nativo).
-- **Testing:** Vitest (para validar matemáticamente que 10,000+ niveles generados tengan solución garantizada).
+- **Stack:** TypeScript + Vite + Phaser 3 (3.x estable) + Vitest + Capacitor (Android).
+- **`src/core/`:** TypeScript puro (RNG mulberry32, generador, solver). Se prueba con Vitest en Node.
+- **`src/game/`:** Phaser 3 (escenas, tweens, presentación, `theme.ts`).
+- **`src/services/`:** `StorageService`, `AdService`, `HapticService` con adaptadores web/noop. El juego nunca llama directo a AdMob ni a Capacitor.
+- **Nota clave:** La abstracción `PuzzleModule` se **difiere a la Fase 8** para no sobre-diseñar prematuramente con una sola mecánica.
 
 ---
 
-## 📋 3. Decisiones Estratégicas de la Fase 0
+## 📋 3. Reglas y Decisiones Críticas de la Fase 0
 
-### A. Mecánica Núcleo (Core Gameplay)
-- **Mecánica elegida para el MVP:** Conexión de Flujo / Circuitos de Energía giratorios.
-- **Diseño de Código:** Se implementa bajo una interfaz abstracta `PuzzleModule`. Esto permitirá en el futuro (Fase 8) añadir otros módulos de puzzle (por ejemplo, mezcla de frecuencias, compuertas lógicas o nodos de colores) sin rehacer la arquitectura.
-
-### B. Identidad Visual y Temática ("Juice")
-- **Tema:** *Luz, Pulso y Energía Zen*. Fondo oscuro elegante con líneas neón vibrantes (cian, violeta, ámbar).
-- **Audio:** Escala pentatónica interactiva (cada toque es una nota afinada que nunca desentona).
-- **Háptica:** Micro-vibraciones suaves al rotar y una pulsación gratificante al cerrar el circuito.
-
-### C. Estrategia de Audiencia y Tiendas
-- **Público Declarado:** 13+ (Público General) en Google Play Console.
-- **Razón:** Maximiza el catálogo de anuncios, fill-rate y eCPM de AdMob, evitando las restricciones complejas del programa Familias en la fase inicial, pero manteniendo la arquitectura "privacy-first".
-
-### D. Monetización Sostenible y Respetuosa
-- **Rewarded Video (Anuncios Recompensados):** Voluntario a cambio de una pista luminosa o deshacer movimientos.
-- **Intersticiales con Cooldown:** Solo tras rachas de niveles (ej. cada 4-5 niveles resueltos) y con temporizador de enfriamiento.
-- **Compra In-App (Fase 8):** "Modo Zen / Eliminar Anuncios" por pago único accesible.
-
----
-
-## 🗺️ 4. Roadmap Resumido por Fases
-- [x] **Fase 0 (En curso):** Decisiones de diseño, arquitectura, setup de Vite + TS + Phaser 3 + Capacitor, y trámites de cuentas.
-- [ ] **Fase 1:** Prototipo jugable con nivel fijo y validación de sensaciones.
-- [ ] **Fase 2:** Generador procedural con algoritmos deterministas (semillas RNG) y solver automático.
-- [ ] **Fase 3:** Motor de dificultad adaptativa y opciones de accesibilidad.
-- [ ] **Fase 4:** Pulido visual, audio pentatónico, racha diaria y estadísticas.
-- [ ] **Fase 5:** Integración de AdMob (móvil) y web ads con flujo de consentimiento UMP.
-- [ ] **Fase 6:** Build de Android AAB, prueba cerrada de 14 días en Google Play.
-- [ ] **Fase 7:** Lanzamiento en producción y versión web.
-- [ ] **Fase 8:** Métricas, optimizaciones y nuevos módulos de puzzle.
+1. **Rama de trabajo:** Siempre `dev`. Nunca push directo a `main`.
+2. **Nombre y Branding:**
+   - Nombre visible centralizado en una única constante: `APP_NAME` en `src/config.ts`.
+   - Provisional: `"Puzzle Adaptativo"`.
+   - *Lumen Loop* y *Synapse Flow*: **Descartados** (ya existen en Play Store).
+   - *Zen Circuit*: Candidato con riesgos (mezcla con apps de electrónica).
+3. **Identificador Android (`appId`):**
+   - Provisional en Fase 0: `com.placeholder.puzzleadaptativo`.
+   - **No se puede cambiar una vez publicada la app en Play Store**; se fijará antes de subir el primer bundle.
+4. **Accesibilidad desde el inicio:**
+   - Áreas táctiles de mínimo 48 dp.
+   - Nada que parpadee más de 3 veces por segundo.
+   - No depender exclusivamente del color.
+5. **Criterios de Aceptación de la Fase 0:**
+   - `npm run typecheck` pasa sin errores.
+   - `npm test` pasa (pruebas de `rng.ts` con Vitest).
+   - `npm run build` genera `dist/`.
+   - `npm run dev` corre "Hola Mundo" en navegador con toque interactivo (rotación 90° con tween).
+   - `npx cap sync android` genera la carpeta `android/`.
 
 ---
 
-## 📌 5. Convención Git y Estructura del Repositorio
-- `main`: Rama de producción estable.
-- `dev`: Rama de desarrollo activo e integración continua.
-- Convención de Commits: Convencional (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
+## 🧑 4. Tareas Humanas Críticas (Recordatorio)
+- Registrar cuenta de Google Play Console (25 USD, verificación de identidad y de dispositivo Android).
+- Crear cuenta de AdMob (app en borrador).
+- Verificar nombre definitivo en Play Store (sin filtro de dispositivo), App Store, marcas registradas y dominios.
+- Reclutar 15–20 testers para los 14 días de prueba cerrada obligatoria.
