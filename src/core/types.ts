@@ -58,3 +58,23 @@ export interface BoardState {
   grid: CellState[][];
   source: { row: number; col: number };
 }
+
+export interface LevelParams {
+  width: number;        // Columnas
+  height: number;       // Filas
+  extraLoops: number;   // Aristas extra sobre el árbol -> ciclos
+  branchBias: number;   // 0..1, tendencia a ramificar vs camino serpenteante
+  decoys?: number;      // Piezas decorativas / ruido (por defecto 0)
+}
+
+export interface GeneratedLevel {
+  seed: number;
+  params: LevelParams;
+  board: BoardState;
+  solutionRotations: number[][]; // Matriz de rotaciones solución (todas 0 con respecto a baseMask)
+  initialRotations: number[][];  // Matriz de rotaciones desordenadas iniciales
+  minTaps: number;               // Mínimo de toques en sentido horario para resolver
+  difficulty: number;            // Puntuación de dificultad d(nivel)
+  branches: number;              // Cantidad de nodos ramificados (T y Cruz)
+  cycles: number;                // Cantidad de ciclos en el circuito
+}

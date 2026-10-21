@@ -15,4 +15,5 @@ android/local.properties
 .DS_Store
 .vite
 .idea/
+.vscode/
 *.iml
