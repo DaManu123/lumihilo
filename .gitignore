@@ -14,3 +14,5 @@ android/local.properties
 *.aab
 .DS_Store
 .vite
+.idea/
+*.iml
