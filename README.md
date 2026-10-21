@@ -63,4 +63,4 @@ Regla de arquitectura: **el código del juego nunca llama directamente a AdMob/A
 
 ## Licencia
 
-Pendiente de decidir.
+Propietaria: **todos los derechos reservados** (ver [LICENSE](LICENSE)). El repositorio es privado por ahora; la licencia se reevaluará antes de hacerlo público.

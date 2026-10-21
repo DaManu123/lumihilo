@@ -31,7 +31,7 @@ Un puzzle casual donde **cada partida = un nivel nuevo generado por algoritmo**.
 | Nombre y marca | Libre | Elegir uno corto y fácil de buscar; revisar que no exista en Play Store |
 | Audiencia declarada | A) 13+ / público general · B) incluye menores de 13 | Decidir con la sección "Audiencia" de más abajo |
 | Dominio web | github.io / dominio propio | Dominio propio si se quiere AdSense (revisar requisitos vigentes) |
-| Licencia del repo | MIT / propietaria | Decidir antes de hacerlo público |
+| Licencia del repo | Propietaria / MIT / otra | Por ahora propietaria (`LICENSE`, repo privado); reevaluar antes de hacerlo público |
 | Telemetría | Solo local / Firebase Analytics | Solo local al inicio |
 
 ## Mecánicas candidatas
