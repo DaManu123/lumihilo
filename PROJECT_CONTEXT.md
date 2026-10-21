@@ -73,7 +73,13 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
 ---
 
 ## 🧑 4. Tareas Humanas Críticas (Recordatorio)
-- Registrar cuenta de Google Play Console (25 USD, verificación de identidad y de dispositivo Android).
+- **Google Play Console (AVISO PENDIENTE):** El usuario realizó el pago de los 25 USD en una cuenta de correo distinta a la que desea para publicar el juego. Recordar más adelante evaluar si se publica con esa cuenta o si se tramita soporte/reembolso o transferencia de app hacia la cuenta deseada antes de la Fase 6.
 - Crear cuenta de AdMob (app en borrador).
 - Verificar nombre definitivo en Play Store (sin filtro de dispositivo), App Store, marcas registradas y dominios.
 - Reclutar 15–20 testers para los 14 días de prueba cerrada obligatoria.
+
+---
+
+## 🏁 Estado de las Fases
+- [x] **Fase 0 (Completada y verificada):** Setup técnico Vite + TS + Phaser 3 + Vitest + Capacitor Android. Escena interactiva probada y verificada por el usuario.
+- [ ] **Fase 1 (Siguiente):** Prototipo jugable con nivel fijo (rejilla 4x4, detección de victoria, contador de toques, pantalla de victoria).
