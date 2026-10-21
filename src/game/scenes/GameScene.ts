@@ -35,6 +35,7 @@ export class GameScene extends Phaser.Scene {
   private diffText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private tapsText!: Phaser.GameObjects.Text;
+  private connectedText!: Phaser.GameObjects.Text;
   private boardContainer!: Phaser.GameObjects.Container;
 
   constructor() {
@@ -127,17 +128,26 @@ export class GameScene extends Phaser.Scene {
 
     // Contadores en cabecera
     this.tapsText = this.add
-      .text(width * 0.25, 165, 'Toques: 0', {
+      .text(width * 0.22, 165, 'Toques: 0', {
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: THEME.mutedText,
       })
       .setOrigin(0.5);
 
-    this.timerText = this.add
-      .text(width * 0.75, 165, 'Tiempo: 00:00', {
+    this.connectedText = this.add
+      .text(width * 0.5, 165, '⚡ 0/16', {
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontSize: '16px',
+        fontStyle: 'bold',
+        color: THEME.primaryCss,
+      })
+      .setOrigin(0.5);
+
+    this.timerText = this.add
+      .text(width * 0.78, 165, 'Tiempo: 00:00', {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '15px',
         color: THEME.mutedText,
       })
       .setOrigin(0.5);
@@ -255,21 +265,44 @@ export class GameScene extends Phaser.Scene {
     const half = effectiveCellSize / 2;
     const wireWidth = Math.max(7, effectiveCellSize * 0.12);
 
+    let poweredCount = 0;
+    const totalCells = rows * cols;
+
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const view = this.cellViews[r][c];
         const isCellPowered = powered[r][c];
+        if (isCellPowered) poweredCount++;
+
         const g = view.wireGraphics;
         g.clear();
 
         const mask = view.cell.baseMask;
-        const color = isCellPowered ? THEME.primary : 0x3b4252;
+        const color = isCellPowered ? THEME.primary : THEME.wireOff;
         const centerColor = view.cell.isSource
           ? THEME.accent
           : isCellPowered
             ? THEME.primary
-            : 0x3b4252;
+            : THEME.wireOffHub;
 
+        // Si está energizado, dibujar capa sutil de brillo exterior
+        if (isCellPowered) {
+          g.lineStyle(wireWidth + 4, THEME.primary, 0.25);
+          if (hasDirection(mask, Direction.NORTH)) {
+            g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -half); g.strokePath();
+          }
+          if (hasDirection(mask, Direction.EAST)) {
+            g.beginPath(); g.moveTo(0, 0); g.lineTo(half, 0); g.strokePath();
+          }
+          if (hasDirection(mask, Direction.SOUTH)) {
+            g.beginPath(); g.moveTo(0, 0); g.lineTo(0, half); g.strokePath();
+          }
+          if (hasDirection(mask, Direction.WEST)) {
+            g.beginPath(); g.moveTo(0, 0); g.lineTo(-half, 0); g.strokePath();
+          }
+        }
+
+        // Línea principal del cable
         g.lineStyle(wireWidth, color, 1);
 
         if (hasDirection(mask, Direction.NORTH)) {
@@ -297,7 +330,7 @@ export class GameScene extends Phaser.Scene {
           g.strokePath();
         }
 
-        const hubRadius = view.cell.isSource ? wireWidth * 1.3 : wireWidth * 0.8;
+        const hubRadius = view.cell.isSource ? wireWidth * 1.35 : wireWidth * 0.85;
         g.fillStyle(centerColor, 1);
         g.fillCircle(0, 0, hubRadius);
 
@@ -308,9 +341,18 @@ export class GameScene extends Phaser.Scene {
 
         view.bg.setStrokeStyle(
           view.cell.isSource ? 3 : 1.5,
-          view.cell.isSource ? THEME.accent : isCellPowered ? 0x00f0ff : 0x30363d
+          view.cell.isSource
+            ? THEME.accent
+            : isCellPowered
+              ? THEME.primary
+              : THEME.borderOff
         );
       }
+    }
+
+    if (this.connectedText) {
+      this.connectedText.setText(`⚡ ${poweredCount}/${totalCells}`);
+      this.connectedText.setColor(poweredCount === totalCells ? '#38f9d7' : THEME.primaryCss);
     }
   }
 
