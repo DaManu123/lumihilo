@@ -82,4 +82,5 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
 
 ## 🏁 Estado de las Fases
 - [x] **Fase 0 (Completada y verificada):** Setup técnico Vite + TS + Phaser 3 + Vitest + Capacitor Android. Escena interactiva probada y verificada por el usuario.
-- [ ] **Fase 1 (Siguiente):** Prototipo jugable con nivel fijo (rejilla 4x4, detección de victoria, contador de toques, pantalla de victoria).
+- [x] **Fase 1 (Código completado y probado):** Prototipo jugable 4×4 implementado en `src/game/scenes/GameScene.ts` y lógica core en `src/core/grid.ts` y `fixedLevel.ts`. 9 tests unitarios pasando. Falta la prueba de juego con 5 personas (tarea humana).
+- [ ] **Fase 2 (Siguiente):** Generador procedural con algoritmos deterministas (semillas RNG) y solver automático.
