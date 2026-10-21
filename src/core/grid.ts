@@ -112,6 +112,32 @@ export function computePowerFlow(board: BoardState): boolean[][] {
 }
 
 /**
+ * Comprueba si una rama en una dirección específica conecta bilateralmente con su vecina.
+ */
+export function isBranchConnected(
+  board: BoardState,
+  r: number,
+  c: number,
+  worldDir: Direction
+): boolean {
+  const cell = board.grid[r][c];
+  const currentMask = getCurrentMask(cell);
+  if (!hasDirection(currentMask, worldDir)) return false;
+
+  const delta = DIRECTION_DELTAS[worldDir];
+  const nr = r + delta.dr;
+  const nc = c + delta.dc;
+
+  if (nr < 0 || nr >= board.rows || nc < 0 || nc >= board.cols) {
+    return false;
+  }
+
+  const neighborMask = getCurrentMask(board.grid[nr][nc]);
+  const opposite = OPPOSITE_DIRECTIONS[worldDir];
+  return hasDirection(neighborMask, opposite);
+}
+
+/**
  * Comprueba si el estado actual del tablero cumple la condición de victoria:
  * 1. Todas las celdas del tablero están alimentadas desde la fuente.
  * 2. Cero cables abiertos/fugas: cada terminal abierto conecta a un vecino con puerto opuesto.

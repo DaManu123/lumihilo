@@ -5,6 +5,7 @@ import {
   checkVictory,
   rotateCell,
   hasDirection,
+  isBranchConnected,
 } from '../../core/grid';
 import { generateLevel } from '../../core/generator';
 import { THEME } from '../theme';
@@ -35,7 +36,6 @@ export class GameScene extends Phaser.Scene {
   private diffText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private tapsText!: Phaser.GameObjects.Text;
-  private connectedText!: Phaser.GameObjects.Text;
   private boardContainer!: Phaser.GameObjects.Container;
 
   constructor() {
@@ -128,26 +128,17 @@ export class GameScene extends Phaser.Scene {
 
     // Contadores en cabecera
     this.tapsText = this.add
-      .text(width * 0.22, 165, 'Toques: 0', {
+      .text(width * 0.3, 165, 'Toques: 0', {
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '15px',
+        fontSize: '16px',
         color: THEME.mutedText,
       })
       .setOrigin(0.5);
 
-    this.connectedText = this.add
-      .text(width * 0.5, 165, '⚡ 0/16', {
+    this.timerText = this.add
+      .text(width * 0.7, 165, 'Tiempo: 00:00', {
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontSize: '16px',
-        fontStyle: 'bold',
-        color: THEME.primaryCss,
-      })
-      .setOrigin(0.5);
-
-    this.timerText = this.add
-      .text(width * 0.78, 165, 'Tiempo: 00:00', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '15px',
         color: THEME.mutedText,
       })
       .setOrigin(0.5);
@@ -265,72 +256,85 @@ export class GameScene extends Phaser.Scene {
     const half = effectiveCellSize / 2;
     const wireWidth = Math.max(7, effectiveCellSize * 0.12);
 
-    let poweredCount = 0;
-    const totalCells = rows * cols;
-
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const view = this.cellViews[r][c];
         const isCellPowered = powered[r][c];
-        if (isCellPowered) poweredCount++;
-
         const g = view.wireGraphics;
         g.clear();
 
         const mask = view.cell.baseMask;
-        const color = isCellPowered ? THEME.primary : THEME.wireOff;
+        const rot = view.cell.rotation;
+
+        const branches = [
+          {
+            localDir: Direction.NORTH,
+            draw: () => {
+              g.beginPath();
+              g.moveTo(0, 0);
+              g.lineTo(0, -half);
+              g.strokePath();
+            },
+          },
+          {
+            localDir: Direction.EAST,
+            draw: () => {
+              g.beginPath();
+              g.moveTo(0, 0);
+              g.lineTo(half, 0);
+              g.strokePath();
+            },
+          },
+          {
+            localDir: Direction.SOUTH,
+            draw: () => {
+              g.beginPath();
+              g.moveTo(0, 0);
+              g.lineTo(0, half);
+              g.strokePath();
+            },
+          },
+          {
+            localDir: Direction.WEST,
+            draw: () => {
+              g.beginPath();
+              g.moveTo(0, 0);
+              g.lineTo(-half, 0);
+              g.strokePath();
+            },
+          },
+        ];
+
+        // Dibujar cada rama del cable
+        for (const branch of branches) {
+          if (hasDirection(mask, branch.localDir)) {
+            const worldDir = ((branch.localDir + rot) % 4) as Direction;
+            const isBranchActive =
+              isCellPowered && isBranchConnected(this.board, r, c, worldDir);
+
+            if (isBranchActive) {
+              // Resplandor exterior de energía
+              g.lineStyle(wireWidth + 4, THEME.primary, 0.28);
+              branch.draw();
+              // Hilo principal iluminado
+              g.lineStyle(wireWidth, THEME.primary, 1);
+              branch.draw();
+            } else {
+              // Cable apagado o que choca contra pared / vecino desconectado
+              g.lineStyle(wireWidth, THEME.wireOff, 1);
+              branch.draw();
+            }
+          }
+        }
+
+        // Núcleo central
+        const hubRadius = view.cell.isSource ? wireWidth * 1.35 : wireWidth * 0.85;
         const centerColor = view.cell.isSource
           ? THEME.accent
           : isCellPowered
             ? THEME.primary
             : THEME.wireOffHub;
 
-        // Si está energizado, dibujar capa sutil de brillo exterior
-        if (isCellPowered) {
-          g.lineStyle(wireWidth + 4, THEME.primary, 0.25);
-          if (hasDirection(mask, Direction.NORTH)) {
-            g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -half); g.strokePath();
-          }
-          if (hasDirection(mask, Direction.EAST)) {
-            g.beginPath(); g.moveTo(0, 0); g.lineTo(half, 0); g.strokePath();
-          }
-          if (hasDirection(mask, Direction.SOUTH)) {
-            g.beginPath(); g.moveTo(0, 0); g.lineTo(0, half); g.strokePath();
-          }
-          if (hasDirection(mask, Direction.WEST)) {
-            g.beginPath(); g.moveTo(0, 0); g.lineTo(-half, 0); g.strokePath();
-          }
-        }
-
-        // Línea principal del cable
-        g.lineStyle(wireWidth, color, 1);
-
-        if (hasDirection(mask, Direction.NORTH)) {
-          g.beginPath();
-          g.moveTo(0, 0);
-          g.lineTo(0, -half);
-          g.strokePath();
-        }
-        if (hasDirection(mask, Direction.EAST)) {
-          g.beginPath();
-          g.moveTo(0, 0);
-          g.lineTo(half, 0);
-          g.strokePath();
-        }
-        if (hasDirection(mask, Direction.SOUTH)) {
-          g.beginPath();
-          g.moveTo(0, 0);
-          g.lineTo(0, half);
-          g.strokePath();
-        }
-        if (hasDirection(mask, Direction.WEST)) {
-          g.beginPath();
-          g.moveTo(0, 0);
-          g.lineTo(-half, 0);
-          g.strokePath();
-        }
-
-        const hubRadius = view.cell.isSource ? wireWidth * 1.35 : wireWidth * 0.85;
         g.fillStyle(centerColor, 1);
         g.fillCircle(0, 0, hubRadius);
 
@@ -348,11 +352,6 @@ export class GameScene extends Phaser.Scene {
               : THEME.borderOff
         );
       }
-    }
-
-    if (this.connectedText) {
-      this.connectedText.setText(`⚡ ${poweredCount}/${totalCells}`);
-      this.connectedText.setColor(poweredCount === totalCells ? '#38f9d7' : THEME.primaryCss);
     }
   }
 
