@@ -1,10 +1,14 @@
 import { Capacitor } from '@capacitor/core';
-import { StorageService, WebStorageService } from './StorageService';
+import { HybridStorageService, storage } from './StorageService';
 import { MonetizationService, NoopMonetizationService } from './MonetizationService';
 import { HapticService, NoopHapticService } from './HapticService';
 
+export * from './StorageService';
+export * from './MonetizationService';
+export * from './HapticService';
+
 export interface ServiceContainer {
-  storage: StorageService;
+  storage: HybridStorageService;
   ads: MonetizationService;
   haptics: HapticService;
 }
@@ -13,9 +17,15 @@ export function createServices(): ServiceContainer {
   const isNative = Capacitor.isNativePlatform();
   console.log(`[Services] Plataforma detectada: ${isNative ? 'Nativa (Capacitor)' : 'Web'}`);
 
+  if (isNative) {
+    storage.initNative().catch((err) => {
+      console.warn('[Services] Fallo al sincronizar almacenamiento nativo:', err);
+    });
+  }
+
   return {
-    storage: new WebStorageService(), // TODO(fase-3): usar NativeStorageService si isNative
-    ads: new NoopMonetizationService(), // TODO(fase-5): usar NativeMonetizationService si isNative
-    haptics: new NoopHapticService(), // TODO(fase-4): usar NativeHapticService si isNative
+    storage,
+    ads: new NoopMonetizationService(),
+    haptics: new NoopHapticService(),
   };
 }

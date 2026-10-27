@@ -72,5 +72,16 @@ describe('Lógica de Conexión y Grid (src/core/)', () => {
 
       expect(checkVictory(board)).toBe(true);
     });
+
+    it('permite rotar en sentido antihorario con steps negativos', () => {
+      const board = createFixedLevel4x4(false);
+      expect(board.grid[0][0].rotation).toBe(0);
+
+      rotateCell(board, 0, 0, -1);
+      expect(board.grid[0][0].rotation).toBe(3); // 0 -> 3 (antihorario)
+
+      rotateCell(board, 0, 0, 1);
+      expect(board.grid[0][0].rotation).toBe(0); // 3 -> 0 (horario)
+    });
   });
 });

@@ -62,11 +62,11 @@ export function determinePieceType(mask: number): PieceType {
 }
 
 /**
- * Rota una celda del tablero 90° en sentido horario e incrementa su rotación.
+ * Rota una celda del tablero en pasos de 90° (por defecto +1 en sentido horario, -1 antihorario).
  */
-export function rotateCell(board: BoardState, row: number, col: number): void {
+export function rotateCell(board: BoardState, row: number, col: number, steps = 1): void {
   const cell = board.grid[row][col];
-  cell.rotation = (cell.rotation + 1) % 4;
+  cell.rotation = ((cell.rotation + steps) % 4 + 4) % 4;
 }
 
 /**
