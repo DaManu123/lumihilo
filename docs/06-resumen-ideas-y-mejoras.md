@@ -7,11 +7,11 @@ Documento de referencia rápida. Resume lo conversado después del plan inicial 
 | Tema | Decisión vigente | Estado |
 |---|---|---|
 | Género | Puzzle casual, partidas de 30–90 s, un puzzle nuevo generado por partida | Decidido |
-| Mecánica MVP | Rotar piezas para conectar un circuito (generado desde un árbol de expansión; solución garantizada) | Decidido (validar en Fase 1) |
-| Temática | **Circuitos de luz / flujo neón** sobre fondo oscuro minimalista (en lugar de tuberías de plomería) | **Provisional**: confirmar tras el prototipo de la Fase 1 |
+| Mecánica MVP | Rotar piezas para conectar un circuito (generado desde un árbol de expansión; solución garantizada) | Validado con éxito (Fase 1 y 2) |
+| Temática | **Circuitos de luz / flujo neón** sobre fondo oscuro minimalista, con opción de **Modo Claro** | Validado |
 | Dificultad | Adaptativa al comportamiento del jugador, no a su edad; modos Relajado / Normal / Reto | Decidido |
 | Plataformas | Web + Android (Phaser 3 + TypeScript + Vite + Capacitor) | Decidido |
-| Monetización | Anuncios: recompensados (pistas), intersticiales entre partidas, banner solo en menús | Decidido |
+| Monetización | Anuncios: recompensados (pistas/chispas), intersticiales entre partidas, banner solo en menús | Decidido |
 
 La temática es una "capa de piel": el código se diseña para que colores y sprites se puedan cambiar sin tocar la lógica (`src/game/theme.ts`). Así no se pierde trabajo si el prototipo sugiere otra estética.
 
@@ -109,3 +109,15 @@ Reglas prácticas:
 | Borrador de política de privacidad | AdMob real y consentimiento (Fase 5) |
 | Cuentas de Play Console y AdMob (tarea humana) | Build firmada y pruebas cerradas (Fase 6) |
 | Decisiones documentadas en README y `01` | `PuzzleModule`, segundo puzzle, iOS (Fase 8) |
+
+## 10. Feedback de Playtesting y Asignación de Mejoras (Octubre 2026)
+
+Tras probar el prototipo con usuarios reales, surgieron 4 sugerencias clave para potenciar la comodidad, rejugabilidad y retención. Para evitar sobrecargar el desarrollo y mantener entregas incrementales sólidas, se asignan a las siguientes fases:
+
+| Sugerencia | Análisis UX / Técnico | Fase Asignada |
+|---|---|---|
+| **1. Modo Claro** | Mayor legibilidad en exteriores y alivio para usuarios con astigmatismo/fatiga visual. Se resuelve con paleta de alto contraste en `theme.ts` (fondo marfil/blanco puro con trazos azul cobalto y neón suave) y guardado en `StorageService`. | **Fase 3** (Accesibilidad y Opciones) |
+| **2. Rotación Inversa & Control** | *Riesgo del doble tap en móvil:* añade latencia (250 ms) y provoca toques accidentales cuando el usuario juega rápido. <br>**Solución superior:** <br>• **Web:** Clic derecho = rotar antihorario (-90°). <br>• **Móvil/Web:** Botón flotante accesible **"Deshacer" (Undo)** para revertir el último giro al instante. <br>• **Tutorial inicial:** Notificación/tooltip sutil al arrancar el primer puzzle explicando los controles. | **Fase 3** (Controles, Accesibilidad y Tutorial) |
+| **3. Estímulos, Economía y Pistas/Comodines** | • **Moneda blanda (Chispas / Lumen Sparks):** Se ganan al completar puzzles (bonus por eficiencia/tiempo). <br>• **Comodines (Pistas):** Corrige/fija una pieza desalineada (usando `solver.ts`) o ilumina el flujo de la fuente. <br>• **Bucle con anuncios:** En Fase 5, ver un anuncio recompensado otorga comodines o chispas de inmediato si el jugador se queda sin saldo. <br>• **Tienda cosmética:** En Fase 8, las chispas permiten desbloquear temas visuales adicionales (Cyberpunk, Matrix, Solar). | **Fase 4** (Sistema de pistas y economía local) → **Fase 5** (Recompensas con anuncios) → **Fase 8** (Tienda cosmética) |
+| **4. Leaderboard Global** | *Dilema:* Los puzzles procedurales tienen diferente complejidad por semilla, y un backend propio violaría la regla de "sin servidores/cuentas ni costes fijos". <br>**Solución:** <br>• Vincular la competencia global al **Reto Diario (Daily Challenge)** de la Fase 4 (misma semilla para todos cada día). <br>• Tabla global gestionada mediante **Google Play Games Services** (sin contraseñas, gestionado por Google, seguro y sin backend propio). | **Fase 4** (Reto Diario & Récords locales) → **Fase 8** (Integración global con Play Games) |
+
