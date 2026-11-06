@@ -9,4 +9,11 @@ android/app/release/
 android/.gradle/
 android/build/
 android/app/build/
+android/local.properties
+*.apk
+*.aab
 .DS_Store
+.vite
+.idea/
+.vscode/
+*.iml

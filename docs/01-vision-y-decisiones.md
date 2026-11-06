@@ -25,11 +25,12 @@ Un puzzle casual donde **cada partida = un nivel nuevo generado por algoritmo**.
 
 ## Decisiones pendientes (resolver en la Fase 0)
 
-| Tema | Opciones | Recomendación inicial |
+| Tema | Opciones | Recomendación / Estado actual |
 |---|---|---|
-| Mecánica del puzzle | Ver tabla de abajo | **Rotar tuberías** para el MVP |
-| Nombre y marca | Libre | Elegir uno corto y fácil de buscar; revisar que no exista en Play Store |
-| Audiencia declarada | A) 13+ / público general · B) incluye menores de 13 | Decidir con la sección "Audiencia" de más abajo |
+| Mecánica del puzzle | Ver tabla de abajo | **Rotar piezas para conectar circuito** para el MVP |
+| Temática visual | Varios temas (circuitos, agua, etc.) | **Circuitos de luz neón (provisional)** hasta el prototipo de la Fase 1 |
+| Nombre y marca | En verificación | Provisional: **"Puzzle Adaptativo"** (`APP_NAME`). **"Lumen Loop" y "Synapse Flow" están descartados** (ya existen en Play Store). **"Zen Circuit" es candidato con riesgos** (se mezcla con apps de electrónica/educación y faltan búsquedas web/marcas). |
+| Audiencia declarada | A) 13+ / público general · B) incluye menores de 13 | **13+ (provisional)**, confirmar antes de llenar la declaración en Play Console |
 | Dominio web | github.io / dominio propio | Dominio propio si se quiere AdSense (revisar requisitos vigentes) |
 | Licencia del repo | Propietaria / MIT / otra | Por ahora propietaria (`LICENSE`, repo privado); reevaluar antes de hacerlo público |
 | Telemetría | Solo local / Firebase Analytics | Solo local al inicio |

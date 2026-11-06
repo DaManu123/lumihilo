@@ -61,6 +61,28 @@ puzzle-adaptativo/
 
 Regla de arquitectura: **el código del juego nunca llama directamente a AdMob/AdSense**; todo pasa por `AdService`, con una implementación web y otra nativa.
 
+## Desarrollo
+
+### Requisitos previos
+- **Node.js**: versión 18+ o superior (verificado con Node v26 y npm 11).
+- **Android Studio** (opcional para desarrollo web, obligatorio para compilar Android): con Android SDK y Android SDK Command-line Tools instalados.
+
+### Instalación de dependencias
+```bash
+npm install
+```
+
+### Scripts disponibles
+- `npm run dev`: Inicia el servidor de desarrollo local de Vite en `http://localhost:3000`.
+- `npm test`: Ejecuta las pruebas unitarias con Vitest (`vitest run`).
+- `npm run typecheck`: Comprobación estricta de tipos con TypeScript (`tsc --noEmit`).
+- `npm run build`: Compila el proyecto web para producción en el directorio `dist/`.
+- `npm run cap:sync`: Compila el proyecto web y sincroniza los assets con el proyecto nativo Android (`npm run build && npx cap sync android`).
+
+> [!WARNING]
+> **Advertencia crítica sobre el identificador de paquete (`appId`):**  
+> Actualmente el proyecto está configurado con el identificador provisional `com.placeholder.puzzleadaptativo` en `capacitor.config.ts`. El `appId` **no se puede modificar una vez publicada la app en Google Play Store**. El nombre de paquete definitivo debe definirse y fijarse obligatoriamente **antes de subir la primera build a Play Console**.
+
 ## Licencia
 
 Propietaria: **todos los derechos reservados** (ver [LICENSE](LICENSE)). El repositorio es privado por ahora; la licencia se reevaluará antes de hacerlo público.

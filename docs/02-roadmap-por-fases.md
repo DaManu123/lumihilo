@@ -60,34 +60,46 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 
 ## Fase 3 · Dificultad adaptativa, modos y accesibilidad (≈1–2 semanas)
 
-**Objetivo:** que el juego se ajuste solo al jugador.
+**Objetivo:** que el juego se ajuste solo al jugador, ofrezca ergonomía de control óptima y opciones visuales inclusivas.
 
 - [ ] Registrar por partida: tiempo, toques, pistas, abandono (local)
 - [ ] Algoritmo de ajuste v1 (escalera simple) y, si hace falta, v2 (tipo Elo)
 - [ ] Modos elegibles por el jugador: **Relajado / Normal / Reto**
-- [ ] Opciones de accesibilidad: tamaño de piezas, alto contraste, modo daltónico (patrones además de color), velocidad de animación, vibración on/off
-- [ ] Tutorial de 1 nivel guiado, sin texto largo
-- [ ] Guardado local de progreso (`@capacitor/preferences` en móvil, `localStorage` en web)
+- [ ] Opciones de accesibilidad y visuales:
+  - **Modo Claro** y Modo Oscuro (conmutador rápido y persistencia en `StorageService`)
+  - Alto contraste y modo daltónico (patrones visuales además de color)
+  - Tamaño de piezas y velocidad de animación
+  - Vibración on/off (háptica)
+- [ ] Controles ergonómicos y rotación inversa:
+  - Rotación horaria (+90°) con toque principal / clic izquierdo
+  - Rotación antihoraria (-90°) con clic secundario en web y botón accesible flotante **Deshacer** en móvil
+- [ ] Tutorial guiado de 1 nivel con banner/tooltip informativo sobre los controles al comenzar
+- [ ] Guardado local de progreso y preferencias (`@capacitor/preferences` en móvil, `localStorage` en web)
 - [ ] Probar el ajuste con 3 tipos de jugador (niño, adulto, persona mayor) y afinar parámetros
 
-**Entregable:** el juego sube y baja la dificultad según el desempeño.
+**Entregable:** el juego sube y baja la dificultad según el desempeño, soporta modo claro/oscuro y ofrece controles cómodos.
 **Criterio de salida:** en pruebas, nadie se atora más de 3 niveles seguidos sin que baje la dificultad, y nadie resuelve 5 seguidos sin que suba.
 
 ---
 
-## Fase 4 · Pulido y "enganche" (≈1–2 semanas)
+## Fase 4 · Pulido, economía y "enganche" (≈1–2 semanas)
 
-**Objetivo:** que dé ganas de jugar "una más".
+**Objetivo:** que dé ganas de jugar "una más" y recompensar el avance del jugador.
 
 - [ ] Arte final simple y coherente (paleta, tipografía, icono)
 - [ ] Sonido y vibración al rotar, conectar y ganar (con opción de silencio)
 - [ ] Efecto de "energía fluyendo" al completar el circuito
-- [ ] **Reto diario:** semilla derivada de la fecha, igual para todos
-- [ ] **Racha diaria** y estadísticas (mejor tiempo, partidas resueltas)
+- [ ] **Sistema de estímulos y economía interna:**
+  - Puntos / Chispas de energía ganadas por nivel resuelto (bonos por resolver en toques mínimos y bajo tiempo)
+  - Saldo acumulativo local en `StorageService`
+- [ ] **Comodines y pistas inteligentes:**
+  - Comodín de alineación: reorienta automáticamente una pieza fuera de lugar usando `solver.ts`
+  - Costo en chispas o uso balanceado por partida
+- [ ] **Reto diario:** semilla derivada de la fecha, idéntica para todos los jugadores
+- [ ] **Racha diaria** y estadísticas (mejor tiempo, partidas resueltas, racha de días activos)
 - [ ] Reinicio instantáneo tras ganar
-- [ ] Pistas: resaltar una pieza mal colocada (esto será el gancho de los anuncios recompensados en la Fase 5)
 
-**Entregable:** versión "bonita" y con bucle de retención.
+**Entregable:** versión con bucle de retención, economía interna de chispas, pistas inteligentes y reto diario.
 **Criterio de salida:** en pruebas con amigos, varios piden "otra partida" sin que se les sugiera.
 
 ---
@@ -143,10 +155,12 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 
 ---
 
-## Fase 8 · Post-lanzamiento (continuo)
+## Fase 8 · Post-lanzamiento y Expansión (continuo)
 
 - [ ] Revisar métricas: duración de sesión, retención, ingresos por anuncio, tasa de opt-in a recompensados
 - [ ] Ajustar frecuencia de intersticiales con datos reales
+- [ ] **Leaderboard Global:** integración de Google Play Games Services para competir en el Reto Diario sin servidores propios
+- [ ] **Tienda de ventajas cosméticas:** desbloqueo de skins y temas visuales adicionales (Cyberpunk, Matrix, Solar) usando las Chispas acumuladas
 - [ ] Segundo módulo de puzzle (`PuzzleModule`)
 - [ ] Opción "quitar anuncios" con compra única (Google Play Billing)
 - [ ] Evaluar iOS (requiere Mac y cuenta de Apple Developer)
