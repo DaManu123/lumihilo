@@ -2,8 +2,12 @@ import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { AdaptiveProfile, createDefaultProfile } from '../core/adaptive';
 
+/** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
+export type RotationDirection = 'cw' | 'ccw';
+
 export interface UserSettings {
   theme: 'dark' | 'light';
+  rotationDirection: RotationDirection;
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   hasSeenTutorial: boolean;
@@ -11,6 +15,7 @@ export interface UserSettings {
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'dark',
+  rotationDirection: 'cw',
   soundEnabled: true,
   hapticsEnabled: true,
   hasSeenTutorial: false,

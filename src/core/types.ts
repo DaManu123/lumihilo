@@ -73,7 +73,7 @@ export interface GeneratedLevel {
   board: BoardState;
   solutionRotations: number[][]; // Matriz de rotaciones solución (todas 0 con respecto a baseMask)
   initialRotations: number[][];  // Matriz de rotaciones desordenadas iniciales
-  minTaps: number;               // Mínimo de toques en sentido horario para resolver
+  minTaps: number;               // Mínimo de toques (horarios o antihorarios) para resolver
   difficulty: number;            // Puntuación de dificultad d(nivel)
   branches: number;              // Cantidad de nodos ramificados (T y Cruz)
   cycles: number;                // Cantidad de ciclos en el circuito

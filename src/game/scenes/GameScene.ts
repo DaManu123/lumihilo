@@ -16,7 +16,17 @@ import {
   PerformanceEvaluation,
 } from '../../core/adaptive';
 import { THEME, setActiveTheme } from '../theme';
-import { storage, UserSettings } from '../../services';
+import {
+  FONT,
+  FONT_FAMILY,
+  MARGIN,
+  HudLayout,
+  Rect,
+  BoardGeometry,
+  computeHudLayout,
+  computeBoardGeometry,
+} from '../layout';
+import { storage, UserSettings, RotationDirection } from '../../services';
 import { APP_NAME } from '../../config';
 
 interface CellView {
@@ -32,6 +42,14 @@ interface CellView {
 interface MoveRecord {
   row: number;
   col: number;
+  /** Sentido del giro realizado: +1 horario, -1 antihorario (para poder deshacerlo exactamente). */
+  step: number;
+}
+
+interface ButtonParts {
+  container: Phaser.GameObjects.Container;
+  bg: Phaser.GameObjects.Rectangle;
+  text: Phaser.GameObjects.Text;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -39,26 +57,36 @@ export class GameScene extends Phaser.Scene {
   private settings!: UserSettings;
   private currentLevelIndex = 1;
   private currentLevelData!: GeneratedLevel;
+  private currentParams!: LevelParams;
   private board!: BoardState;
+  private geometry!: BoardGeometry;
+  private hud!: HudLayout;
   private cellViews: CellView[][] = [];
   private isWon = false;
   private tapCount = 0;
   private elapsedTime = 0;
   private timerEvent?: Phaser.Time.TimerEvent;
   private moveHistory: MoveRecord[] = [];
+  private rotationDirection: RotationDirection = 'cw';
+
+  // Contenedores de UI
+  private headerContainer!: Phaser.GameObjects.Container;
+  private controlsContainer!: Phaser.GameObjects.Container;
+  private boardContainer!: Phaser.GameObjects.Container;
 
   // Elementos de UI
-  private headerContainer!: Phaser.GameObjects.Container;
   private levelText!: Phaser.GameObjects.Text;
   private diffText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private tapsText!: Phaser.GameObjects.Text;
-  private modeBtnText!: Phaser.GameObjects.Text;
-  private themeBtnText!: Phaser.GameObjects.Text;
-  private undoBtn!: Phaser.GameObjects.Container;
-  private undoBtnText!: Phaser.GameObjects.Text;
-  private boardContainer!: Phaser.GameObjects.Container;
-  private tutorialContainer?: Phaser.GameObjects.Container;
+  private modeBtn!: ButtonParts;
+  private undoBtn!: ButtonParts;
+  private dirBtn!: Phaser.GameObjects.Container;
+  private dirBg!: Phaser.GameObjects.Rectangle;
+  private dirIcon!: Phaser.GameObjects.Graphics;
+  private dirTitle!: Phaser.GameObjects.Text;
+  private dirSub!: Phaser.GameObjects.Text;
+  private dirBtnRect!: Rect;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -72,18 +100,22 @@ export class GameScene extends Phaser.Scene {
     this.profile = storage.loadProfile();
     this.settings = storage.loadSettings();
     setActiveTheme(this.settings.theme);
+    this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
 
     const { width } = this.cameras.main;
     this.cameras.main.setBackgroundColor(THEME.background);
+    this.hud = computeHudLayout(width);
 
     this.headerContainer = this.add.container(0, 0);
     this.boardContainer = this.add.container(0, 0);
+    this.controlsContainer = this.add.container(0, 0);
 
-    this.createHeader(width);
-    this.createControlsBar(width);
-    this.checkAndShowTutorial(width);
-
-    this.startLevel(this.currentLevelIndex);
+    // El nivel debe existir antes de construir la interfaz (el HUD lee sus datos)
+    this.loadLevel(this.currentLevelIndex);
+    this.buildUi();
+    this.buildBoard();
+    this.updateFlowVisuals();
+    this.checkAndShowTutorial();
 
     // Cronómetro interno (actualiza cada segundo)
     this.timerEvent = this.time.addEvent({
@@ -92,184 +124,121 @@ export class GameScene extends Phaser.Scene {
       callback: () => {
         if (!this.isWon) {
           this.elapsedTime++;
-          this.timerText.setText(`Tiempo: ${this.formatTime(this.elapsedTime)}`);
+          this.updateHud();
         }
       },
     });
   }
 
-  private checkAndShowTutorial(width: number): void {
-    if (this.settings.hasSeenTutorial) return;
+  // ---------------------------------------------------------------------------
+  // Interfaz
+  // ---------------------------------------------------------------------------
 
-    const { height } = this.cameras.main;
-    const bannerH = 70;
-    const bannerY = height - 50;
-
-    this.tutorialContainer = this.add.container(width / 2, bannerY);
-
-    const bg = this.add
-      .rectangle(0, 0, Math.min(width * 0.94, 600), bannerH, THEME.surface, 0.96)
-      .setStrokeStyle(2, THEME.primary);
-
-    const msg = this.add
-      .text(
-        -50,
-        0,
-        '💡 Tip: Clic izquierdo / toque para girar.\nClic derecho (PC) o botón ↩️ Deshacer para retroceder.',
-        {
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-          fontSize: '13px',
-          color: THEME.text,
-          lineSpacing: 3,
-        }
-      )
-      .setOrigin(0.5);
-
-    const okBtn = this.add
-      .rectangle(Math.min(width * 0.4, 230), 0, 75, 36, THEME.primary)
-      .setInteractive({ useHandCursor: true });
-
-    const okText = this.add
-      .text(Math.min(width * 0.4, 230), 0, 'OK', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '14px',
-        fontStyle: 'bold',
-        color: '#0d1117',
-      })
-      .setOrigin(0.5);
-
-    okBtn.on('pointerdown', () => {
-      this.settings.hasSeenTutorial = true;
-      storage.saveSettings(this.settings);
-      this.tutorialContainer?.destroy();
-      this.tutorialContainer = undefined;
-    });
-
-    this.tutorialContainer.add([bg, msg, okBtn, okText]);
-  }
-
-  private startLevel(levelIndex: number): void {
-    this.currentLevelIndex = levelIndex;
-    this.isWon = false;
-    this.tapCount = 0;
-    this.elapsedTime = 0;
-    this.moveHistory = [];
-    this.updateUndoButtonState();
-
-    if (this.timerEvent) this.timerEvent.paused = false;
-
-    const params: LevelParams = getLevelParamsForProfile(this.profile);
-    const seed = 10000 + levelIndex * 7919;
-    this.currentLevelData = generateLevel(params, seed);
-    this.board = this.currentLevelData.board;
-
-    this.levelText.setText(
-      `Nivel ${levelIndex} (${params.width}×${params.height}) - Tier ${this.profile.currentTier}`
-    );
-    this.diffText.setText(
-      `Dificultad: ${this.currentLevelData.difficulty.toFixed(1)} | Rating: ${this.profile.rating}`
-    );
-    this.tapsText.setText('Toques: 0');
-    this.timerText.setText('Tiempo: 00:00');
-
-    this.buildBoard();
-    this.updateFlowVisuals();
-  }
-
-  private createHeader(width: number): void {
+  /** Construye (o reconstruye, p. ej. al cambiar de tema) toda la interfaz fuera del tablero. */
+  private buildUi(): void {
     this.headerContainer.removeAll(true);
+    this.controlsContainer.removeAll(true);
+    this.createHeader();
+    this.createControlsBar();
+    this.updateHud();
+    this.updateUndoButtonState();
+  }
 
-    // Barra superior: Título + Botón de Modo + Botón de Tema
-    this.add
-      .text(width / 2, 45, APP_NAME, {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '24px',
+  /** Crea un botón táctil con fondo, borde y texto centrado. */
+  private makeButton(
+    rect: Rect,
+    label: string,
+    onTap: () => void,
+    opts: { textColor?: string; strokeColor?: number; fontSize?: number } = {}
+  ): ButtonParts {
+    const container = this.add.container(rect.x, rect.y);
+    const bg = this.add
+      .rectangle(0, 0, rect.w, rect.h, THEME.surface)
+      .setStrokeStyle(2, opts.strokeColor ?? THEME.borderOff)
+      .setInteractive({ useHandCursor: true });
+    const text = this.add
+      .text(0, 0, label, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${opts.fontSize ?? FONT.button}px`,
+        fontStyle: 'bold',
+        color: opts.textColor ?? THEME.text,
+      })
+      .setOrigin(0.5);
+
+    bg.on('pointerdown', onTap);
+    container.add([bg, text]);
+    return { container, bg, text };
+  }
+
+  private modeLabel(mode: GameMode): string {
+    return mode === 'relaxed' ? '🌿 Relajado' : mode === 'challenge' ? '🔥 Reto' : '⚡ Normal';
+  }
+
+  private createHeader(): void {
+    const { width } = this.cameras.main;
+
+    const title = this.add
+      .text(width / 2, this.hud.titleY, APP_NAME, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.title}px`,
         fontStyle: 'bold',
         color: THEME.text,
       })
       .setOrigin(0.5);
 
-    // Botón selector de Modo (Relajado / Normal / Reto)
-    const modeLabel =
-      this.profile.mode === 'relaxed'
-        ? '🌿 Relajado'
-        : this.profile.mode === 'challenge'
-          ? '🔥 Reto'
-          : '⚡ Normal';
+    // Selector de modo (Relajado / Normal / Reto)
+    this.modeBtn = this.makeButton(
+      this.hud.modeBtn,
+      this.modeLabel(this.profile.mode),
+      () => this.cycleGameMode(),
+      { textColor: THEME.primaryCss }
+    );
 
-    const modeBtnBg = this.add
-      .rectangle(75, 45, 110, 32, THEME.surface)
-      .setStrokeStyle(1.5, THEME.borderOff)
-      .setInteractive({ useHandCursor: true });
+    // Alternancia de modo Claro / Oscuro
+    const themeBtn = this.makeButton(
+      this.hud.themeBtn,
+      this.settings.theme === 'light' ? '☀️ Claro' : '🌙 Oscuro',
+      // Se difiere para no destruir el botón mientras se procesa su propio toque
+      () => this.time.delayedCall(0, () => this.toggleTheme())
+    );
 
-    this.modeBtnText = this.add
-      .text(75, 45, modeLabel, {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '13px',
-        fontStyle: 'bold',
-        color: THEME.primaryCss,
-      })
-      .setOrigin(0.5);
-
-    modeBtnBg.on('pointerdown', () => this.cycleGameMode());
-
-    // Botón de alternancia de Modo Claro / Oscuro
-    const themeIcon = this.settings.theme === 'light' ? '☀️ Claro' : '🌙 Oscuro';
-    const themeBtnBg = this.add
-      .rectangle(width - 65, 45, 95, 32, THEME.surface)
-      .setStrokeStyle(1.5, THEME.borderOff)
-      .setInteractive({ useHandCursor: true });
-
-    this.themeBtnText = this.add
-      .text(width - 65, 45, themeIcon, {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '13px',
-        color: THEME.text,
-      })
-      .setOrigin(0.5);
-
-    themeBtnBg.on('pointerdown', () => this.toggleTheme());
-
-    // Subtítulo con nivel y rating
     this.levelText = this.add
-      .text(width / 2, 85, 'Nivel 1 (4×4)', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '17px',
+      .text(width / 2, this.hud.levelY, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.level}px`,
         fontStyle: 'bold',
         color: THEME.primaryCss,
       })
       .setOrigin(0.5);
 
     this.diffText = this.add
-      .text(width / 2, 110, 'Dificultad: 16.0', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '13px',
+      .text(width / 2, this.hud.diffY, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.small}px`,
         color: THEME.mutedText,
       })
       .setOrigin(0.5);
 
-    // Contadores de toques y tiempo
     this.tapsText = this.add
-      .text(width * 0.3, 145, 'Toques: 0', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '15px',
-        color: THEME.mutedText,
+      .text(this.hud.tapsX, this.hud.statsY, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.stats}px`,
+        color: THEME.text,
       })
       .setOrigin(0.5);
 
     this.timerText = this.add
-      .text(width * 0.7, 145, 'Tiempo: 00:00', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '15px',
-        color: THEME.mutedText,
+      .text(this.hud.timeX, this.hud.statsY, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.stats}px`,
+        color: THEME.text,
       })
       .setOrigin(0.5);
 
     this.headerContainer.add([
-      modeBtnBg,
-      this.modeBtnText,
-      themeBtnBg,
-      this.themeBtnText,
+      title,
+      this.modeBtn.container,
+      themeBtn.container,
       this.levelText,
       this.diffText,
       this.tapsText,
@@ -277,53 +246,227 @@ export class GameScene extends Phaser.Scene {
     ]);
   }
 
-  private createControlsBar(width: number): void {
-    const barY = 180;
+  /** Refresca todos los textos informativos a partir del estado actual. */
+  private updateHud(): void {
+    if (!this.levelText || !this.currentParams) return;
+    const { width, height } = this.currentParams;
+    this.levelText.setText(
+      `Nivel ${this.currentLevelIndex} (${width}×${height}) · Tier ${this.profile.currentTier}`
+    );
+    this.diffText.setText(
+      `Dificultad ${this.currentLevelData.difficulty.toFixed(1)} · Rating ${this.profile.rating}`
+    );
+    this.tapsText.setText(`Toques: ${this.tapCount}`);
+    this.timerText.setText(`Tiempo: ${this.formatTime(this.elapsedTime)}`);
+  }
 
-    // Botón de Reinicio
-    const resetBtn = this.add
-      .text(width * 0.35, barY, '🔄 Reiniciar', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '14px',
-        color: THEME.mutedText,
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    resetBtn.on('pointerover', () => resetBtn.setColor(THEME.primaryCss));
-    resetBtn.on('pointerout', () => resetBtn.setColor(THEME.mutedText));
-    resetBtn.on('pointerdown', () => {
+  private createControlsBar(): void {
+    const resetBtn = this.makeButton(this.hud.resetBtn, '🔄 Reiniciar', () => {
       if (!this.isWon) {
         this.startLevel(this.currentLevelIndex);
       }
     });
 
-    // Botón accesible de Deshacer (Undo)
-    this.undoBtn = this.add.container(width * 0.65, barY);
-    const undoBg = this.add
-      .rectangle(0, 0, 110, 28, THEME.surface)
-      .setStrokeStyle(1.5, THEME.borderOff)
-      .setInteractive({ useHandCursor: true });
+    this.undoBtn = this.makeButton(this.hud.undoBtn, '↩️ Deshacer', () => this.handleUndo());
 
-    this.undoBtnText = this.add
-      .text(0, 0, '↩️ Deshacer', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '13px',
+    this.createDirectionButton(this.hud.dirBtn);
+
+    this.controlsContainer.add([resetBtn.container, this.undoBtn.container, this.dirBtn]);
+  }
+
+  /**
+   * Botón grande que indica (y cambia) el sentido en que giran las piezas al tocarlas.
+   * La flecha circular apunta siempre hacia donde girarán las piezas; el color también cambia
+   * (cian = horario, magenta = antihorario) para no depender solo del icono.
+   */
+  private createDirectionButton(rect: Rect): void {
+    this.dirBtnRect = rect;
+    this.dirBtn = this.add.container(rect.x, rect.y);
+
+    this.dirBg = this.add.rectangle(0, 0, rect.w, rect.h, THEME.surface).setInteractive({
+      useHandCursor: true,
+    });
+
+    this.dirIcon = this.add.graphics();
+
+    this.dirTitle = this.add
+      .text(46, -20, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '36px',
+        fontStyle: 'bold',
+        color: THEME.text,
+      })
+      .setOrigin(0.5);
+
+    this.dirSub = this.add
+      .text(46, 24, 'Toca aquí para cambiar el sentido', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.small}px`,
         color: THEME.mutedText,
       })
       .setOrigin(0.5);
 
-    undoBg.on('pointerdown', () => this.handleUndo());
+    this.dirBg.on('pointerdown', () => this.toggleRotationDirection());
 
-    this.undoBtn.add([undoBg, this.undoBtnText]);
-    this.updateUndoButtonState();
+    this.dirBtn.add([this.dirBg, this.dirIcon, this.dirTitle, this.dirSub]);
+    this.renderDirectionButton();
+  }
+
+  private renderDirectionButton(): void {
+    const clockwise = this.rotationDirection === 'cw';
+    const color = clockwise ? THEME.primary : THEME.accent;
+    const colorCss = clockwise ? THEME.primaryCss : THEME.accentCss;
+
+    this.dirBg.setFillStyle(THEME.surface).setStrokeStyle(5, color);
+    this.dirTitle.setText(clockwise ? 'GIRO HORARIO' : 'GIRO ANTIHORARIO').setColor(colorCss);
+
+    // Flecha circular: un arco de 270° con punta en el extremo, en el sentido del giro.
+    // Para antihorario se refleja horizontalmente (mirror = -1).
+    const mirror = clockwise ? 1 : -1;
+    const cx = -this.dirBtnRect.w / 2 + 78;
+    const cy = 0;
+    const radius = 28;
+    const start = -Math.PI * 0.55;
+    const end = start + Math.PI * 1.5;
+    const segments = 28;
+
+    const g = this.dirIcon;
+    g.clear();
+    g.lineStyle(9, color, 1);
+    g.beginPath();
+    for (let i = 0; i <= segments; i++) {
+      const theta = start + ((end - start) * i) / segments;
+      const x = cx + mirror * radius * Math.cos(theta);
+      const y = cy + radius * Math.sin(theta);
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.strokePath();
+
+    const tx = mirror * -Math.sin(end); // tangente (hacia donde avanza el arco)
+    const ty = Math.cos(end);
+    const nx = mirror * Math.cos(end); // radial
+    const ny = Math.sin(end);
+    const ex = cx + radius * nx;
+    const ey = cy + radius * ny;
+    g.fillStyle(color, 1);
+    g.fillTriangle(
+      ex + tx * 20,
+      ey + ty * 20,
+      ex + nx * 16,
+      ey + ny * 16,
+      ex - nx * 16,
+      ey - ny * 16
+    );
+  }
+
+  private toggleRotationDirection(): void {
+    this.rotationDirection = this.rotationDirection === 'cw' ? 'ccw' : 'cw';
+    this.settings.rotationDirection = this.rotationDirection;
+    storage.saveSettings(this.settings);
+    this.renderDirectionButton();
+
+    // Pequeño "pulso" de confirmación (sin parpadeos)
+    this.tweens.add({
+      targets: this.dirBtn,
+      scale: 1.04,
+      duration: 90,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+    });
   }
 
   private updateUndoButtonState(): void {
-    if (!this.undoBtnText) return;
+    if (!this.undoBtn) return;
     const canUndo = this.moveHistory.length > 0 && !this.isWon;
-    this.undoBtnText.setColor(canUndo ? THEME.primaryCss : THEME.mutedText);
-    this.undoBtn.setAlpha(canUndo ? 1 : 0.5);
+    this.undoBtn.text.setColor(canUndo ? THEME.primaryCss : THEME.mutedText);
+    this.undoBtn.container.setAlpha(canUndo ? 1 : 0.5);
+  }
+
+  private checkAndShowTutorial(): void {
+    if (this.settings.hasSeenTutorial) return;
+
+    const { width, height } = this.cameras.main;
+    const cardW = Math.min(width - 2 * MARGIN, 640);
+    const cardH = 600;
+
+    const overlay = this.add.container(width / 2, height / 2).setDepth(100);
+
+    const backdrop = this.add.rectangle(0, 0, width, height, 0x000000, 0.78).setInteractive();
+    const card = this.add
+      .rectangle(0, 0, cardW, cardH, THEME.surface, 1)
+      .setStrokeStyle(3, THEME.primary);
+
+    const title = this.add
+      .text(0, -cardH / 2 + 56, '¿Cómo se juega?', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '40px',
+        fontStyle: 'bold',
+        color: THEME.primaryCss,
+      })
+      .setOrigin(0.5);
+
+    const body = this.add
+      .text(
+        0,
+        -20,
+        '👆 Toca una pieza para girarla.\n' +
+          '🔄 El botón grande cambia el sentido del giro: horario ↻ o antihorario ↺.\n' +
+          '↩️ Deshacer revierte tu última jugada.\n' +
+          '⚡ Enciende todo el circuito desde la fuente.\n' +
+          '🖱️ En PC, el clic derecho gira al revés.',
+        {
+          fontFamily: FONT_FAMILY,
+          fontSize: '27px',
+          color: THEME.text,
+          align: 'left',
+          lineSpacing: 16,
+          wordWrap: { width: cardW - 90 },
+        }
+      )
+      .setOrigin(0.5);
+
+    const okBtn = this.makeButton(
+      { x: 0, y: cardH / 2 - 76, w: 380, h: 96 },
+      'Entendido',
+      () => {
+        this.settings.hasSeenTutorial = true;
+        storage.saveSettings(this.settings);
+        overlay.destroy();
+      },
+      { textColor: '#0d1117', strokeColor: THEME.primary, fontSize: 30 }
+    );
+    okBtn.bg.setFillStyle(THEME.primary);
+
+    overlay.add([backdrop, card, title, body, okBtn.container]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Niveles
+  // ---------------------------------------------------------------------------
+
+  /** Genera el nivel y reinicia el estado de la partida (sin tocar la interfaz). */
+  private loadLevel(levelIndex: number): void {
+    this.currentLevelIndex = levelIndex;
+    this.isWon = false;
+    this.tapCount = 0;
+    this.elapsedTime = 0;
+    this.moveHistory = [];
+
+    if (this.timerEvent) this.timerEvent.paused = false;
+
+    this.currentParams = getLevelParamsForProfile(this.profile);
+    const seed = 10000 + levelIndex * 7919;
+    this.currentLevelData = generateLevel(this.currentParams, seed);
+    this.board = this.currentLevelData.board;
+  }
+
+  private startLevel(levelIndex: number): void {
+    this.loadLevel(levelIndex);
+    this.updateHud();
+    this.updateUndoButtonState();
+    this.buildBoard();
+    this.updateFlowVisuals();
   }
 
   private cycleGameMode(): void {
@@ -337,10 +480,7 @@ export class GameScene extends Phaser.Scene {
     if (nextMode === 'challenge') this.profile.currentTier = Math.max(5, this.profile.currentTier);
 
     storage.saveProfile(this.profile);
-
-    const modeLabel =
-      nextMode === 'relaxed' ? '🌿 Relajado' : nextMode === 'challenge' ? '🔥 Reto' : '⚡ Normal';
-    this.modeBtnText.setText(modeLabel);
+    this.modeBtn.text.setText(this.modeLabel(nextMode));
 
     this.startLevel(1);
   }
@@ -353,10 +493,8 @@ export class GameScene extends Phaser.Scene {
     setActiveTheme(newThemeName);
     this.cameras.main.setBackgroundColor(THEME.background);
 
-    // Recrear header y redibujar tablero
-    const { width } = this.cameras.main;
-    this.createHeader(width);
-    this.createControlsBar(width);
+    // Reconstruye la interfaz con la nueva paleta conservando el estado de la partida
+    this.buildUi();
     this.buildBoard();
     this.updateFlowVisuals();
   }
@@ -367,15 +505,8 @@ export class GameScene extends Phaser.Scene {
     this.cellViews = [];
 
     const { rows, cols } = this.board;
-    const maxBoardWidth = Math.min(width * 0.9, 620);
-    const maxBoardHeight = height * 0.56;
-    const cellSize = Math.min(maxBoardWidth / cols, maxBoardHeight / rows);
-    const spacing = 6;
-    const effectiveCellSize = cellSize - spacing;
-
-    const boardTotalW = cellSize * cols;
-    const startX = (width - boardTotalW) / 2 + cellSize / 2;
-    const startY = height * 0.55 - (cellSize * rows) / 2 + cellSize / 2;
+    this.geometry = computeBoardGeometry(width, height, rows, cols, this.hud.boardTop);
+    const { cellSize, cellVisual, startX, startY } = this.geometry;
 
     for (let r = 0; r < rows; r++) {
       const rowViews: CellView[] = [];
@@ -388,7 +519,7 @@ export class GameScene extends Phaser.Scene {
 
         // Fondo de celda
         const bg = this.add
-          .rectangle(0, 0, effectiveCellSize, effectiveCellSize, THEME.surface)
+          .rectangle(0, 0, cellVisual, cellVisual, THEME.surface)
           .setStrokeStyle(cell.isSource ? 3 : 1.5, cell.isSource ? THEME.accent : THEME.borderOff)
           .setInteractive({ useHandCursor: true });
 
@@ -408,10 +539,10 @@ export class GameScene extends Phaser.Scene {
           isRotating: false,
         };
 
-        // Soporte tanto para clic izquierdo (+90° CW) como clic derecho (-90° CCW)
+        // Toque / clic izquierdo: gira en el sentido elegido; clic derecho (PC): sentido contrario
         bg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-          const isReverse = pointer.rightButtonDown() || pointer.button === 2;
-          this.handleCellTap(view, isReverse);
+          const isRightClick = pointer.rightButtonDown() || pointer.button === 2;
+          this.handleCellTap(view, isRightClick);
         });
 
         this.boardContainer.add(container);
@@ -421,24 +552,29 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private handleCellTap(view: CellView, isReverse = false): void {
+  /**
+   * @param invert true cuando se usa el clic derecho: gira en el sentido contrario al seleccionado.
+   */
+  private handleCellTap(view: CellView, invert = false): void {
     if (this.isWon || view.isRotating) return;
+
+    // El botón de dirección define el sentido; el clic derecho (PC) lo invierte
+    let step = this.rotationDirection === 'cw' ? 1 : -1;
+    if (invert) step = -step;
 
     view.isRotating = true;
     this.tapCount++;
-    this.tapsText.setText(`Toques: ${this.tapCount}`);
+    this.updateHud();
 
-    // Registrar en el historial de deshacer
-    this.moveHistory.push({ row: view.row, col: view.col });
+    // Registrar en el historial de deshacer (con el sentido, para revertirlo exactamente)
+    this.moveHistory.push({ row: view.row, col: view.col, step });
     this.updateUndoButtonState();
 
     // Rotar en el modelo lógico
-    const step = isReverse ? -1 : 1;
     rotateCell(this.board, view.row, view.col, step);
 
     // Animación fluida de giro
-    const deltaAngle = isReverse ? -90 : 90;
-    const targetAngle = view.container.angle + deltaAngle;
+    const targetAngle = view.container.angle + step * 90;
 
     this.tweens.add({
       targets: view.container,
@@ -458,17 +594,20 @@ export class GameScene extends Phaser.Scene {
   private handleUndo(): void {
     if (this.isWon || this.moveHistory.length === 0) return;
 
-    const lastMove = this.moveHistory.pop()!;
-    this.updateUndoButtonState();
-
+    const lastMove = this.moveHistory[this.moveHistory.length - 1];
     const view = this.cellViews[lastMove.row][lastMove.col];
+
+    // Si la pieza aún está girando se ignora el toque sin perder la jugada del historial
     if (view.isRotating) return;
 
-    view.isRotating = true;
-    // Deshacer revierte rotando en sentido contrario (-1 paso)
-    rotateCell(this.board, lastMove.row, lastMove.col, -1);
+    this.moveHistory.pop();
+    this.updateUndoButtonState();
 
-    const targetAngle = view.container.angle - 90;
+    view.isRotating = true;
+    // Deshacer gira en el sentido contrario al de la jugada original
+    rotateCell(this.board, lastMove.row, lastMove.col, -lastMove.step);
+
+    const targetAngle = view.container.angle - lastMove.step * 90;
     this.tweens.add({
       targets: view.container,
       angle: targetAngle,
@@ -486,12 +625,8 @@ export class GameScene extends Phaser.Scene {
   private updateFlowVisuals(): void {
     const powered = computePowerFlow(this.board);
     const { rows, cols } = this.board;
-    const maxBoardWidth = Math.min(this.cameras.main.width * 0.9, 620);
-    const maxBoardHeight = this.cameras.main.height * 0.56;
-    const cellSize = Math.min(maxBoardWidth / cols, maxBoardHeight / rows);
-    const effectiveCellSize = cellSize - 6;
-    const half = effectiveCellSize / 2;
-    const wireWidth = Math.max(7, effectiveCellSize * 0.12);
+    const half = this.geometry.cellVisual / 2;
+    const wireWidth = Math.max(8, this.geometry.cellVisual * 0.12);
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -598,6 +733,7 @@ export class GameScene extends Phaser.Scene {
 
     if (checkVictory(this.board)) {
       this.isWon = true;
+      this.updateUndoButtonState();
       if (this.timerEvent) this.timerEvent.paused = true;
 
       // Evaluar desempeño y adaptar dificultad del jugador
@@ -618,32 +754,30 @@ export class GameScene extends Phaser.Scene {
   private showVictoryModal(evaluation: PerformanceEvaluation): void {
     const { width, height } = this.cameras.main;
 
-    const overlay = this.add.container(width / 2, height / 2);
+    const overlay = this.add.container(width / 2, height / 2).setDepth(200);
     overlay.setAlpha(0);
 
-    const backdrop = this.add
-      .rectangle(0, 0, width, height, 0x000000, 0.8)
-      .setInteractive();
+    const backdrop = this.add.rectangle(0, 0, width, height, 0x000000, 0.8).setInteractive();
 
-    const cardWidth = Math.min(width * 0.86, 480);
-    const cardHeight = 410;
+    const cardWidth = Math.min(width - 2 * MARGIN, 640);
+    const cardHeight = 660;
     const card = this.add
       .rectangle(0, 0, cardWidth, cardHeight, THEME.surface, 1)
       .setStrokeStyle(3, THEME.primary);
 
     const title = this.add
-      .text(0, -145, '¡CIRCUITO COMPLETO!', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '25px',
+      .text(0, -cardHeight / 2 + 56, '¡CIRCUITO COMPLETO!', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '38px',
         fontStyle: 'bold',
         color: THEME.primaryCss,
       })
       .setOrigin(0.5);
 
     const subtitle = this.add
-      .text(0, -105, `Nivel ${this.currentLevelIndex} superado`, {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '15px',
+      .text(0, -cardHeight / 2 + 108, `Nivel ${this.currentLevelIndex} superado`, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '28px',
         color: THEME.text,
       })
       .setOrigin(0.5);
@@ -661,62 +795,53 @@ export class GameScene extends Phaser.Scene {
     const statsText = this.add
       .text(
         0,
-        -15,
+        -30,
         `⏱️ Tiempo: ${this.formatTime(this.elapsedTime)}\n` +
           `👆 Toques: ${this.tapCount} (Mínimo: ${minTaps})\n` +
           `🎯 Eficiencia: ${efficiency}%\n` +
           `📈 ${ratingFeedback}${tierFeedback}`,
         {
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-          fontSize: '16px',
+          fontFamily: FONT_FAMILY,
+          fontSize: '28px',
           color: THEME.text,
           align: 'center',
-          lineSpacing: 8,
+          lineSpacing: 14,
+          wordWrap: { width: cardWidth - 60 },
         }
       )
       .setOrigin(0.5);
 
     // Botón "Siguiente nivel"
-    const btnWidth = cardWidth * 0.78;
-    const btnHeight = 50;
-    const nextBtnBg = this.add
-      .rectangle(0, 95, btnWidth, btnHeight, THEME.primary)
-      .setInteractive({ useHandCursor: true });
-
-    const nextBtnText = this.add
-      .text(0, 95, 'Siguiente nivel →', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '17px',
-        fontStyle: 'bold',
-        color: '#0d1117',
-      })
-      .setOrigin(0.5);
-
-    nextBtnBg.on('pointerover', () => nextBtnBg.setFillStyle(THEME.primaryGlow));
-    nextBtnBg.on('pointerout', () => nextBtnBg.setFillStyle(THEME.primary));
-    nextBtnBg.on('pointerdown', () => {
-      overlay.destroy();
-      this.startLevel(this.currentLevelIndex + 1);
-    });
+    const nextBtn = this.makeButton(
+      { x: 0, y: cardHeight / 2 - 190, w: cardWidth * 0.84, h: 104 },
+      'Siguiente nivel →',
+      () => {
+        overlay.destroy();
+        this.startLevel(this.currentLevelIndex + 1);
+      },
+      { textColor: '#0d1117', strokeColor: THEME.primary, fontSize: 32 }
+    );
+    nextBtn.bg.setFillStyle(THEME.primary);
 
     // Botón secundario "Repetir nivel"
-    const replayBtn = this.add
-      .text(0, 150, 'Repetir este nivel', {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '14px',
-        color: THEME.mutedText,
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    const replayBtn = this.makeButton(
+      { x: 0, y: cardHeight / 2 - 70, w: cardWidth * 0.84, h: 92 },
+      'Repetir este nivel',
+      () => {
+        overlay.destroy();
+        this.startLevel(this.currentLevelIndex);
+      }
+    );
 
-    replayBtn.on('pointerover', () => replayBtn.setColor(THEME.text));
-    replayBtn.on('pointerout', () => replayBtn.setColor(THEME.mutedText));
-    replayBtn.on('pointerdown', () => {
-      overlay.destroy();
-      this.startLevel(this.currentLevelIndex);
-    });
-
-    overlay.add([backdrop, card, title, subtitle, statsText, nextBtnBg, nextBtnText, replayBtn]);
+    overlay.add([
+      backdrop,
+      card,
+      title,
+      subtitle,
+      statsText,
+      nextBtn.container,
+      replayBtn.container,
+    ]);
 
     this.tweens.add({
       targets: overlay,

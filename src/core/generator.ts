@@ -176,7 +176,7 @@ export function generateLevel(params: LevelParams, seed: number): GeneratedLevel
     initialRotations[0][0] = 1;
   }
 
-  // 6. Cálculo de toques mínimos en sentido horario (minTaps)
+  // 6. Cálculo de toques mínimos (minTaps), permitiendo giros horarios y antihorarios
   let minTaps = 0;
   for (let r = 0; r < height; r++) {
     for (let c = 0; c < width; c++) {
@@ -206,7 +206,8 @@ export function generateLevel(params: LevelParams, seed: number): GeneratedLevel
 }
 
 /**
- * Calcula los toques mínimos en sentido horario necesarios para resolver una pieza dada su rotación.
+ * Calcula los toques mínimos necesarios para resolver una pieza dada su rotación,
+ * teniendo en cuenta que el jugador puede girar tanto en sentido horario como antihorario.
  */
 export function calculateCellMinTaps(baseMask: number, currentRotation: number): number {
   const rot = ((currentRotation % 4) + 4) % 4;
@@ -222,8 +223,8 @@ export function calculateCellMinTaps(baseMask: number, currentRotation: number):
   }
 
   // Esquina, T, Extremo: simetría de 360° (período 4)
-  // En rotación horaria (CW), de rot a 0 se requieren: (4 - rot) % 4 toques
-  return (4 - rot) % 4;
+  // De rot a 0 se necesitan `rot` toques antihorarios o `4 - rot` horarios: gana el menor.
+  return Math.min(rot, 4 - rot);
 }
 
 /**

@@ -71,8 +71,10 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
   - Tamaño de piezas y velocidad de animación
   - Vibración on/off (háptica)
 - [ ] Controles ergonómicos y rotación inversa:
-  - Rotación horaria (+90°) con toque principal / clic izquierdo
-  - Rotación antihoraria (-90°) con clic secundario en web y botón accesible flotante **Deshacer** en móvil
+  - Botón grande de **sentido de giro** (↻ horario / ↺ antihorario, cian/magenta): el toque o clic izquierdo gira las piezas hacia donde apunta la flecha; la preferencia se guarda
+  - Clic derecho en web: gira en el sentido contrario al seleccionado
+  - Botón accesible **Deshacer** que revierte la última jugada (también la antihoraria)
+  - Los toques mínimos (`minTaps`) cuentan giros en ambos sentidos
 - [ ] Tutorial guiado de 1 nivel con banner/tooltip informativo sobre los controles al comenzar
 - [ ] Guardado local de progreso y preferencias (`@capacitor/preferences` en móvil, `localStorage` en web)
 - [ ] Probar el ajuste con 3 tipos de jugador (niño, adulto, persona mayor) y afinar parámetros

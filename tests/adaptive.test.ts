@@ -122,6 +122,18 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
     expect(profile.currentTier).toBeGreaterThanOrEqual(2);
   });
 
+  it('un jugador que solo gira en sentido horario sin desperdiciar toques sigue alcanzando maestría', () => {
+    // Con minTaps bidireccional, jugar perfecto solo en horario ronda ~2/3 de eficiencia
+    const res = evaluateAndAdapt(createDefaultProfile('normal'), {
+      minTaps: 20,
+      actualTaps: 30,
+      elapsedSeconds: 30,
+    });
+
+    expect(res.evaluation.tapEfficiency).toBeCloseTo(0.667, 2);
+    expect(res.evaluation.isMastery).toBe(true);
+  });
+
   it('maestría excepcional incrementa rating y acelera la progresión', () => {
     let profile = createDefaultProfile('normal');
     const initialRating = profile.rating;

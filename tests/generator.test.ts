@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateLevel, calculateCellMinTaps } from '../src/core/generator';
 import { validateLevel } from '../src/core/solver';
+import { rotateMaskCW } from '../src/core/grid';
 import { LevelParams } from '../src/core/types';
 
 describe('Generador Procedural y Solver (Fase 2)', () => {
@@ -57,11 +58,40 @@ describe('Generador Procedural y Solver (Fase 2)', () => {
     expect(calculateCellMinTaps(5, 1)).toBe(1);
     expect(calculateCellMinTaps(5, 3)).toBe(1);
 
-    // Esquina (3) o T (7): rotación horaria hacia 0
+    // Esquina (3) o T (7): se puede girar en ambos sentidos, gana el camino más corto
     expect(calculateCellMinTaps(3, 0)).toBe(0);
-    expect(calculateCellMinTaps(3, 1)).toBe(3); // 1 vuelta -> 3 giros horarios para volver a 0
+    expect(calculateCellMinTaps(3, 1)).toBe(1); // 1 giro antihorario (en vez de 3 horarios)
     expect(calculateCellMinTaps(3, 2)).toBe(2);
-    expect(calculateCellMinTaps(3, 3)).toBe(1);
+    expect(calculateCellMinTaps(3, 3)).toBe(1); // 1 giro horario
+  });
+
+  it('los toques mínimos coinciden con una búsqueda exhaustiva de giros ±90° para cada pieza', () => {
+    // Todas las máscaras de pieza válidas: extremos, esquinas, rectas, T y cruz
+    const masks = [1, 2, 4, 8, 3, 6, 12, 9, 5, 10, 7, 11, 13, 14, 15];
+
+    for (const mask of masks) {
+      for (let rot = 0; rot < 4; rot++) {
+        // BFS sobre estados de rotación: cada toque suma o resta 1 (módulo 4)
+        const dist = new Map<number, number>([[rot, 0]]);
+        const queue = [rot];
+        let best = Infinity;
+        while (queue.length > 0) {
+          const r = queue.shift()!;
+          const d = dist.get(r)!;
+          if (rotateMaskCW(mask, r) === mask) {
+            best = Math.min(best, d);
+          }
+          for (const step of [1, -1]) {
+            const next = (r + step + 4) % 4;
+            if (!dist.has(next)) {
+              dist.set(next, d + 1);
+              queue.push(next);
+            }
+          }
+        }
+        expect(calculateCellMinTaps(mask, rot), `máscara ${mask}, rotación ${rot}`).toBe(best);
+      }
+    }
   });
 
   it('genera niveles válidos en diversas configuraciones (3x3, 4x4, 5x5, 6x6)', () => {
