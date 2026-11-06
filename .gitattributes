@@ -1,0 +1,12 @@
+# Normalizar saltos de línea: LF en el repositorio y en el checkout
+* text=auto eol=lf
+
+# Scripts de Windows necesitan CRLF
+*.bat text eol=crlf
+
+# Binarios
+*.png binary
+*.jpg binary
+*.jar binary
+*.keystore binary
+*.jks binary
