@@ -27,6 +27,7 @@ Partidas de 30–90 segundos, reglas que se entienden en 5 segundos, un puzzle d
 3. [Generación de niveles y dificultad adaptativa](docs/03-generacion-niveles-y-dificultad.md): el corazón técnico del juego
 4. [Monetización y anuncios](docs/04-monetizacion-y-anuncios.md): formatos, reglas de políticas, estrategia
 5. [Publicación en Play Store](docs/05-publicacion-play-store.md): cuentas, pruebas cerradas, requisitos
+6. [Identidad visual](docs/07-identidad-visual.md): paleta "Filamento", tipografía, reglas de accesibilidad
 
 ## Resumen del roadmap
 

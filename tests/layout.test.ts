@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { APP_NAME } from '../src/config';
 import {
   DESIGN_WIDTH,
   MIN_GAME_HEIGHT,
@@ -45,12 +46,12 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
     const hud = computeHudLayout(DESIGN_WIDTH);
     const buttons: Record<string, Rect> = {
       estadisticas: hud.statsBtn,
-      modo: hud.modeBtn,
-      diario: hud.dailyBtn,
-      tema: hud.themeBtn,
-      reiniciar: hud.resetBtn,
-      deshacer: hud.undoBtn,
-      pista: hud.hintBtn,
+      modo: hud.modeSegments[0],
+      diario: hud.modeSegments[1],
+      tema: hud.modeSegments[2],
+      reiniciar: hud.toolSegments[0],
+      deshacer: hud.toolSegments[1],
+      pista: hud.toolSegments[2],
       direccion: hud.dirBtn,
     };
 
@@ -78,6 +79,34 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
         for (let j = i + 1; j < entries.length; j++) {
           expect(overlaps(entries[i][1], entries[j][1]), `${entries[i][0]} vs ${entries[j][0]}`).toBe(false);
         }
+      }
+    });
+
+    it('el título no choca con el marcador de Chispas aunque el saldo sea grande', () => {
+      // Medido en navegador: Unbounded a 28 px ocupa ≈ 0,68 em por carácter; se usa 0,75 por margen
+      const titleRight = hud.titlePos.x + APP_NAME.length * FONT.title * 0.75;
+      // Saldo abreviado (p. ej. "99k") + icono de chispa + separaciones
+      const sparksBlock = 3 * FONT.stats * 0.9 + 26 + 16;
+      expect(titleRight).toBeLessThan(hud.sparksRight.x - sparksBlock);
+    });
+
+    it('el nombre del nivel, su etiqueta de tamaño y el cronómetro caben en la misma fila', () => {
+      const name = 'Reto diario'; // el nombre más largo
+      const nameRight = hud.levelPos.x + name.length * FONT.display * 0.75;
+      const chip = 18 + 5 * FONT.small * 0.6 + 32; // separación + "6×6" + márgenes
+      const timeLeft = hud.timePos.x - 5 * FONT.display * 0.85; // "00:00" alineado a la derecha
+      expect(nameRight + chip).toBeLessThan(timeLeft);
+    });
+
+    it('las barras segmentadas dividen el ancho en tres partes iguales sin huecos', () => {
+      for (const [bar, segs] of [
+        [hud.modeBar, hud.modeSegments],
+        [hud.toolbar, hud.toolSegments],
+      ] as const) {
+        expect(segs[0].x - segs[0].w / 2).toBeCloseTo(bar.x - bar.w / 2, 5);
+        expect(segs[2].x + segs[2].w / 2).toBeCloseTo(bar.x + bar.w / 2, 5);
+        expect(segs[0].x + segs[0].w / 2).toBeCloseTo(segs[1].x - segs[1].w / 2, 5);
+        expect(segs[1].x + segs[1].w / 2).toBeCloseTo(segs[2].x - segs[2].w / 2, 5);
       }
     });
 
