@@ -74,7 +74,7 @@ export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
   const col = (i: number) => MARGIN + colW / 2 + i * (colW + GAP);
 
   const titleY = 54;
-  const topRowY = 148;
+  const topRowY = 158;
   const levelY = 230;
   const diffY = 266;
   const statsY = 312;

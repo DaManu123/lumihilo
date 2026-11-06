@@ -204,7 +204,7 @@ export interface SparksReward {
 export function computeSparksReward(input: RewardInput): SparksReward {
   const base = 5 + Math.max(1, Math.floor(input.tier));
 
-  // Sin bono de eficiencia si se usaron pistas: el bono premia resolverlo uno mismo
+  // Sin bonos de eficiencia ni rapidez si se usaron pistas: premian resolverlo uno mismo
   let efficiencyBonus = 0;
   if (input.hintsUsed === 0) {
     if (input.tapEfficiency >= 0.99) efficiencyBonus = 10;
@@ -213,7 +213,8 @@ export function computeSparksReward(input: RewardInput): SparksReward {
   }
 
   const expectedSeconds = Math.max(12, input.minTaps * 2.5);
-  const speedBonus = input.elapsedSeconds <= expectedSeconds ? 5 : 0;
+  // La rapidez también exige no haber usado pistas (con ayuda, un nivel sale en segundos)
+  const speedBonus = input.hintsUsed === 0 && input.elapsedSeconds <= expectedSeconds ? 5 : 0;
   const recordBonus = input.isNewRecord ? 5 : 0;
 
   const multiplier = Math.max(0, input.multiplier);
@@ -232,6 +233,7 @@ export interface LevelOutcome {
   elapsedSeconds: number;
   tapEfficiency: number;
   sparksEarned: number;
+  hintsUsed: number;
   isDaily: boolean;
   today: string;
 }
@@ -241,7 +243,9 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
   const key = String(outcome.tier);
   const best = progress.stats.bestTimeByTier[key];
   const bestTimeByTier = { ...progress.stats.bestTimeByTier };
-  if (best === undefined || outcome.elapsedSeconds < best) {
+  // Los récords y las resoluciones "perfectas" solo cuentan si se resolvió sin pistas
+  const withoutHints = outcome.hintsUsed === 0;
+  if (withoutHints && (best === undefined || outcome.elapsedSeconds < best)) {
     bestTimeByTier[key] = Math.max(1, Math.floor(outcome.elapsedSeconds));
   }
 
@@ -252,13 +256,18 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
     sparks: progress.sparks + outcome.sparksEarned,
     stats: {
       levelsSolved: progress.stats.levelsSolved + 1,
-      perfectSolves: progress.stats.perfectSolves + (outcome.tapEfficiency >= 0.99 ? 1 : 0),
+      perfectSolves: progress.stats.perfectSolves + (withoutHints && outcome.tapEfficiency >= 0.99 ? 1 : 0),
       dailyCompleted: progress.stats.dailyCompleted + (firstDailyToday ? 1 : 0),
       bestTimeByTier,
     },
     streak: registerActivity(progress.streak, outcome.today),
     lastDailyCompleted: firstDailyToday ? outcome.today : progress.lastDailyCompleted,
   };
+}
+
+/** Texto compacto del saldo para que quepa en el encabezado (p. ej. 12500 → "12k"). */
+export function formatSparks(sparks: number): string {
+  return sparks >= 10_000 ? `${Math.floor(sparks / 1000)}k` : String(sparks);
 }
 
 /** Gasta Chispas; devuelve null si no alcanzan. */

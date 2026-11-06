@@ -16,6 +16,7 @@ import {
   isNewTimeRecord,
   applyLevelOutcome,
   spendSparks,
+  formatSparks,
   StreakState,
 } from '../src/core/progress';
 import { generateLevel } from '../src/core/generator';
@@ -120,8 +121,10 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
       expect(computeSparksReward({ ...base, tapEfficiency: 0.3 }).efficiencyBonus).toBe(0);
     });
 
-    it('usar pistas elimina el bono de eficiencia', () => {
-      expect(computeSparksReward({ ...base, tapEfficiency: 1, hintsUsed: 1 }).efficiencyBonus).toBe(0);
+    it('usar pistas elimina los bonos de eficiencia y rapidez', () => {
+      const r = computeSparksReward({ ...base, tapEfficiency: 1, elapsedSeconds: 3, hintsUsed: 1 });
+      expect(r.efficiencyBonus).toBe(0);
+      expect(r.speedBonus).toBe(0);
     });
 
     it('el reto diario duplica la recompensa la primera vez y no da nada al repetirlo', () => {
@@ -138,7 +141,7 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
   });
 
   describe('aplicar resultados y gastar Chispas', () => {
-    const outcome = { tier: 2, elapsedSeconds: 30, tapEfficiency: 1, sparksEarned: 20, isDaily: false, today: '2026-11-06' };
+    const outcome = { tier: 2, elapsedSeconds: 30, tapEfficiency: 1, sparksEarned: 20, hintsUsed: 0, isDaily: false, today: '2026-11-06' };
 
     it('suma chispas, estadísticas, racha y mejor tiempo', () => {
       const p = applyLevelOutcome(createDefaultProgress(1), outcome);
@@ -164,6 +167,15 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
       expect(p2.stats.bestTimeByTier['2']).toBe(30);
     });
 
+    it('resolver con pistas no crea récords ni cuenta como resolución perfecta', () => {
+      const withHints = { ...outcome, hintsUsed: 3, elapsedSeconds: 2 };
+      const p = applyLevelOutcome(createDefaultProgress(1), withHints);
+      expect(p.stats.levelsSolved).toBe(1);
+      expect(p.stats.perfectSolves).toBe(0);
+      expect(p.stats.bestTimeByTier['2']).toBeUndefined();
+      expect(p.streak.current).toBe(1); // sí cuenta como actividad del día
+    });
+
     it('el reto diario solo cuenta una vez por día', () => {
       const daily = { ...outcome, isDaily: true };
       const p1 = applyLevelOutcome(createDefaultProgress(1), daily);
@@ -180,6 +192,13 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
       expect(spendSparks({ ...p, sparks: HINT_COST - 1 }, HINT_COST)).toBeNull();
       expect(spendSparks({ ...p, sparks: HINT_COST }, HINT_COST)?.sparks).toBe(0);
     });
+  });
+
+  it('formatSparks acorta los saldos grandes para que quepan en el encabezado', () => {
+    expect(formatSparks(0)).toBe('0');
+    expect(formatSparks(9999)).toBe('9999');
+    expect(formatSparks(10000)).toBe('10k');
+    expect(formatSparks(123456)).toBe('123k');
   });
 
   describe('datos guardados corruptos o antiguos', () => {
@@ -215,7 +234,7 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
 
     it('conserva un progreso válido sin cambios', () => {
       const original = applyLevelOutcome(createDefaultProgress(99), {
-        tier: 3, elapsedSeconds: 41, tapEfficiency: 0.7, sparksEarned: 12, isDaily: true, today: '2026-11-06',
+        tier: 3, elapsedSeconds: 41, tapEfficiency: 0.7, sparksEarned: 12, hintsUsed: 0, isDaily: true, today: '2026-11-06',
       });
       expect(sanitizeProgress(JSON.parse(JSON.stringify(original)), 1)).toEqual(original);
     });

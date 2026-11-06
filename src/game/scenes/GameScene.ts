@@ -26,6 +26,7 @@ import {
   dailySeed,
   dailyTier,
   dateKey,
+  formatSparks,
   isNewTimeRecord,
   levelSeed,
   spendSparks,
@@ -327,7 +328,7 @@ export class GameScene extends Phaser.Scene {
     );
     this.tapsText.setText(`Toques: ${this.tapCount}`);
     this.timerText.setText(`Tiempo: ${this.formatTime(this.elapsedTime)}`);
-    this.sparksText.setText(`✨ ${this.progress.sparks}`);
+    this.sparksText.setText(`✨ ${formatSparks(this.progress.sparks)}`);
   }
 
   private createControlsBar(): void {
@@ -505,7 +506,7 @@ export class GameScene extends Phaser.Scene {
 
     const { width, height } = this.cameras.main;
     const cardW = Math.min(width - 2 * MARGIN, 640);
-    const cardH = 700;
+    const cardH = 640;
 
     const overlay = this.add.container(width / 2, height / 2).setDepth(100);
 
@@ -528,18 +529,16 @@ export class GameScene extends Phaser.Scene {
         0,
         -10,
         '👆 Toca una pieza para girarla.\n' +
-          '🔄 El botón grande cambia el sentido del giro: horario ↻ o antihorario ↺.\n' +
-          '↩️ Deshacer revierte tu última jugada.\n' +
-          '⚡ Enciende todo el circuito desde la fuente.\n' +
-          '✨ Ganas Chispas al resolver niveles; úsalas en 💡 Pistas.\n' +
-          '📅 Cada día hay un reto igual para todos. ¡Mantén tu racha!\n' +
-          '🖱️ En PC, el clic derecho gira al revés.',
+          '🔄 El botón grande cambia el sentido: ↻ o ↺.\n' +
+          '⚡ Conecta todo el circuito a la fuente.\n' +
+          '✨ Gana Chispas y úsalas en 💡 Pistas.\n' +
+          '📅 Reto nuevo cada día: ¡cuida tu racha!',
         {
           fontFamily: FONT_FAMILY,
-          fontSize: '26px',
+          fontSize: '28px',
           color: THEME.text,
           align: 'left',
-          lineSpacing: 12,
+          lineSpacing: 18,
           wordWrap: { width: cardW - 90 },
         }
       )
@@ -964,7 +963,8 @@ export class GameScene extends Phaser.Scene {
     const countsAsTodaysDaily = this.isDaily && this.dailyKey === today;
     const firstDailyToday = countsAsTodaysDaily && this.progress.lastDailyCompleted !== today;
     const multiplier = this.isDaily ? (firstDailyToday ? 2 : 0) : 1;
-    const isNewRecord = isNewTimeRecord(this.progress, playedTier, this.elapsedTime);
+    const isNewRecord =
+      this.hintsUsed === 0 && isNewTimeRecord(this.progress, playedTier, this.elapsedTime);
 
     const reward = computeSparksReward({
       tier: playedTier,
@@ -982,6 +982,7 @@ export class GameScene extends Phaser.Scene {
       elapsedSeconds: this.elapsedTime,
       tapEfficiency: evaluation.tapEfficiency,
       sparksEarned: reward.total,
+      hintsUsed: this.hintsUsed,
       isDaily: countsAsTodaysDaily,
       today,
     });
@@ -1011,7 +1012,7 @@ export class GameScene extends Phaser.Scene {
     const backdrop = this.add.rectangle(0, 0, width, height, 0x000000, 0.8).setInteractive();
 
     const cardWidth = Math.min(width - 2 * MARGIN, 640);
-    const cardHeight = 800;
+    const cardHeight = 860;
     const card = this.add
       .rectangle(0, 0, cardWidth, cardHeight, THEME.surface, 1)
       .setStrokeStyle(3, THEME.primary);
@@ -1041,7 +1042,7 @@ export class GameScene extends Phaser.Scene {
     const lines: string[] = [
       `⏱️ Tiempo: ${this.formatTime(this.elapsedTime)}${info.isNewRecord ? '  🏅 ¡Récord!' : ''}`,
       `👆 Toques: ${this.tapCount} (Mínimo: ${minTaps})`,
-      `🎯 Eficiencia: ${efficiency}%`,
+      this.hintsUsed > 0 ? '🎯 Eficiencia: — (con pistas)' : `🎯 Eficiencia: ${efficiency}%`,
     ];
     if (this.hintsUsed > 0) lines.push(`💡 Pistas usadas: ${this.hintsUsed}`);
 
@@ -1063,7 +1064,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const statsText = this.add
-      .text(0, -60, lines.join('\n'), {
+      .text(0, -90, lines.join('\n'), {
         fontFamily: FONT_FAMILY,
         fontSize: '27px',
         color: THEME.text,
@@ -1078,7 +1079,7 @@ export class GameScene extends Phaser.Scene {
         ? `Base ${reward.base} · Eficiencia +${reward.efficiencyBonus} · Rapidez +${reward.speedBonus} · Récord +${reward.recordBonus}`
         : '';
     const breakdownText = this.add
-      .text(0, 170, breakdown, {
+      .text(0, cardHeight / 2 - 280, breakdown, {
         fontFamily: FONT_FAMILY,
         fontSize: '21px',
         color: THEME.mutedText,
