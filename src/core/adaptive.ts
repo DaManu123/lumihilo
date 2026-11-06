@@ -25,6 +25,9 @@ export const DIFFICULTY_TIERS: Record<number, LevelParams> = {
   10: { width: 7, height: 7, extraLoops: 4, branchBias: 0.8 },
 };
 
+/** Eficiencia mínima de toques (minTaps / toques reales) para considerar maestría. */
+export const MASTERY_MIN_EFFICIENCY = 0.6;
+
 export const MIN_TIER = 1;
 export const MAX_TIER = 10;
 
@@ -188,8 +191,10 @@ export function evaluateAndAdapt(
     (result.hintsUsed !== undefined && result.hintsUsed >= 2));
 
   // Criterio de maestría:
-  // - Eficiencia de toques >= 0.7 y tiempo dentro de lo esperado
-  const isMastery = tapEfficiency >= 0.7 && result.elapsedSeconds <= expectedSeconds * 1.25;
+  // - Eficiencia de toques >= 0.6 y tiempo dentro de lo esperado.
+  // minTaps considera giros en ambos sentidos; un jugador que solo gira en sentido horario
+  // y no desperdicia ningún toque ronda ~0.67 de eficiencia, así que 0.6 no lo penaliza.
+  const isMastery = tapEfficiency >= MASTERY_MIN_EFFICIENCY && result.elapsedSeconds <= expectedSeconds * 1.25;
 
   let deltaRating = 0;
   if (isMastery) {

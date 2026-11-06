@@ -16,7 +16,7 @@ import {
   PerformanceEvaluation,
 } from '../../core/adaptive';
 import { THEME, setActiveTheme } from '../theme';
-import { storage, UserSettings } from '../../services';
+import { storage, UserSettings, RotationDirection } from '../../services';
 import { APP_NAME } from '../../config';
 
 interface CellView {
@@ -32,6 +32,8 @@ interface CellView {
 interface MoveRecord {
   row: number;
   col: number;
+  /** Sentido del giro realizado: +1 horario, -1 antihorario (para poder deshacerlo exactamente). */
+  step: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -46,9 +48,17 @@ export class GameScene extends Phaser.Scene {
   private elapsedTime = 0;
   private timerEvent?: Phaser.Time.TimerEvent;
   private moveHistory: MoveRecord[] = [];
+  private rotationDirection: RotationDirection = 'cw';
 
   // Elementos de UI
   private headerContainer!: Phaser.GameObjects.Container;
+  private controlsContainer!: Phaser.GameObjects.Container;
+  private dirBtnWidth = 0;
+  private dirBg!: Phaser.GameObjects.Rectangle;
+  private dirIcon!: Phaser.GameObjects.Graphics;
+  private dirTitle!: Phaser.GameObjects.Text;
+  private dirSub!: Phaser.GameObjects.Text;
+  private dirBtn!: Phaser.GameObjects.Container;
   private levelText!: Phaser.GameObjects.Text;
   private diffText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
@@ -72,12 +82,14 @@ export class GameScene extends Phaser.Scene {
     this.profile = storage.loadProfile();
     this.settings = storage.loadSettings();
     setActiveTheme(this.settings.theme);
+    this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
 
     const { width } = this.cameras.main;
     this.cameras.main.setBackgroundColor(THEME.background);
 
     this.headerContainer = this.add.container(0, 0);
     this.boardContainer = this.add.container(0, 0);
+    this.controlsContainer = this.add.container(0, 0);
 
     this.createHeader(width);
     this.createControlsBar(width);
@@ -102,7 +114,7 @@ export class GameScene extends Phaser.Scene {
     if (this.settings.hasSeenTutorial) return;
 
     const { height } = this.cameras.main;
-    const bannerH = 70;
+    const bannerH = 84;
     const bannerY = height - 50;
 
     this.tutorialContainer = this.add.container(width / 2, bannerY);
@@ -115,7 +127,9 @@ export class GameScene extends Phaser.Scene {
       .text(
         -50,
         0,
-        '💡 Tip: Clic izquierdo / toque para girar.\nClic derecho (PC) o botón ↩️ Deshacer para retroceder.',
+        '💡 Toca una pieza para girarla (PC: clic derecho = sentido contrario).\n' +
+          'El botón grande cambia el sentido del giro: ↻ horario / ↺ antihorario.\n' +
+          '↩️ Deshacer revierte tu última jugada.',
         {
           fontFamily: 'system-ui, -apple-system, sans-serif',
           fontSize: '13px',
@@ -180,7 +194,7 @@ export class GameScene extends Phaser.Scene {
     this.headerContainer.removeAll(true);
 
     // Barra superior: Título + Botón de Modo + Botón de Tema
-    this.add
+    const titleText = this.add
       .text(width / 2, 45, APP_NAME, {
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontSize: '24px',
@@ -266,6 +280,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.headerContainer.add([
+      titleText,
       modeBtnBg,
       this.modeBtnText,
       themeBtnBg,
@@ -278,7 +293,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createControlsBar(width: number): void {
-    const barY = 180;
+    // Se reconstruye entera (p. ej. al cambiar de tema) sin dejar objetos huérfanos
+    this.controlsContainer.removeAll(true);
+
+    const barY = 185;
 
     // Botón de Reinicio
     const resetBtn = this.add
@@ -316,7 +334,116 @@ export class GameScene extends Phaser.Scene {
     undoBg.on('pointerdown', () => this.handleUndo());
 
     this.undoBtn.add([undoBg, this.undoBtnText]);
+
+    // Botón grande de sentido de giro
+    this.createDirectionButton(width, barY + 67);
+
+    this.controlsContainer.add([resetBtn, this.undoBtn, this.dirBtn]);
     this.updateUndoButtonState();
+  }
+
+  /**
+   * Botón grande que indica (y cambia) el sentido en que giran las piezas al tocarlas.
+   * La flecha circular apunta siempre hacia donde girarán las piezas; el color también cambia
+   * (cian = horario, magenta = antihorario) para no depender solo del icono.
+   */
+  private createDirectionButton(width: number, y: number): void {
+    this.dirBtnWidth = Math.min(width * 0.82, 520);
+    const btnH = 64;
+
+    this.dirBtn = this.add.container(width / 2, y);
+
+    this.dirBg = this.add
+      .rectangle(0, 0, this.dirBtnWidth, btnH, THEME.surface)
+      .setInteractive({ useHandCursor: true });
+
+    this.dirIcon = this.add.graphics();
+
+    this.dirTitle = this.add
+      .text(30, -10, '', {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '21px',
+        fontStyle: 'bold',
+        color: THEME.text,
+      })
+      .setOrigin(0.5);
+
+    this.dirSub = this.add
+      .text(30, 17, 'Toca aquí para cambiar el sentido', {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '12px',
+        color: THEME.mutedText,
+      })
+      .setOrigin(0.5);
+
+    this.dirBg.on('pointerdown', () => this.toggleRotationDirection());
+
+    this.dirBtn.add([this.dirBg, this.dirIcon, this.dirTitle, this.dirSub]);
+    this.renderDirectionButton();
+  }
+
+  private renderDirectionButton(): void {
+    const clockwise = this.rotationDirection === 'cw';
+    const color = clockwise ? THEME.primary : THEME.accent;
+    const colorCss = clockwise ? THEME.primaryCss : THEME.accentCss;
+
+    this.dirBg.setFillStyle(THEME.surface).setStrokeStyle(4, color);
+    this.dirTitle.setText(clockwise ? 'GIRO HORARIO' : 'GIRO ANTIHORARIO').setColor(colorCss);
+
+    // Flecha circular: un arco de 270° con punta en el extremo, en el sentido del giro.
+    // Para antihorario se refleja horizontalmente (mirror = -1).
+    const mirror = clockwise ? 1 : -1;
+    const cx = -this.dirBtnWidth / 2 + 46;
+    const cy = 0;
+    const radius = 16;
+    const start = -Math.PI * 0.55;
+    const end = start + Math.PI * 1.5;
+    const segments = 24;
+
+    const g = this.dirIcon;
+    g.clear();
+    g.lineStyle(5, color, 1);
+    g.beginPath();
+    for (let i = 0; i <= segments; i++) {
+      const theta = start + ((end - start) * i) / segments;
+      const x = cx + mirror * radius * Math.cos(theta);
+      const y = cy + radius * Math.sin(theta);
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.strokePath();
+
+    const tx = mirror * -Math.sin(end); // tangente (hacia donde avanza el arco)
+    const ty = Math.cos(end);
+    const nx = mirror * Math.cos(end); // radial
+    const ny = Math.sin(end);
+    const ex = cx + radius * nx;
+    const ey = cy + radius * ny;
+    g.fillStyle(color, 1);
+    g.fillTriangle(
+      ex + tx * 12,
+      ey + ty * 12,
+      ex + nx * 9,
+      ey + ny * 9,
+      ex - nx * 9,
+      ey - ny * 9
+    );
+  }
+
+  private toggleRotationDirection(): void {
+    this.rotationDirection = this.rotationDirection === 'cw' ? 'ccw' : 'cw';
+    this.settings.rotationDirection = this.rotationDirection;
+    storage.saveSettings(this.settings);
+    this.renderDirectionButton();
+
+    // Pequeño "pulso" de confirmación (sin parpadeos)
+    this.tweens.add({
+      targets: this.dirBtn,
+      scale: 1.05,
+      duration: 90,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+    });
   }
 
   private updateUndoButtonState(): void {
@@ -408,10 +535,10 @@ export class GameScene extends Phaser.Scene {
           isRotating: false,
         };
 
-        // Soporte tanto para clic izquierdo (+90° CW) como clic derecho (-90° CCW)
+        // Toque / clic izquierdo: gira en el sentido elegido; clic derecho (PC): sentido contrario
         bg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-          const isReverse = pointer.rightButtonDown() || pointer.button === 2;
-          this.handleCellTap(view, isReverse);
+          const isRightClick = pointer.rightButtonDown() || pointer.button === 2;
+          this.handleCellTap(view, isRightClick);
         });
 
         this.boardContainer.add(container);
@@ -421,24 +548,29 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private handleCellTap(view: CellView, isReverse = false): void {
+  /**
+   * @param invert true cuando se usa el clic derecho: gira en el sentido contrario al seleccionado.
+   */
+  private handleCellTap(view: CellView, invert = false): void {
     if (this.isWon || view.isRotating) return;
+
+    // El botón de dirección define el sentido; el clic derecho (PC) lo invierte
+    let step = this.rotationDirection === 'cw' ? 1 : -1;
+    if (invert) step = -step;
 
     view.isRotating = true;
     this.tapCount++;
     this.tapsText.setText(`Toques: ${this.tapCount}`);
 
-    // Registrar en el historial de deshacer
-    this.moveHistory.push({ row: view.row, col: view.col });
+    // Registrar en el historial de deshacer (con el sentido, para revertirlo exactamente)
+    this.moveHistory.push({ row: view.row, col: view.col, step });
     this.updateUndoButtonState();
 
     // Rotar en el modelo lógico
-    const step = isReverse ? -1 : 1;
     rotateCell(this.board, view.row, view.col, step);
 
     // Animación fluida de giro
-    const deltaAngle = isReverse ? -90 : 90;
-    const targetAngle = view.container.angle + deltaAngle;
+    const targetAngle = view.container.angle + step * 90;
 
     this.tweens.add({
       targets: view.container,
@@ -458,17 +590,20 @@ export class GameScene extends Phaser.Scene {
   private handleUndo(): void {
     if (this.isWon || this.moveHistory.length === 0) return;
 
-    const lastMove = this.moveHistory.pop()!;
-    this.updateUndoButtonState();
-
+    const lastMove = this.moveHistory[this.moveHistory.length - 1];
     const view = this.cellViews[lastMove.row][lastMove.col];
+
+    // Si la pieza aún está girando se ignora el toque sin perder la jugada del historial
     if (view.isRotating) return;
 
-    view.isRotating = true;
-    // Deshacer revierte rotando en sentido contrario (-1 paso)
-    rotateCell(this.board, lastMove.row, lastMove.col, -1);
+    this.moveHistory.pop();
+    this.updateUndoButtonState();
 
-    const targetAngle = view.container.angle - 90;
+    view.isRotating = true;
+    // Deshacer gira en el sentido contrario al de la jugada original
+    rotateCell(this.board, lastMove.row, lastMove.col, -lastMove.step);
+
+    const targetAngle = view.container.angle - lastMove.step * 90;
     this.tweens.add({
       targets: view.container,
       angle: targetAngle,
