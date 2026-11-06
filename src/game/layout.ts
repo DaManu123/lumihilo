@@ -17,6 +17,8 @@ export const MARGIN = 24;
 export const GAP = 16;
 export const BUTTON_H = 92;
 export const DIRECTION_BTN_H = 112;
+/** Lado de los botones de icono (≈ 49 dp en un teléfono típico). */
+export const ICON_BTN = 92;
 
 export const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
@@ -46,7 +48,12 @@ export interface Rect {
 
 export interface HudLayout {
   titleY: number;
+  /** Botón de estadísticas (izquierda del título). */
+  statsBtn: Rect;
+  /** Posición del marcador de Chispas (alineado a la derecha). */
+  sparksPos: { x: number; y: number };
   modeBtn: Rect;
+  dailyBtn: Rect;
   themeBtn: Rect;
   levelY: number;
   diffY: number;
@@ -55,18 +62,19 @@ export interface HudLayout {
   timeX: number;
   resetBtn: Rect;
   undoBtn: Rect;
+  hintBtn: Rect;
   dirBtn: Rect;
   /** Y donde empieza la zona del tablero. */
   boardTop: number;
 }
 
 export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
-  const halfW = (width - 2 * MARGIN - GAP) / 2;
-  const leftX = MARGIN + halfW / 2;
-  const rightX = width - MARGIN - halfW / 2;
+  // Tres columnas iguales para las filas de botones
+  const colW = (width - 2 * MARGIN - 2 * GAP) / 3;
+  const col = (i: number) => MARGIN + colW / 2 + i * (colW + GAP);
 
-  const titleY = 52;
-  const topRowY = 146;
+  const titleY = 54;
+  const topRowY = 148;
   const levelY = 230;
   const diffY = 266;
   const statsY = 312;
@@ -76,15 +84,19 @@ export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
 
   return {
     titleY,
-    modeBtn: { x: leftX, y: topRowY, w: halfW, h: BUTTON_H },
-    themeBtn: { x: rightX, y: topRowY, w: halfW, h: BUTTON_H },
+    statsBtn: { x: MARGIN + ICON_BTN / 2, y: titleY, w: ICON_BTN, h: ICON_BTN },
+    sparksPos: { x: width - MARGIN, y: titleY },
+    modeBtn: { x: col(0), y: topRowY, w: colW, h: BUTTON_H },
+    dailyBtn: { x: col(1), y: topRowY, w: colW, h: BUTTON_H },
+    themeBtn: { x: col(2), y: topRowY, w: colW, h: BUTTON_H },
     levelY,
     diffY,
     statsY,
-    tapsX: leftX,
-    timeX: rightX,
-    resetBtn: { x: leftX, y: controlsY, w: halfW, h: BUTTON_H },
-    undoBtn: { x: rightX, y: controlsY, w: halfW, h: BUTTON_H },
+    tapsX: col(0),
+    timeX: col(2),
+    resetBtn: { x: col(0), y: controlsY, w: colW, h: BUTTON_H },
+    undoBtn: { x: col(1), y: controlsY, w: colW, h: BUTTON_H },
+    hintBtn: { x: col(2), y: controlsY, w: colW, h: BUTTON_H },
     dirBtn: { x: width / 2, y: dirY, w: width - 2 * MARGIN, h: DIRECTION_BTN_H },
     boardTop,
   };

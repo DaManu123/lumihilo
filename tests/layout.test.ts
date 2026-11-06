@@ -44,10 +44,13 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
   describe('computeHudLayout', () => {
     const hud = computeHudLayout(DESIGN_WIDTH);
     const buttons: Record<string, Rect> = {
+      estadisticas: hud.statsBtn,
       modo: hud.modeBtn,
+      diario: hud.dailyBtn,
       tema: hud.themeBtn,
       reiniciar: hud.resetBtn,
       deshacer: hud.undoBtn,
+      pista: hud.hintBtn,
       direccion: hud.dirBtn,
     };
 

@@ -123,7 +123,9 @@ Esto reemplaza preguntar la edad: el jugador elige cómo quiere jugar y el algor
 
 ## Reto diario
 
-`seed = hash(fecha UTC)` y parámetros fijos del día → todos juegan el mismo nivel. Permite comparar tiempos con amigos y crea el hábito de volver cada día.
+`seed = hash(fecha)` y parámetros fijos según el día de la semana (tier 3 el lunes, subiendo hasta 8 el sábado; domingo 6) → todos los que comparten fecha juegan el mismo nivel, sin depender de su perfil adaptativo. Permite comparar tiempos con amigos y crea el hábito de volver cada día.
+
+**Decisión (nov 2026):** se usa la **fecha local del jugador**, no UTC, para que el reto cambie a medianoche de su día y la racha sea coherente. Para el leaderboard de la Fase 8 se compararán resultados por clave de fecha (`YYYY-MM-DD`). Solo la primera vez de cada día da Chispas (el doble); repetirlo no da nada y no altera el perfil adaptativo.
 
 ## Pruebas obligatorias (Vitest)
 

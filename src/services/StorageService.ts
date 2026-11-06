@@ -1,6 +1,7 @@
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { AdaptiveProfile, createDefaultProfile } from '../core/adaptive';
+import { PlayerProgress, sanitizeProgress } from '../core/progress';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -172,6 +173,28 @@ export class HybridStorageService implements StorageService {
 
   saveProfile(profile: AdaptiveProfile): void {
     this.set('profile_adaptive', JSON.stringify(profile));
+  }
+
+  /** Progreso del jugador (nivel, Chispas, estadísticas, racha). Se valida al leerlo. */
+  loadProgress(): PlayerProgress {
+    const raw = this.get('player_progress');
+    // La semilla base se genera una sola vez y se guarda, para que cada jugador tenga niveles propios
+    const freshSeed = Math.floor(Math.random() * 0x7fffffff);
+    let parsed: unknown = null;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = null;
+      }
+    }
+    const progress = sanitizeProgress(parsed, freshSeed);
+    if (!raw) this.saveProgress(progress);
+    return progress;
+  }
+
+  saveProgress(progress: PlayerProgress): void {
+    this.set('player_progress', JSON.stringify(progress));
   }
 
   loadSettings(): UserSettings {

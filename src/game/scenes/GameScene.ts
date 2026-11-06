@@ -15,6 +15,22 @@ import {
   evaluateAndAdapt,
   PerformanceEvaluation,
 } from '../../core/adaptive';
+import {
+  HINT_COST,
+  PlayerProgress,
+  SparksReward,
+  applyLevelOutcome,
+  computeSparksReward,
+  currentStreak,
+  dailyParams,
+  dailySeed,
+  dailyTier,
+  dateKey,
+  isNewTimeRecord,
+  levelSeed,
+  spendSparks,
+} from '../../core/progress';
+import { findHintCell, hintRotationDelta } from '../../core/hints';
 import { THEME, setActiveTheme } from '../theme';
 import {
   FONT,
@@ -52,8 +68,20 @@ interface ButtonParts {
   text: Phaser.GameObjects.Text;
 }
 
+interface VictoryInfo {
+  reward: SparksReward;
+  isDaily: boolean;
+  firstDailyToday: boolean;
+  isNewRecord: boolean;
+  streak: number;
+  streakIncreased: boolean;
+}
+
+const HINT_GOLD = 0xffc933;
+
 export class GameScene extends Phaser.Scene {
   private profile!: AdaptiveProfile;
+  private progress!: PlayerProgress;
   private settings!: UserSettings;
   private currentLevelIndex = 1;
   private currentLevelData!: GeneratedLevel;
@@ -64,10 +92,15 @@ export class GameScene extends Phaser.Scene {
   private cellViews: CellView[][] = [];
   private isWon = false;
   private tapCount = 0;
+  private hintsUsed = 0;
   private elapsedTime = 0;
   private timerEvent?: Phaser.Time.TimerEvent;
   private moveHistory: MoveRecord[] = [];
   private rotationDirection: RotationDirection = 'cw';
+
+  // Reto diario
+  private isDaily = false;
+  private dailyKey = '';
 
   // Contenedores de UI
   private headerContainer!: Phaser.GameObjects.Container;
@@ -79,14 +112,18 @@ export class GameScene extends Phaser.Scene {
   private diffText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private tapsText!: Phaser.GameObjects.Text;
+  private sparksText!: Phaser.GameObjects.Text;
   private modeBtn!: ButtonParts;
+  private dailyBtn!: ButtonParts;
   private undoBtn!: ButtonParts;
+  private hintBtn!: ButtonParts;
   private dirBtn!: Phaser.GameObjects.Container;
   private dirBg!: Phaser.GameObjects.Rectangle;
   private dirIcon!: Phaser.GameObjects.Graphics;
   private dirTitle!: Phaser.GameObjects.Text;
   private dirSub!: Phaser.GameObjects.Text;
   private dirBtnRect!: Rect;
+  private toast?: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -96,11 +133,13 @@ export class GameScene extends Phaser.Scene {
     // Desactivar el menú contextual del navegador para permitir clic derecho
     this.input.mouse?.disableContextMenu();
 
-    // Cargar perfil y configuraciones persistentes
+    // Cargar perfil, progreso y configuraciones persistentes
     this.profile = storage.loadProfile();
+    this.progress = storage.loadProgress();
     this.settings = storage.loadSettings();
     setActiveTheme(this.settings.theme);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
+    this.currentLevelIndex = this.progress.currentLevel;
 
     const { width } = this.cameras.main;
     this.cameras.main.setBackgroundColor(THEME.background);
@@ -142,9 +181,10 @@ export class GameScene extends Phaser.Scene {
     this.createControlsBar();
     this.updateHud();
     this.updateUndoButtonState();
+    this.updateHintButtonState();
   }
 
-  /** Crea un botón táctil con fondo, borde y texto centrado. */
+  /** Crea un botón táctil con fondo, borde y texto centrado (admite varias líneas). */
   private makeButton(
     rect: Rect,
     label: string,
@@ -162,6 +202,7 @@ export class GameScene extends Phaser.Scene {
         fontSize: `${opts.fontSize ?? FONT.button}px`,
         fontStyle: 'bold',
         color: opts.textColor ?? THEME.text,
+        align: 'center',
       })
       .setOrigin(0.5);
 
@@ -172,6 +213,11 @@ export class GameScene extends Phaser.Scene {
 
   private modeLabel(mode: GameMode): string {
     return mode === 'relaxed' ? '🌿 Relajado' : mode === 'challenge' ? '🔥 Reto' : '⚡ Normal';
+  }
+
+  private dailyLabel(): string {
+    if (this.isDaily) return '🏠 Volver';
+    return this.progress.lastDailyCompleted === dateKey(new Date()) ? '📅 Diario ✓' : '📅 Diario';
   }
 
   private createHeader(): void {
@@ -186,6 +232,19 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const statsBtn = this.makeButton(this.hud.statsBtn, '📊', () => this.showStatsModal(), {
+      fontSize: 40,
+    });
+
+    this.sparksText = this.add
+      .text(this.hud.sparksPos.x, this.hud.sparksPos.y, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${FONT.stats}px`,
+        fontStyle: 'bold',
+        color: THEME.accentCss,
+      })
+      .setOrigin(1, 0.5);
+
     // Selector de modo (Relajado / Normal / Reto)
     this.modeBtn = this.makeButton(
       this.hud.modeBtn,
@@ -193,6 +252,11 @@ export class GameScene extends Phaser.Scene {
       () => this.cycleGameMode(),
       { textColor: THEME.primaryCss }
     );
+
+    // Reto diario
+    this.dailyBtn = this.makeButton(this.hud.dailyBtn, this.dailyLabel(), () => this.toggleDaily(), {
+      textColor: THEME.accentCss,
+    });
 
     // Alternancia de modo Claro / Oscuro
     const themeBtn = this.makeButton(
@@ -237,7 +301,10 @@ export class GameScene extends Phaser.Scene {
 
     this.headerContainer.add([
       title,
+      statsBtn.container,
+      this.sparksText,
       this.modeBtn.container,
+      this.dailyBtn.container,
       themeBtn.container,
       this.levelText,
       this.diffText,
@@ -251,13 +318,16 @@ export class GameScene extends Phaser.Scene {
     if (!this.levelText || !this.currentParams) return;
     const { width, height } = this.currentParams;
     this.levelText.setText(
-      `Nivel ${this.currentLevelIndex} (${width}×${height}) · Tier ${this.profile.currentTier}`
+      this.isDaily
+        ? `📅 Reto diario (${width}×${height}) · Tier ${dailyTier(this.dailyKey)}`
+        : `Nivel ${this.currentLevelIndex} (${width}×${height}) · Tier ${this.profile.currentTier}`
     );
     this.diffText.setText(
       `Dificultad ${this.currentLevelData.difficulty.toFixed(1)} · Rating ${this.profile.rating}`
     );
     this.tapsText.setText(`Toques: ${this.tapCount}`);
     this.timerText.setText(`Tiempo: ${this.formatTime(this.elapsedTime)}`);
+    this.sparksText.setText(`✨ ${this.progress.sparks}`);
   }
 
   private createControlsBar(): void {
@@ -269,9 +339,18 @@ export class GameScene extends Phaser.Scene {
 
     this.undoBtn = this.makeButton(this.hud.undoBtn, '↩️ Deshacer', () => this.handleUndo());
 
+    this.hintBtn = this.makeButton(this.hud.hintBtn, `💡 Pista\n${HINT_COST} ✨`, () => this.useHint(), {
+      fontSize: 24,
+    });
+
     this.createDirectionButton(this.hud.dirBtn);
 
-    this.controlsContainer.add([resetBtn.container, this.undoBtn.container, this.dirBtn]);
+    this.controlsContainer.add([
+      resetBtn.container,
+      this.undoBtn.container,
+      this.hintBtn.container,
+      this.dirBtn,
+    ]);
   }
 
   /**
@@ -383,12 +462,50 @@ export class GameScene extends Phaser.Scene {
     this.undoBtn.container.setAlpha(canUndo ? 1 : 0.5);
   }
 
+  private updateHintButtonState(): void {
+    if (!this.hintBtn) return;
+    const canHint = this.progress.sparks >= HINT_COST && !this.isWon;
+    this.hintBtn.text.setColor(canHint ? THEME.primaryCss : THEME.mutedText);
+    this.hintBtn.container.setAlpha(canHint ? 1 : 0.5);
+  }
+
+  /** Aviso breve y no bloqueante sobre el tablero. */
+  private showToast(message: string): void {
+    this.toast?.destroy();
+    const { width } = this.cameras.main;
+    const toast = this.add
+      .text(width / 2, this.hud.boardTop + 60, message, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '28px',
+        fontStyle: 'bold',
+        color: THEME.text,
+        backgroundColor: THEME.surfaceCss,
+        padding: { x: 28, y: 18 },
+        align: 'center',
+        wordWrap: { width: width - 2 * MARGIN - 80 },
+      })
+      .setOrigin(0.5)
+      .setDepth(150);
+    this.toast = toast;
+
+    this.tweens.add({
+      targets: toast,
+      alpha: 0,
+      delay: 1500,
+      duration: 400,
+      onComplete: () => {
+        toast.destroy();
+        if (this.toast === toast) this.toast = undefined;
+      },
+    });
+  }
+
   private checkAndShowTutorial(): void {
     if (this.settings.hasSeenTutorial) return;
 
     const { width, height } = this.cameras.main;
     const cardW = Math.min(width - 2 * MARGIN, 640);
-    const cardH = 600;
+    const cardH = 700;
 
     const overlay = this.add.container(width / 2, height / 2).setDepth(100);
 
@@ -409,18 +526,20 @@ export class GameScene extends Phaser.Scene {
     const body = this.add
       .text(
         0,
-        -20,
+        -10,
         '👆 Toca una pieza para girarla.\n' +
           '🔄 El botón grande cambia el sentido del giro: horario ↻ o antihorario ↺.\n' +
           '↩️ Deshacer revierte tu última jugada.\n' +
           '⚡ Enciende todo el circuito desde la fuente.\n' +
+          '✨ Ganas Chispas al resolver niveles; úsalas en 💡 Pistas.\n' +
+          '📅 Cada día hay un reto igual para todos. ¡Mantén tu racha!\n' +
           '🖱️ En PC, el clic derecho gira al revés.',
         {
           fontFamily: FONT_FAMILY,
-          fontSize: '27px',
+          fontSize: '26px',
           color: THEME.text,
           align: 'left',
-          lineSpacing: 16,
+          lineSpacing: 12,
           wordWrap: { width: cardW - 90 },
         }
       )
@@ -450,21 +569,39 @@ export class GameScene extends Phaser.Scene {
     this.currentLevelIndex = levelIndex;
     this.isWon = false;
     this.tapCount = 0;
+    this.hintsUsed = 0;
     this.elapsedTime = 0;
     this.moveHistory = [];
 
     if (this.timerEvent) this.timerEvent.paused = false;
 
-    this.currentParams = getLevelParamsForProfile(this.profile);
-    const seed = 10000 + levelIndex * 7919;
-    this.currentLevelData = generateLevel(this.currentParams, seed);
+    if (this.isDaily) {
+      // Mismo puzzle para todos los jugadores del día: no depende de su nivel ni de su perfil
+      this.currentParams = dailyParams(this.dailyKey);
+      this.currentLevelData = generateLevel(this.currentParams, dailySeed(this.dailyKey));
+    } else {
+      this.currentParams = getLevelParamsForProfile(this.profile);
+      this.currentLevelData = generateLevel(
+        this.currentParams,
+        levelSeed(this.progress.seedBase, levelIndex)
+      );
+    }
     this.board = this.currentLevelData.board;
   }
 
   private startLevel(levelIndex: number): void {
     this.loadLevel(levelIndex);
+
+    // Guardar en qué nivel va el jugador para retomarlo al reabrir la app
+    if (!this.isDaily && this.progress.currentLevel !== levelIndex) {
+      this.progress = { ...this.progress, currentLevel: levelIndex };
+      storage.saveProgress(this.progress);
+    }
+
+    this.dailyBtn.text.setText(this.dailyLabel());
     this.updateHud();
     this.updateUndoButtonState();
+    this.updateHintButtonState();
     this.buildBoard();
     this.updateFlowVisuals();
   }
@@ -482,7 +619,20 @@ export class GameScene extends Phaser.Scene {
     storage.saveProfile(this.profile);
     this.modeBtn.text.setText(this.modeLabel(nextMode));
 
+    // Cambiar de modo reinicia la progresión de niveles (y sale del reto diario)
+    this.isDaily = false;
     this.startLevel(1);
+  }
+
+  private toggleDaily(): void {
+    if (this.isDaily) {
+      this.isDaily = false;
+      this.startLevel(this.progress.currentLevel);
+    } else {
+      this.isDaily = true;
+      this.dailyKey = dateKey(new Date());
+      this.startLevel(1);
+    }
   }
 
   private toggleTheme(): void {
@@ -622,6 +772,63 @@ export class GameScene extends Phaser.Scene {
     this.updateFlowVisuals();
   }
 
+  /**
+   * Comodín de alineación: por 10 Chispas, orienta correctamente la pieza mal colocada más
+   * cercana a la fuente. Usar pistas cuenta en el ajuste de dificultad y quita el bono de eficiencia.
+   */
+  private useHint(): void {
+    if (this.isWon) return;
+
+    const target = findHintCell(this.board);
+    if (!target) {
+      this.showToast('¡Todo está bien colocado!');
+      return;
+    }
+
+    const view = this.cellViews[target.row][target.col];
+    if (view.isRotating) return; // espera a que termine el giro; no se cobra
+
+    const afterPurchase = spendSparks(this.progress, HINT_COST);
+    if (!afterPurchase) {
+      this.showToast(`Necesitas ${HINT_COST} ✨ para una pista.\nResuelve niveles para ganar Chispas.`);
+      return;
+    }
+
+    this.progress = afterPurchase;
+    storage.saveProgress(this.progress);
+    this.hintsUsed++;
+
+    // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
+    this.moveHistory = [];
+    this.updateUndoButtonState();
+
+    const delta = hintRotationDelta(view.cell.rotation);
+    view.isRotating = true;
+    rotateCell(this.board, target.row, target.col, delta);
+
+    this.updateHud();
+    this.updateHintButtonState();
+    this.updateFlowVisuals();
+    view.bg.setStrokeStyle(5, HINT_GOLD); // resalta la pieza corregida
+
+    this.tweens.add({
+      targets: view.container,
+      angle: view.container.angle + delta * 90,
+      duration: 260,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        view.isRotating = false;
+        this.updateFlowVisuals();
+        view.bg.setStrokeStyle(5, HINT_GOLD);
+        this.evaluateVictory();
+        // Mantiene el resaltado dorado un instante para que se vea qué pieza se corrigió
+        this.time.delayedCall(900, () => {
+          if (this.cellViews[target.row]?.[target.col] === view) this.updateFlowVisuals();
+        });
+      },
+    });
+  }
+
   private updateFlowVisuals(): void {
     const powered = computePowerFlow(this.board);
     const { rows, cols } = this.board;
@@ -730,28 +937,72 @@ export class GameScene extends Phaser.Scene {
 
   private evaluateVictory(): void {
     if (this.isWon) return;
+    if (!checkVictory(this.board)) return;
 
-    if (checkVictory(this.board)) {
-      this.isWon = true;
-      this.updateUndoButtonState();
-      if (this.timerEvent) this.timerEvent.paused = true;
+    this.isWon = true;
+    this.updateUndoButtonState();
+    this.updateHintButtonState();
+    if (this.timerEvent) this.timerEvent.paused = true;
 
-      // Evaluar desempeño y adaptar dificultad del jugador
-      const minTaps = this.currentLevelData.minTaps;
-      const { updatedProfile, evaluation } = evaluateAndAdapt(this.profile, {
-        minTaps,
-        actualTaps: this.tapCount,
-        elapsedSeconds: this.elapsedTime,
-      });
+    const today = dateKey(new Date());
+    const minTaps = this.currentLevelData.minTaps;
+    const playedTier = this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier;
 
+    // Evaluar desempeño; el reto diario NO altera el perfil adaptativo (es igual para todos)
+    const { updatedProfile, evaluation } = evaluateAndAdapt(this.profile, {
+      minTaps,
+      actualTaps: this.tapCount,
+      elapsedSeconds: this.elapsedTime,
+      hintsUsed: this.hintsUsed,
+    });
+    if (!this.isDaily) {
       this.profile = updatedProfile;
       storage.saveProfile(this.profile);
-
-      this.showVictoryModal(evaluation);
     }
+
+    // Recompensa de Chispas: el reto diario paga doble la primera vez de cada día y nada al repetirlo
+    const countsAsTodaysDaily = this.isDaily && this.dailyKey === today;
+    const firstDailyToday = countsAsTodaysDaily && this.progress.lastDailyCompleted !== today;
+    const multiplier = this.isDaily ? (firstDailyToday ? 2 : 0) : 1;
+    const isNewRecord = isNewTimeRecord(this.progress, playedTier, this.elapsedTime);
+
+    const reward = computeSparksReward({
+      tier: playedTier,
+      tapEfficiency: evaluation.tapEfficiency,
+      elapsedSeconds: this.elapsedTime,
+      minTaps,
+      hintsUsed: this.hintsUsed,
+      isNewRecord,
+      multiplier,
+    });
+
+    const streakBefore = this.progress.streak.current;
+    this.progress = applyLevelOutcome(this.progress, {
+      tier: playedTier,
+      elapsedSeconds: this.elapsedTime,
+      tapEfficiency: evaluation.tapEfficiency,
+      sparksEarned: reward.total,
+      isDaily: countsAsTodaysDaily,
+      today,
+    });
+    if (!this.isDaily) {
+      // Al ganar, el jugador retoma en el siguiente nivel si cierra la app
+      this.progress = { ...this.progress, currentLevel: this.currentLevelIndex + 1 };
+    }
+    storage.saveProgress(this.progress);
+    this.updateHud();
+
+    this.showVictoryModal(evaluation, {
+      reward,
+      isDaily: this.isDaily,
+      firstDailyToday,
+      isNewRecord,
+      streak: currentStreak(this.progress.streak, today),
+      streakIncreased: this.progress.streak.current > streakBefore,
+    });
   }
 
-  private showVictoryModal(evaluation: PerformanceEvaluation): void {
+  private showVictoryModal(evaluation: PerformanceEvaluation, info: VictoryInfo): void {
     const { width, height } = this.cameras.main;
 
     const overlay = this.add.container(width / 2, height / 2).setDepth(200);
@@ -760,7 +1011,7 @@ export class GameScene extends Phaser.Scene {
     const backdrop = this.add.rectangle(0, 0, width, height, 0x000000, 0.8).setInteractive();
 
     const cardWidth = Math.min(width - 2 * MARGIN, 640);
-    const cardHeight = 660;
+    const cardHeight = 800;
     const card = this.add
       .rectangle(0, 0, cardWidth, cardHeight, THEME.surface, 1)
       .setStrokeStyle(3, THEME.primary);
@@ -775,49 +1026,79 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const subtitle = this.add
-      .text(0, -cardHeight / 2 + 108, `Nivel ${this.currentLevelIndex} superado`, {
-        fontFamily: FONT_FAMILY,
-        fontSize: '28px',
-        color: THEME.text,
-      })
+      .text(
+        0,
+        -cardHeight / 2 + 108,
+        info.isDaily ? '📅 Reto diario superado' : `Nivel ${this.currentLevelIndex} superado`,
+        { fontFamily: FONT_FAMILY, fontSize: '28px', color: THEME.text }
+      )
       .setOrigin(0.5);
 
     const minTaps = this.currentLevelData.minTaps;
     const efficiency = Math.round(evaluation.tapEfficiency * 100);
+    const { reward } = info;
 
-    const deltaSign = evaluation.deltaRating >= 0 ? '+' : '';
-    const ratingFeedback = `${deltaSign}${evaluation.deltaRating} Rating (Total: ${this.profile.rating})`;
-    const tierFeedback =
-      evaluation.newTier !== this.profile.currentTier
-        ? `\n🆙 Nivel de habilidad: Tier ${evaluation.newTier}`
-        : '';
+    const lines: string[] = [
+      `⏱️ Tiempo: ${this.formatTime(this.elapsedTime)}${info.isNewRecord ? '  🏅 ¡Récord!' : ''}`,
+      `👆 Toques: ${this.tapCount} (Mínimo: ${minTaps})`,
+      `🎯 Eficiencia: ${efficiency}%`,
+    ];
+    if (this.hintsUsed > 0) lines.push(`💡 Pistas usadas: ${this.hintsUsed}`);
+
+    if (!info.isDaily) {
+      const deltaSign = evaluation.deltaRating >= 0 ? '+' : '';
+      lines.push(`📈 ${deltaSign}${evaluation.deltaRating} Rating (Total: ${this.profile.rating})`);
+      if (evaluation.newTier !== this.profile.currentTier) {
+        lines.push(`🆙 Nivel de habilidad: Tier ${evaluation.newTier}`);
+      }
+    }
+
+    if (info.isDaily && !info.firstDailyToday) {
+      lines.push('✨ Sin Chispas: ya completaste el reto de hoy');
+    } else {
+      lines.push(`✨ +${reward.total} Chispas${reward.multiplier === 2 ? '  (¡doble por el reto!)' : ''}`);
+    }
+    if (info.streak > 0) {
+      lines.push(`🔥 Racha: ${info.streak} ${info.streak === 1 ? 'día' : 'días'}${info.streakIncreased ? ' ¡sube!' : ''}`);
+    }
 
     const statsText = this.add
-      .text(
-        0,
-        -30,
-        `⏱️ Tiempo: ${this.formatTime(this.elapsedTime)}\n` +
-          `👆 Toques: ${this.tapCount} (Mínimo: ${minTaps})\n` +
-          `🎯 Eficiencia: ${efficiency}%\n` +
-          `📈 ${ratingFeedback}${tierFeedback}`,
-        {
-          fontFamily: FONT_FAMILY,
-          fontSize: '28px',
-          color: THEME.text,
-          align: 'center',
-          lineSpacing: 14,
-          wordWrap: { width: cardWidth - 60 },
-        }
-      )
+      .text(0, -60, lines.join('\n'), {
+        fontFamily: FONT_FAMILY,
+        fontSize: '27px',
+        color: THEME.text,
+        align: 'center',
+        lineSpacing: 12,
+        wordWrap: { width: cardWidth - 60 },
+      })
       .setOrigin(0.5);
 
-    // Botón "Siguiente nivel"
+    const breakdown =
+      reward.total > 0
+        ? `Base ${reward.base} · Eficiencia +${reward.efficiencyBonus} · Rapidez +${reward.speedBonus} · Récord +${reward.recordBonus}`
+        : '';
+    const breakdownText = this.add
+      .text(0, 170, breakdown, {
+        fontFamily: FONT_FAMILY,
+        fontSize: '21px',
+        color: THEME.mutedText,
+        align: 'center',
+        wordWrap: { width: cardWidth - 60 },
+      })
+      .setOrigin(0.5);
+
+    // Botón principal: siguiente nivel, o volver al juego si venía del reto diario
     const nextBtn = this.makeButton(
       { x: 0, y: cardHeight / 2 - 190, w: cardWidth * 0.84, h: 104 },
-      'Siguiente nivel →',
+      info.isDaily ? 'Volver al juego →' : 'Siguiente nivel →',
       () => {
         overlay.destroy();
-        this.startLevel(this.currentLevelIndex + 1);
+        if (info.isDaily) {
+          this.isDaily = false;
+          this.startLevel(this.progress.currentLevel);
+        } else {
+          this.startLevel(this.currentLevelIndex + 1);
+        }
       },
       { textColor: '#0d1117', strokeColor: THEME.primary, fontSize: 32 }
     );
@@ -826,7 +1107,7 @@ export class GameScene extends Phaser.Scene {
     // Botón secundario "Repetir nivel"
     const replayBtn = this.makeButton(
       { x: 0, y: cardHeight / 2 - 70, w: cardWidth * 0.84, h: 92 },
-      'Repetir este nivel',
+      info.isDaily ? 'Repetir el reto' : 'Repetir este nivel',
       () => {
         overlay.destroy();
         this.startLevel(this.currentLevelIndex);
@@ -839,6 +1120,7 @@ export class GameScene extends Phaser.Scene {
       title,
       subtitle,
       statsText,
+      breakdownText,
       nextBtn.container,
       replayBtn.container,
     ]);
@@ -849,6 +1131,63 @@ export class GameScene extends Phaser.Scene {
       duration: 320,
       ease: 'Power2',
     });
+  }
+
+  /** Pantalla de estadísticas del jugador. */
+  private showStatsModal(): void {
+    const { width, height } = this.cameras.main;
+    const today = dateKey(new Date());
+    const { stats, streak } = this.progress;
+    const tier = this.profile.currentTier;
+    const best = stats.bestTimeByTier[String(tier)];
+
+    const overlay = this.add.container(width / 2, height / 2).setDepth(200);
+    const backdrop = this.add.rectangle(0, 0, width, height, 0x000000, 0.8).setInteractive();
+    const cardW = Math.min(width - 2 * MARGIN, 640);
+    const cardH = 700;
+    const card = this.add
+      .rectangle(0, 0, cardW, cardH, THEME.surface, 1)
+      .setStrokeStyle(3, THEME.primary);
+
+    const title = this.add
+      .text(0, -cardH / 2 + 56, '📊 Estadísticas', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '40px',
+        fontStyle: 'bold',
+        color: THEME.primaryCss,
+      })
+      .setOrigin(0.5);
+
+    const body = this.add
+      .text(
+        0,
+        -20,
+        `✨ Chispas: ${this.progress.sparks}\n` +
+          `🔥 Racha: ${currentStreak(streak, today)} días (mejor: ${streak.best})\n` +
+          `🧩 Niveles resueltos: ${stats.levelsSolved}\n` +
+          `🎯 Con eficiencia perfecta: ${stats.perfectSolves}\n` +
+          `📅 Retos diarios completados: ${stats.dailyCompleted}\n` +
+          `⏱️ Mejor tiempo (Tier ${tier}): ${best !== undefined ? this.formatTime(best) : '—'}\n` +
+          `📈 Rating: ${this.profile.rating}`,
+        {
+          fontFamily: FONT_FAMILY,
+          fontSize: '30px',
+          color: THEME.text,
+          align: 'left',
+          lineSpacing: 20,
+        }
+      )
+      .setOrigin(0.5);
+
+    const closeBtn = this.makeButton(
+      { x: 0, y: cardH / 2 - 76, w: 380, h: 96 },
+      'Cerrar',
+      () => overlay.destroy(),
+      { textColor: '#0d1117', strokeColor: THEME.primary, fontSize: 30 }
+    );
+    closeBtn.bg.setFillStyle(THEME.primary);
+
+    overlay.add([backdrop, card, title, body, closeBtn.container]);
   }
 
   private formatTime(seconds: number): string {
