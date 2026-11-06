@@ -73,10 +73,10 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
 ---
 
 ## 🧑 4. Tareas Humanas Críticas (Recordatorio)
-- **Google Play Console (AVISO PENDIENTE):** El usuario realizó el pago de los 25 USD en una cuenta de correo distinta a la que desea para publicar el juego. Recordar más adelante evaluar si se publica con esa cuenta o si se tramita soporte/reembolso o transferencia de app hacia la cuenta deseada antes de la Fase 6.
+- **Google Play Console (RESUELTO, nov 2026):** El usuario tramitó la devolución y volvió a pagar los 25 USD en la cuenta con la que sí se publicará. Aún no se ha publicado nada; se lanzará cuando haya una versión madura del juego. Como la cuenta es nueva, conviene subir la primera build a prueba cerrada en cuanto exista una versión estable, para que los 14 días corran en paralelo con el desarrollo.
 - Crear cuenta de AdMob (app en borrador).
 - Verificar nombre definitivo en Play Store (sin filtro de dispositivo), App Store, marcas registradas y dominios.
-- Reclutar 15–20 testers para los 14 días de prueba cerrada obligatoria.
+- Reclutar 15–20 testers para los 14 días de prueba cerrada obligatoria. **Confirmado (nov 2026):** la cuenta de desarrollador es nueva (creada en 2026), por lo que SÍ aplica el requisito de ≥12 testers continuos durante 14 días antes de pedir producción (detalle en `docs/05-publicacion-play-store.md`).
 
 ---
 
