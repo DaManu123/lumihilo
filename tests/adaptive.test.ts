@@ -90,6 +90,38 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
     expect(res.updatedProfile.consecutiveStruggles).toBe(1);
   });
 
+  it('abandonos consecutivos bajan el tier solo al llegar a 3 (igual que los atascos)', () => {
+    let profile: AdaptiveProfile = { ...createDefaultProfile('normal'), currentTier: 4 };
+    const abandon = { minTaps: 10, actualTaps: 5, elapsedSeconds: 40, abandoned: true };
+
+    for (let i = 0; i < 2; i++) {
+      profile = evaluateAndAdapt(profile, abandon).updatedProfile;
+      expect(profile.currentTier).toBe(4);
+    }
+    profile = evaluateAndAdapt(profile, abandon).updatedProfile;
+    expect(profile.currentTier).toBe(3);
+  });
+
+  it('modo relajado no penaliza lentitud, reintentos ni abandono', () => {
+    let profile: AdaptiveProfile = { ...createDefaultProfile('relaxed'), currentTier: 2 };
+    const startRating = profile.rating;
+
+    for (let i = 0; i < 5; i++) {
+      const res = evaluateAndAdapt(profile, { minTaps: 10, actualTaps: 80, elapsedSeconds: 300 });
+      expect(res.evaluation.isStruggle).toBe(false);
+      profile = res.updatedProfile;
+    }
+    for (let i = 0; i < 5; i++) {
+      const res = evaluateAndAdapt(profile, { minTaps: 10, actualTaps: 5, elapsedSeconds: 40, abandoned: true });
+      expect(res.evaluation.isStruggle).toBe(false);
+      profile = res.updatedProfile;
+    }
+
+    expect(profile.rating).toBeGreaterThanOrEqual(startRating);
+    expect(profile.consecutiveStruggles).toBe(0);
+    expect(profile.currentTier).toBeGreaterThanOrEqual(2);
+  });
+
   it('maestría excepcional incrementa rating y acelera la progresión', () => {
     let profile = createDefaultProfile('normal');
     const initialRating = profile.rating;

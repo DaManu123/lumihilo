@@ -2,7 +2,7 @@ import { LevelParams } from './types';
 
 /**
  * Modos de juego elegibles por el usuario.
- * - relaxed: Puzzles accesibles (4x4), sin penalización por lentitud o reintentos, ideal para jugar sin estrés.
+ * - relaxed: Puzzles accesibles (4x4, tiers 1-3), sin penalización por lentitud, reintentos ni abandono, ideal para jugar sin estrés.
  * - normal: Dificultad adaptativa automática que escala según el desempeño real del jugador.
  * - challenge: Puzzles de mayor tamaño (5x5 a 7x7) con más bucles y bifurcaciones complejas.
  */
@@ -89,7 +89,7 @@ export function createDefaultProfile(mode: GameMode = 'normal'): AdaptiveProfile
  */
 export function getLevelParamsForProfile(profile: AdaptiveProfile): LevelParams {
   if (profile.mode === 'relaxed') {
-    // En modo relajado se mantiene en 4x4 o 5x5 suave
+    // En modo relajado se mantiene en 4x4 (tiers 1 a 3, aumentando solo los bucles)
     const tier = Math.min(profile.currentTier, 3);
     return DIFFICULTY_TIERS[tier] || DIFFICULTY_TIERS[1];
   }
@@ -124,13 +124,29 @@ export function evaluateAndAdapt(
   updated.totalTimeSeconds += result.elapsedSeconds;
 
   // Si fue abandono, cuenta como dificultad excesiva / atasco
+  // En modo relajado no hay penalización: abandonar no cuenta como atasco ni baja el rating.
+  if (result.abandoned && updated.mode === 'relaxed') {
+    updated.consecutiveWinsWithoutStruggle = 0;
+    return {
+      updatedProfile: updated,
+      evaluation: {
+        tapEfficiency: 0,
+        isStruggle: false,
+        isMastery: false,
+        performanceScore: 0,
+        deltaRating: 0,
+        newTier: updated.currentTier,
+      },
+    };
+  }
+
   if (result.abandoned) {
     updated.consecutiveStruggles++;
     updated.consecutiveWinsWithoutStruggle = 0;
     updated.rating = Math.max(500, updated.rating - 50);
 
     let newTier = updated.currentTier;
-    if (updated.consecutiveStruggles >= 2) {
+    if (updated.consecutiveStruggles >= 3) {
       newTier = Math.max(MIN_TIER, updated.currentTier - 1);
       updated.currentTier = newTier;
       updated.consecutiveStruggles = 0;
@@ -165,9 +181,11 @@ export function evaluateAndAdapt(
   // Criterios de atasco (Struggle):
   // - Necesitó más de 3.2x los toques mínimos Y tardó más del doble del tiempo esperado.
   // - O usó más de 2 pistas.
+  // En modo relajado nunca se considera atasco (sin penalización por lentitud ni reintentos).
   const isStruggle =
-    (safeActualTaps >= safeMinTaps * 3.2 && result.elapsedSeconds > expectedSeconds * 1.8) ||
-    (result.hintsUsed !== undefined && result.hintsUsed >= 2);
+    updated.mode !== 'relaxed' &&
+    ((safeActualTaps >= safeMinTaps * 3.2 && result.elapsedSeconds > expectedSeconds * 1.8) ||
+    (result.hintsUsed !== undefined && result.hintsUsed >= 2));
 
   // Criterio de maestría:
   // - Eficiencia de toques >= 0.7 y tiempo dentro de lo esperado

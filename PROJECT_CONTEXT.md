@@ -2,7 +2,7 @@
 **Proyecto:** Puzzle Adaptativo (Nombre de trabajo provisional; *Lumen Loop* y *Synapse Flow* descartados por colisión en Play Store)  
 **Repositorio GitHub:** [DaManu123/puzzle-adaptativo](https://github.com/DaManu123/puzzle-adaptativo)  
 **Rama activa de trabajo:** `dev`  
-**Última actualización:** Fase 0 (Planificación y Setup)
+**Última actualización:** Fase 3 completada (noviembre 2026)
 
 ---
 
@@ -84,4 +84,12 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
 - [x] **Fase 0 (Completada y verificada):** Setup técnico Vite + TS + Phaser 3 + Vitest + Capacitor Android. Escena interactiva probada y verificada por el usuario.
 - [x] **Fase 1 (Completada y validada):** Prototipo jugable 4×4 validado por el usuario como divertido y funcional.
 - [x] **Fase 2 (Completada y probada):** Generador procedural con árbol de expansión (`generator.ts`), ciclos ajustables, solver independiente (`solver.ts`), cálculo de dificultad `d(nivel)` y prueba de estrés de 10.000 niveles en verde (0.06 ms/nivel). Soporte en `GameScene` para jugar rachas infinitas de niveles con dificultad creciente.
-- [ ] **Fase 3 (Siguiente):** Dificultad adaptativa (ajuste de skill v1), modos de juego (Relajado / Normal / Reto), opciones de accesibilidad y persistencia local.
+- [x] **Fase 3 (Completada):** Dificultad adaptativa (`src/core/adaptive.ts`): 10 tiers (4×4 a 7×7), perfil con rating tipo Elo y modos Relajado / Normal / Reto. Reglas verificadas por tests: 3 atascos (o abandonos) seguidos bajan el tier, 5 victorias seguidas sin atasco lo suben. El modo Relajado nunca penaliza (ni lentitud, ni reintentos, ni abandono) y se limita a los tiers 1-3 (4×4). Incluye modo claro/oscuro persistente, deshacer / rotación inversa (clic derecho o botón) y aviso inicial. Persistencia local con `StorageService` (localStorage + Capacitor Preferences). Landing page y política de privacidad en `docs/landing/` y `docs/`. 24 tests en verde.
+- [ ] **Fase 4 (Siguiente):** Juice (sonido, vibración, efecto de energía), arte final, reto diario, racha y estadísticas, pistas y reinicio instantáneo.
+
+## 📝 Pendientes conocidos
+- El índice de nivel no se persiste: la semilla es `10000 + nivel * 7919`, así que al recargar se repiten los mismos niveles. Separar semillas al implementar el reto diario.
+- `appId` sigue siendo `com.placeholder.puzzleadaptativo` (fijarlo antes del primer bundle).
+- La landing tiene placeholders de tráiler y capturas; la política de privacidad es un borrador.
+- `HelloScene` sigue registrada en `main.ts` y hay un `console.log` de depuración.
+- Añadir `.gitattributes` (`* text=auto eol=lf`) para evitar falsos cambios CRLF/LF.
