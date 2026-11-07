@@ -5,12 +5,18 @@ import {
   noteForCell,
   winStepNote,
 } from '../core/sound';
+import type { HapticLevel } from '../core/haptics';
 import type { AudioService } from './AudioService';
 import type { HapticService } from './HapticService';
+import { MusicPlayer, NoopMusicPlayer } from './MusicService';
 
 export interface FeedbackSettings {
+  /** Efectos de sonido. */
   sound: boolean;
+  /** Música de fondo. */
+  music: boolean;
   haptics: boolean;
+  hapticsLevel: HapticLevel;
 }
 
 /**
@@ -18,15 +24,24 @@ export interface FeedbackSettings {
  * victoria…) tiene aquí su respuesta sensorial, y los ajustes del jugador se respetan en un solo sitio.
  */
 export class FeedbackService {
-  private settings: FeedbackSettings = { sound: true, haptics: true };
+  private settings: FeedbackSettings = { sound: true, music: true, haptics: true, hapticsLevel: 'normal' };
+  /** El audio solo puede empezar tras el primer gesto del usuario. */
+  private unlocked = false;
 
   constructor(
     private readonly audio: AudioService,
-    private readonly haptics: HapticService
+    private readonly haptics: HapticService,
+    private readonly music: MusicPlayer = new NoopMusicPlayer()
   ) {}
 
   configure(settings: Partial<FeedbackSettings>): void {
     this.settings = { ...this.settings, ...settings };
+    this.haptics.setLevel(this.settings.hapticsLevel);
+    // La música se enciende o se apaga al instante, pero solo si ya hubo un gesto del usuario
+    if (this.unlocked) {
+      if (this.settings.music) this.music.start();
+      else this.music.stop();
+    }
   }
 
   private sound(play: () => void): void {
@@ -43,9 +58,21 @@ export class FeedbackService {
     }
   }
 
-  /** Primer gesto del usuario: habilita el audio. */
+  /** Primer gesto del usuario: habilita el audio y, si está activada, arranca la música. */
   unlock(): void {
     this.audio.unlock();
+    this.unlocked = true;
+    if (this.settings.music) this.music.start();
+  }
+
+  /** Cuánto circuito está encendido (0 a 1): la música gana capas a medida que el jugador avanza. */
+  setIntensity(value: number): void {
+    if (this.settings.music) this.music.setIntensity(value);
+  }
+
+  /** Muestra de la vibración actual (al cambiar la intensidad en Ajustes). */
+  previewHaptics(): void {
+    this.vibrate(() => this.haptics.mediumTap());
   }
 
   /** Giro de una casilla: su nota y un toque ligero. */
@@ -88,9 +115,10 @@ export class FeedbackService {
     this.sound(() => this.audio.note(winStepNote(step), { volume: 0.32 }));
   }
 
-  /** Circuito completo: acorde y vibración de éxito. */
+  /** Circuito completo: acorde, vibración de éxito y la música se serena y resuelve. */
   win(): void {
     this.sound(() => this.audio.chord(WIN_CHORD, { volume: 0.6 }));
     this.vibrate(() => this.haptics.success());
+    if (this.settings.music) this.music.resolve();
   }
 }

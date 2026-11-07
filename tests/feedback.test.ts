@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { FeedbackService } from '../src/services/FeedbackService';
 import type { AudioService, NoteOptions } from '../src/services/AudioService';
 import type { HapticService } from '../src/services/HapticService';
+import type { MusicPlayer } from '../src/services/MusicService';
+import type { HapticLevel } from '../src/core/haptics';
 import { NOTE_COUNT, noteForCell, WIN_CHORD, HINT_NOTES } from '../src/core/sound';
 
 class FakeAudio implements AudioService {
@@ -13,8 +15,19 @@ class FakeAudio implements AudioService {
   unlock() { this.unlocked++; }
 }
 
+class FakeMusic implements MusicPlayer {
+  log: string[] = [];
+  intensities: number[] = [];
+  start() { this.log.push('start'); }
+  stop() { this.log.push('stop'); }
+  setIntensity(v: number) { this.intensities.push(v); }
+  resolve() { this.log.push('resolve'); }
+}
+
 class FakeHaptics implements HapticService {
   calls: string[] = [];
+  level: HapticLevel | null = null;
+  setLevel(level: HapticLevel) { this.level = level; }
   async lightTap() { this.calls.push('light'); }
   async mediumTap() { this.calls.push('medium'); }
   async success() { this.calls.push('success'); }
@@ -23,12 +36,14 @@ class FakeHaptics implements HapticService {
 describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () => {
   let audio: FakeAudio;
   let haptics: FakeHaptics;
+  let music: FakeMusic;
   let feedback: FeedbackService;
 
   beforeEach(() => {
     audio = new FakeAudio();
     haptics = new FakeHaptics();
-    feedback = new FeedbackService(audio, haptics);
+    music = new FakeMusic();
+    feedback = new FeedbackService(audio, haptics, music);
   });
 
   it('girar una casilla toca su nota y da un toque ligero', () => {
@@ -124,11 +139,79 @@ describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () =
     expect(audio.unlocked).toBe(1);
   });
 
+  describe('música', () => {
+    it('no arranca hasta el primer gesto del usuario', () => {
+      feedback.configure({ music: true });
+      expect(music.log).toEqual([]);
+      feedback.unlock();
+      expect(music.log).toEqual(['start']);
+    });
+
+    it('con la música desactivada no arranca aunque haya gesto', () => {
+      feedback.configure({ music: false });
+      feedback.unlock();
+      expect(music.log).toEqual([]);
+    });
+
+    it('activar o desactivar la música después del primer gesto la enciende o la apaga al instante', () => {
+      feedback.unlock();
+      feedback.configure({ music: false });
+      feedback.configure({ music: true });
+      expect(music.log).toEqual(['start', 'stop', 'start']);
+    });
+
+    it('la música es independiente de los efectos de sonido', () => {
+      feedback.configure({ sound: false });
+      feedback.unlock();
+      expect(music.log).toEqual(['start']);
+      feedback.configure({ sound: true, music: false });
+      feedback.rotate(0, 0);
+      expect(audio.notes).toHaveLength(1);
+      expect(music.log[music.log.length - 1]).toBe('stop');
+    });
+
+    it('la intensidad llega a la música solo si está activada', () => {
+      feedback.setIntensity(0.4);
+      feedback.configure({ music: false });
+      feedback.setIntensity(0.9);
+      expect(music.intensities).toEqual([0.4]);
+    });
+
+    it('al ganar la música se serena y resuelve', () => {
+      feedback.win();
+      expect(music.log).toEqual(['resolve']);
+    });
+
+    it('al ganar con la música desactivada no la toca', () => {
+      feedback.configure({ music: false });
+      feedback.win();
+      expect(music.log).not.toContain('resolve');
+    });
+  });
+
+  describe('intensidad de la vibración', () => {
+    it('pasa la intensidad elegida al servicio de vibración', () => {
+      feedback.configure({ hapticsLevel: 'strong' });
+      expect(haptics.level).toBe('strong');
+      feedback.configure({ hapticsLevel: 'soft' });
+      expect(haptics.level).toBe('soft');
+    });
+
+    it('la muestra vibra con la intensidad actual y respeta el ajuste de vibración', () => {
+      feedback.previewHaptics();
+      expect(haptics.calls).toEqual(['medium']);
+      feedback.configure({ haptics: false });
+      feedback.previewHaptics();
+      expect(haptics.calls).toEqual(['medium']);
+    });
+  });
+
   it('un error de vibración no rompe el juego', async () => {
     const failing: HapticService = {
       lightTap: () => Promise.reject(new Error('sin motor háptico')),
       mediumTap: () => Promise.reject(new Error('sin motor háptico')),
       success: () => Promise.reject(new Error('sin motor háptico')),
+      setLevel: () => undefined,
     };
     // Aunque el servicio rechace la promesa, FeedbackService no propaga ni deja errores sin capturar
     const f = new FeedbackService(audio, failing);
@@ -141,6 +224,7 @@ describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () =
       lightTap: () => { throw new Error('error síncrono'); },
       mediumTap: () => { throw new Error('error síncrono'); },
       success: () => { throw new Error('error síncrono'); },
+      setLevel: () => undefined,
     };
     expect(() => new FeedbackService(audio, throwing).rotate(0, 0)).not.toThrow();
   });

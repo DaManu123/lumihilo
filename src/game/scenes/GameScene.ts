@@ -32,6 +32,7 @@ import {
   spendSparks,
 } from '../../core/progress';
 import { findHintCell, hintRotationDelta } from '../../core/hints';
+import { HAPTIC_LABELS, HAPTIC_LEVELS, HapticLevel, isHapticLevel } from '../../core/haptics';
 import { THEME, setActiveTheme } from '../theme';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -173,7 +174,13 @@ export class GameScene extends Phaser.Scene {
     setActiveTheme(this.settings.theme);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.currentLevelIndex = this.progress.currentLevel;
-    feedback.configure({ sound: this.settings.soundEnabled, haptics: this.settings.hapticsEnabled });
+    if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
+    feedback.configure({
+      sound: this.settings.soundEnabled,
+      music: this.settings.musicEnabled,
+      haptics: this.settings.hapticsEnabled,
+      hapticsLevel: this.settings.hapticsLevel,
+    });
     // Los navegadores solo permiten audio tras un gesto: se habilita con el primer toque
     this.input.once('pointerdown', () => feedback.unlock());
 
@@ -686,6 +693,71 @@ export class GameScene extends Phaser.Scene {
     overlay.add([text, stateText, track, zone]);
   }
 
+  /**
+   * Selector de una opción entre varias (control segmentado). Cada segmento mide ≥ 48 dp de alto.
+   * Devuelve una función para activarlo o desactivarlo (atenuado e ignorando toques).
+   */
+  private addChoiceRow(
+    overlay: Phaser.GameObjects.Container,
+    cardW: number,
+    y: number,
+    label: string,
+    options: ReadonlyArray<{ value: string; label: string }>,
+    initial: string,
+    onChange: (value: string) => void
+  ): (enabled: boolean) => void {
+    const left = -cardW / 2 + 44;
+    const width = cardW - 88;
+    const height = 88;
+    const top = y + 40;
+    const segW = width / options.length;
+    let value = initial;
+    let enabled = true;
+
+    const group = this.add.container(0, 0);
+    const panel = this.add.graphics();
+    const labels: Phaser.GameObjects.Text[] = [];
+    const draw = () => {
+      panel.clear();
+      panel.lineStyle(2, THEME.divider, 1);
+      panel.strokeRoundedRect(left, top, width, height, 26);
+      options.forEach((option, i) => {
+        const selected = option.value === value;
+        if (selected) {
+          panel.fillStyle(THEME.primary, 1);
+          panel.fillRoundedRect(left + i * segW + 6, top + 6, segW - 12, height - 12, 21);
+        }
+        labels[i].setColor(selected ? THEME.onPrimary : THEME.text);
+      });
+    };
+
+    group.add(this.uiText(left, y, label, { size: 29, weight: '600' }));
+    group.add(panel);
+    options.forEach((option, i) => {
+      const text = this.uiText(left + i * segW + segW / 2, top + height / 2, option.label, {
+        size: FONT.button,
+        weight: '700',
+        originX: 0.5,
+      });
+      labels.push(text);
+      group.add(text);
+      group.add(
+        this.hitZone({ x: left + i * segW + segW / 2, y: top + height / 2, w: segW, h: height }, () => {
+          if (!enabled || value === option.value) return;
+          value = option.value;
+          draw();
+          onChange(value);
+        })
+      );
+    });
+    draw();
+    overlay.add(group);
+    return (on: boolean) => {
+      enabled = on;
+      group.setAlpha(on ? 1 : 0.4);
+    };
+  }
+
   /** Botón relleno (acción principal) o con contorno (secundaria) dentro de una tarjeta. */
   private addCardButton(
     overlay: Phaser.GameObjects.Container,
@@ -751,7 +823,7 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  /** Pantalla de estadísticas del jugador y ajustes de sonido y vibración. */
+  /** Pantalla de estadísticas del jugador. */
   private showStatsModal(): void {
     const today = dateKey(new Date());
     const { stats, streak } = this.progress;
@@ -772,36 +844,82 @@ export class GameScene extends Phaser.Scene {
       ['Puntuación', String(this.profile.rating)],
     ];
 
-    const rowH = 54;
-    const cardH = 150 + rows.length * rowH + 76 + 2 * 84 + 190;
+    const rowH = 58;
+    const cardH = 150 + rows.length * rowH + 190;
     const { overlay, w } = this.createCard(cardH, 200);
     overlay.add(this.uiText(0, -cardH / 2 + 70, 'Estadísticas', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
-    let y = -cardH / 2 + 150;
-    rows.forEach(([label, value, icon]) => {
-      this.addRow(overlay, w, y, label, value, { icon });
+    let y = -cardH / 2 + 160;
+    rows.forEach(([label, value, icon], i) => {
+      this.addRow(overlay, w, y, label, value, { icon, last: i === rows.length - 1 });
       y += rowH;
     });
 
-    // Ajustes
-    y += 22;
-    overlay.add(this.uiText(-w / 2 + 44, y, 'Ajustes', { size: 30, display: true, color: THEME.primaryCss }));
-    y += 62;
-    this.addToggleRow(overlay, w, y, 'Sonido', this.settings.soundEnabled, (value) => {
+    // Dos botones: Ajustes (secundario) y Cerrar (principal)
+    const btnW = (w - 88 - 18) / 2;
+    const btnY = cardH / 2 - 84;
+    this.addCardButton(
+      overlay,
+      { x: -(btnW + 18) / 2, y: btnY, w: btnW, h: 100 },
+      'Ajustes',
+      () => {
+        overlay.destroy();
+        this.showSettingsModal();
+      },
+      false
+    );
+    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, 'Cerrar', () => overlay.destroy(), true);
+  }
+
+  /** Ajustes: efectos de sonido, música, vibración y su intensidad. Se guardan al instante. */
+  private showSettingsModal(): void {
+    const cardH = 150 + 3 * 84 + 170 + 190;
+    const { overlay, w } = this.createCard(cardH, 200);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Ajustes', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    let y = -cardH / 2 + 170;
+    this.addToggleRow(overlay, w, y, 'Efectos', this.settings.soundEnabled, (value) => {
       this.settings.soundEnabled = value;
       storage.saveSettings(this.settings);
       feedback.configure({ sound: value });
-      feedback.toggle(); // al activarlo suena una muestra
+      feedback.toggle(); // al activarlos suena una muestra
     });
     y += 84;
+    this.addToggleRow(overlay, w, y, 'Música', this.settings.musicEnabled, (value) => {
+      this.settings.musicEnabled = value;
+      storage.saveSettings(this.settings);
+      feedback.configure({ music: value });
+    });
+    y += 84;
+
+    let setIntensityEnabled: (enabled: boolean) => void = () => undefined;
     this.addToggleRow(overlay, w, y, 'Vibración', this.settings.hapticsEnabled, (value) => {
       this.settings.hapticsEnabled = value;
       storage.saveSettings(this.settings);
       feedback.configure({ haptics: value });
-      feedback.toggle(); // al activarla vibra una vez
+      setIntensityEnabled(value);
+      feedback.previewHaptics(); // al activarla vibra una vez
     });
+    y += 84 + 6;
 
-    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Cerrar', () => overlay.destroy(), true);
+    setIntensityEnabled = this.addChoiceRow(
+      overlay,
+      w,
+      y,
+      'Intensidad de la vibración',
+      HAPTIC_LEVELS.map((level) => ({ value: level, label: HAPTIC_LABELS[level] })),
+      this.settings.hapticsLevel,
+      (value) => {
+        const level = value as HapticLevel;
+        this.settings.hapticsLevel = level;
+        storage.saveSettings(this.settings);
+        feedback.configure({ hapticsLevel: level });
+        feedback.previewHaptics(); // se nota al momento qué intensidad se eligió
+      }
+    );
+    setIntensityEnabled(this.settings.hapticsEnabled);
+
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
   }
 
   // ---------------------------------------------------------------------------
@@ -1036,11 +1154,16 @@ export class GameScene extends Phaser.Scene {
 
   private updateFlowVisuals(): void {
     const powered = computePowerFlow(this.board);
+    let lit = 0;
     for (let r = 0; r < this.board.rows; r++) {
       for (let c = 0; c < this.board.cols; c++) {
         this.drawCell(this.cellViews[r][c], powered[r][c]);
+        if (powered[r][c]) lit++;
       }
     }
+    // La música gana capas a medida que el circuito se enciende (la fuente, sola, cuenta como 0)
+    const total = this.board.rows * this.board.cols;
+    feedback.setIntensity(total > 1 ? (lit - 1) / (total - 1) : 0);
   }
 
   /**

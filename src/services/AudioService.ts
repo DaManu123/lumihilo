@@ -10,8 +10,8 @@ export interface NoteOptions {
 }
 
 /**
- * Audio del juego. Todo se sintetiza en el momento (no hay archivos de sonido): pesa cero, funciona
- * sin conexión y cada nota sale de la escala pentatónica de `core/sound.ts`.
+ * Efectos de sonido del juego. Todo se sintetiza en el momento (no hay archivos de audio): pesa
+ * cero, funciona sin conexión y cada nota sale de la escala pentatónica de `core/sound.ts`.
  */
 export interface AudioService {
   note(index: number, options?: NoteOptions): void;
@@ -26,17 +26,21 @@ export class NoopAudioService implements AudioService {
   unlock(): void {}
 }
 
-/** Máximo de notas sonando a la vez: evita saturar el procesador si se toca muy rápido. */
-const MAX_VOICES = 14;
+/** Volumen general de la música (queda por debajo de los efectos para no taparlos). */
+export const MUSIC_VOLUME = 0.36;
 
-export class WebAudioService implements AudioService {
+/**
+ * Motor de audio compartido por los efectos y la música: un único contexto de Web Audio con dos
+ * canales (efectos y música), cada uno con su propio eco, que se pausa solo cuando la app pasa a segundo plano.
+ */
+export class AudioEngine {
   private ctx: AudioContext | null = null;
-  private master: GainNode | null = null;
-  private voices = 0;
+  private sfx: GainNode | null = null;
+  private music: GainNode | null = null;
   private failed = false;
 
   /** Crea el contexto de audio la primera vez que hace falta (siempre tras un gesto del usuario). */
-  private context(): AudioContext | null {
+  context(): AudioContext | null {
     if (this.failed) return null;
     if (!this.ctx) {
       try {
@@ -48,41 +52,76 @@ export class WebAudioService implements AudioService {
         }
         const ctx = new Ctor();
 
-        // Cadena: notas → volumen general → salida, más un eco corto que da el brillo de cristal
-        const master = ctx.createGain();
-        master.gain.value = 0.55;
-        master.connect(ctx.destination);
+        // Canal de efectos: eco corto que da el brillo de cristal
+        const sfx = ctx.createGain();
+        sfx.gain.value = 0.55;
+        this.withEcho(ctx, sfx, 0.17, 0.26, 0.2);
 
-        const delay = ctx.createDelay(0.5);
-        delay.delayTime.value = 0.17;
-        const feedback = ctx.createGain();
-        feedback.gain.value = 0.26;
-        const wet = ctx.createGain();
-        wet.gain.value = 0.2;
-        master.connect(delay);
-        delay.connect(feedback);
-        feedback.connect(delay);
-        delay.connect(wet);
-        wet.connect(ctx.destination);
+        // Canal de música: nace en silencio (entra con un fundido) y tiene un eco largo y ambiental
+        const music = ctx.createGain();
+        music.gain.value = 0;
+        this.withEcho(ctx, music, 0.592, 0.36, 0.34);
 
         this.ctx = ctx;
-        this.master = master;
+        this.sfx = sfx;
+        this.music = music;
+
+        // Al pasar la app a segundo plano el audio se pausa; al volver, continúa
+        document.addEventListener('visibilitychange', () => {
+          if (!this.ctx) return;
+          if (document.hidden) void this.ctx.suspend().catch(() => undefined);
+          else void this.ctx.resume().catch(() => undefined);
+        });
       } catch {
         this.failed = true;
         return null;
       }
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
+    if (this.ctx.state === 'suspended' && !document.hidden) void this.ctx.resume().catch(() => undefined);
     return this.ctx;
   }
 
+  /** Conecta un canal a la salida, con un eco (retardo con realimentación) en paralelo. */
+  private withEcho(ctx: AudioContext, bus: GainNode, delaySec: number, feedback: number, wet: number): void {
+    bus.connect(ctx.destination);
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = delaySec;
+    const fb = ctx.createGain();
+    fb.gain.value = feedback;
+    const wetGain = ctx.createGain();
+    wetGain.gain.value = wet;
+    bus.connect(delay);
+    delay.connect(fb);
+    fb.connect(delay);
+    delay.connect(wetGain);
+    wetGain.connect(ctx.destination);
+  }
+
+  get sfxBus(): GainNode | null {
+    return this.sfx;
+  }
+
+  get musicBus(): GainNode | null {
+    return this.music;
+  }
+}
+
+/** Máximo de efectos sonando a la vez: evita saturar el procesador si se toca muy rápido. */
+const MAX_VOICES = 14;
+
+export class WebAudioService implements AudioService {
+  private voices = 0;
+
+  constructor(private readonly engine: AudioEngine) {}
+
   unlock(): void {
-    this.context();
+    this.engine.context();
   }
 
   note(index: number, options: NoteOptions = {}): void {
-    const ctx = this.context();
-    if (!ctx || !this.master || this.voices >= MAX_VOICES) return;
+    const ctx = this.engine.context();
+    const bus = this.engine.sfxBus;
+    if (!ctx || !bus || this.voices >= MAX_VOICES) return;
 
     const { volume = 0.5, bright = false, delaySec = 0 } = options;
     const freq = noteFrequency(index);
@@ -107,7 +146,7 @@ export class WebAudioService implements AudioService {
     body.connect(env);
     shine.connect(shineGain);
     shineGain.connect(env);
-    env.connect(this.master);
+    env.connect(bus);
 
     this.voices++;
     body.onended = () => {

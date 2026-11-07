@@ -2,6 +2,7 @@ import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { AdaptiveProfile, createDefaultProfile } from '../core/adaptive';
 import { PlayerProgress, sanitizeProgress } from '../core/progress';
+import type { HapticLevel } from '../core/haptics';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -10,7 +11,9 @@ export interface UserSettings {
   theme: 'dark' | 'light';
   rotationDirection: RotationDirection;
   soundEnabled: boolean;
+  musicEnabled: boolean;
   hapticsEnabled: boolean;
+  hapticsLevel: HapticLevel;
   hasSeenTutorial: boolean;
 }
 
@@ -18,7 +21,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'dark',
   rotationDirection: 'cw',
   soundEnabled: true,
+  musicEnabled: true,
   hapticsEnabled: true,
+  hapticsLevel: 'normal',
   hasSeenTutorial: false,
 };
 
