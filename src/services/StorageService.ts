@@ -2,7 +2,8 @@ import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { AdaptiveProfile, createDefaultProfile } from '../core/adaptive';
 import { PlayerProgress, sanitizeProgress } from '../core/progress';
-import type { HapticLevel } from '../core/haptics';
+import type { HapticLevel, HapticMode } from '../core/haptics';
+import type { MusicStyle } from '../core/music';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -12,8 +13,12 @@ export interface UserSettings {
   rotationDirection: RotationDirection;
   soundEnabled: boolean;
   musicEnabled: boolean;
+  musicStyle: MusicStyle;
+  /** Volumen de la música en porcentaje (0 a 200): 100 es el estándar. */
+  musicVolume: number;
   hapticsEnabled: boolean;
   hapticsLevel: HapticLevel;
+  hapticsMode: HapticMode;
   hasSeenTutorial: boolean;
 }
 
@@ -22,8 +27,11 @@ export const DEFAULT_SETTINGS: UserSettings = {
   rotationDirection: 'cw',
   soundEnabled: true,
   musicEnabled: true,
+  musicStyle: 'swing',
+  musicVolume: 100,
   hapticsEnabled: true,
   hapticsLevel: 'normal',
+  hapticsMode: 'all',
   hasSeenTutorial: false,
 };
 

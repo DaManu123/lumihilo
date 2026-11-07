@@ -37,6 +37,8 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private sfx: GainNode | null = null;
   private music: GainNode | null = null;
+  /** Salida común: un limitador suave que evita la distorsión aunque se suba mucho el volumen. */
+  private out: AudioNode | null = null;
   private failed = false;
 
   /** Crea el contexto de audio la primera vez que hace falta (siempre tras un gesto del usuario). */
@@ -51,6 +53,16 @@ export class AudioEngine {
           return null;
         }
         const ctx = new Ctor();
+
+        // Limitador suave (tanh): no cambia el volumen normal, pero impide que los picos pasen de ~-2 dBFS
+        // y se distorsionen al sumar efectos y música con el volumen de la música subido
+        const limiter = ctx.createWaveShaper();
+        const curve = new Float32Array(2048);
+        for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((i / (curve.length - 1)) * 2 - 1);
+        limiter.curve = curve;
+        limiter.oversample = '2x';
+        limiter.connect(ctx.destination);
+        this.out = limiter;
 
         // Canal de efectos: eco corto que da el brillo de cristal
         const sfx = ctx.createGain();
@@ -83,7 +95,8 @@ export class AudioEngine {
 
   /** Conecta un canal a la salida, con un eco (retardo con realimentación) en paralelo. */
   private withEcho(ctx: AudioContext, bus: GainNode, delaySec: number, feedback: number, wet: number): void {
-    bus.connect(ctx.destination);
+    const out = this.out ?? ctx.destination;
+    bus.connect(out);
     const delay = ctx.createDelay(1);
     delay.delayTime.value = delaySec;
     const fb = ctx.createGain();
@@ -94,7 +107,7 @@ export class AudioEngine {
     delay.connect(fb);
     fb.connect(delay);
     delay.connect(wetGain);
-    wetGain.connect(ctx.destination);
+    wetGain.connect(out);
   }
 
   get sfxBus(): GainNode | null {

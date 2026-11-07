@@ -31,3 +31,48 @@ jobs:
 
       - name: Compilación para producción (build)
         run: npm run build
+
+  # Compila el proyecto Android (incluido el plugin nativo de vibración, escrito en Java) en cada subida.
+  # No publica nada: solo avisa si algo del lado de Android dejó de compilar, antes de llegar a una Release.
+  android-build:
+    name: Compilar el proyecto Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar el juego web
+        run: npm run build
+
+      - name: Sincronizar Capacitor con el proyecto Android
+        run: npx cap sync android
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Asegurar el SDK de Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
+
+      - name: Compilar el APK de depuración
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
