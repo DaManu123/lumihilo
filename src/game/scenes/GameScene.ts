@@ -73,7 +73,10 @@ import { APP_NAME } from '../../config';
 
 interface CellView {
   container: Phaser.GameObjects.Container;
-  g: Phaser.GameObjects.Graphics;
+  /** Imagen de la casilla: se cambia de textura según su estado (ver `drawCell`). */
+  img: Phaser.GameObjects.Image;
+  /** Clave de la textura que muestra ahora; evita repintar si nada cambió. */
+  textureKey: string;
   cell: CellState;
   row: number;
   col: number;
@@ -131,6 +134,36 @@ interface TextOptions {
 
 /** Retraso entre casillas consecutivas en el pulso de luz de la victoria. */
 const PULSE_STEP_MS = 55;
+
+/** Niveles de brillo distintos durante el pulso de victoria (el ojo no distingue más). */
+const GLOW_STEPS = 8;
+
+/**
+ * Texturas ya pintadas de las casillas. Phaser vuelve a calcular todo lo que contiene un objeto
+ * `Graphics` en CADA fotograma, aunque no cambie; con un tablero grande eso ahogaba a los teléfonos de
+ * gama baja. Cada aspecto distinto de casilla se pinta una vez en una textura y después solo se dibuja
+ * esa imagen, que cuesta casi nada. Es el mismo dibujo, sin cambios visibles.
+ */
+const cellTextureKeys = new Set<string>();
+let cellTexturePrefix = '';
+
+interface CellLeg {
+  dx: number;
+  dy: number;
+  /** Hasta dónde llega el cable desde el centro. */
+  reach: number;
+  lit: boolean;
+}
+
+/** Todo lo que cambia el aspecto de una casilla (y por tanto define su textura). */
+interface CellLook {
+  powered: boolean;
+  isSource: boolean;
+  hintRing: boolean;
+  /** Paso de brillo, de 0 a GLOW_STEPS. */
+  glowStep: number;
+  legs: CellLeg[];
+}
 
 export class GameScene extends Phaser.Scene {
   private profile!: AdaptiveProfile;
@@ -1296,12 +1329,12 @@ export class GameScene extends Phaser.Scene {
 
         // La zona táctil ocupa toda la celda (incluido el hueco entre casillas)
         const hit = this.add.zone(0, 0, cellSize, cellSize).setInteractive({ useHandCursor: true });
-        const g = this.add.graphics();
+        const img = this.add.image(0, 0, '__DEFAULT');
 
-        container.add([g, hit]);
+        container.add([img, hit]);
         container.setAngle(cell.rotation * 90);
 
-        const view: CellView = { container, g, cell, row: r, col: c, isRotating: false, glow: 0, hintRing: false };
+        const view: CellView = { container, img, textureKey: '', cell, row: r, col: c, isRotating: false, glow: 0, hintRing: false };
 
         // Toque / clic izquierdo: gira en el sentido elegido; clic derecho (PC): sentido contrario
         hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -1317,17 +1350,81 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Dibuja una casilla: vidrio redondeado, trazas apagadas (finas) o filamento encendido (grueso,
-   * con halo y núcleo blanco-caliente). Todo es simétrico a 90°, así que gira con el contenedor.
+   * Pone en la casilla la imagen que corresponde a su estado actual: vidrio redondeado, trazas apagadas
+   * (finas) o filamento encendido (grueso, con halo y núcleo blanco-caliente). Todo es simétrico a 90°,
+   * así que gira con el contenedor. La imagen se pinta una sola vez (ver `cellTextureKeys`).
    */
   private drawCell(view: CellView, powered: boolean): void {
     const { cellVisual, gap } = this.geometry;
     const half = cellVisual / 2;
-    const radius = cellVisual * 0.17;
-    const g = view.g;
-    const glow = view.glow;
+    const bridge = half + gap / 2; // llega hasta la mitad del hueco para que los cables vecinos se toquen
     const isSource = view.cell.isSource;
-    g.clear();
+    const dirs: Array<{ dir: Direction; dx: number; dy: number }> = [
+      { dir: Direction.NORTH, dx: 0, dy: -1 },
+      { dir: Direction.EAST, dx: 1, dy: 0 },
+      { dir: Direction.SOUTH, dx: 0, dy: 1 },
+      { dir: Direction.WEST, dx: -1, dy: 0 },
+    ];
+
+    const legs: CellLeg[] = dirs
+      .filter((d) => hasDirection(view.cell.baseMask, d.dir))
+      .map((d) => {
+        const worldDir = ((d.dir + view.cell.rotation) % 4) as Direction;
+        const delta = DIRECTION_DELTAS[worldDir];
+        const nr = view.row + delta.dr;
+        const nc = view.col + delta.dc;
+        const hasNeighbor = nr >= 0 && nr < this.board.rows && nc >= 0 && nc < this.board.cols;
+        return {
+          dx: d.dx,
+          dy: d.dy,
+          // Hacia el borde del tablero el cable termina en el borde de la casilla, sin asomar
+          reach: hasNeighbor ? bridge : half,
+          lit: powered && isBranchConnected(this.board, view.row, view.col, worldDir),
+        };
+      });
+
+    // El brillo solo se nota en casillas encendidas o en la fuente
+    const glowStep = powered || isSource ? Math.round(Math.min(1, Math.max(0, view.glow)) * GLOW_STEPS) : 0;
+    const look: CellLook = { powered, isSource, hintRing: view.hintRing, glowStep, legs };
+
+    const prefix = `${this.settings.theme}|${this.geometry.cellSize}|${cellVisual}`;
+    const key =
+      `cell|${prefix}|${powered ? 1 : 0}${isSource ? 1 : 0}${view.hintRing ? 1 : 0}|${glowStep}|` +
+      legs.map((l) => `${l.dx},${l.dy},${l.reach === bridge ? 'b' : 'h'}${l.lit ? 'L' : 'o'}`).join(';');
+    if (key === view.textureKey) return;
+
+    this.ensureCellTexture(key, prefix, look);
+    view.img.setTexture(key);
+    view.textureKey = key;
+  }
+
+  /** Pinta (una sola vez) la textura de un aspecto de casilla. */
+  private ensureCellTexture(key: string, prefix: string, look: CellLook): void {
+    if (prefix !== cellTexturePrefix) {
+      // Cambió el tema o el tamaño del tablero: las texturas viejas ya no sirven
+      for (const old of cellTextureKeys) if (this.textures.exists(old)) this.textures.remove(old);
+      cellTextureKeys.clear();
+      cellTexturePrefix = prefix;
+    }
+    if (this.textures.exists(key)) return;
+
+    const size = this.geometry.cellSize + 2;
+    const texture = this.textures.addDynamicTexture(key, size, size);
+    if (!texture) return;
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    this.paintCell(g, look);
+    texture.draw(g, size / 2, size / 2);
+    g.destroy();
+    cellTextureKeys.add(key);
+  }
+
+  /** Dibuja el aspecto de una casilla centrado en (0, 0). */
+  private paintCell(g: Phaser.GameObjects.Graphics, look: CellLook): void {
+    const { cellVisual } = this.geometry;
+    const half = cellVisual / 2;
+    const radius = cellVisual * 0.17;
+    const { powered, isSource, legs } = look;
+    const glow = look.glowStep / GLOW_STEPS;
 
     // Casilla de vidrio: se tiñe de calor cuando está energizada
     const tint = powered ? 0.1 + 0.16 * glow : 0;
@@ -1338,35 +1435,12 @@ export class GameScene extends Phaser.Scene {
     g.strokeRoundedRect(-half, -half, cellVisual, cellVisual, radius);
 
     // Anillo de la pista
-    if (view.hintRing) {
+    if (look.hintRing) {
       g.lineStyle(5, THEME.hintRing, 1);
       g.strokeRoundedRect(-half + 3, -half + 3, cellVisual - 6, cellVisual - 6, radius * 0.9);
     }
 
     const w = Math.max(8, cellVisual * 0.12);
-    const bridge = half + gap / 2; // llega hasta la mitad del hueco para que los cables vecinos se toquen
-    const dirs: Array<{ dir: Direction; dx: number; dy: number }> = [
-      { dir: Direction.NORTH, dx: 0, dy: -1 },
-      { dir: Direction.EAST, dx: 1, dy: 0 },
-      { dir: Direction.SOUTH, dx: 0, dy: 1 },
-      { dir: Direction.WEST, dx: -1, dy: 0 },
-    ];
-
-    const legs = dirs
-      .filter((d) => hasDirection(view.cell.baseMask, d.dir))
-      .map((d) => {
-        const worldDir = ((d.dir + view.cell.rotation) % 4) as Direction;
-        const delta = DIRECTION_DELTAS[worldDir];
-        const nr = view.row + delta.dr;
-        const nc = view.col + delta.dc;
-        const hasNeighbor = nr >= 0 && nr < this.board.rows && nc >= 0 && nc < this.board.cols;
-        return {
-          ...d,
-          // Hacia el borde del tablero el cable termina en el borde de la casilla, sin asomar
-          reach: hasNeighbor ? bridge : half,
-          lit: powered && isBranchConnected(this.board, view.row, view.col, worldDir),
-        };
-      });
     const stroke = (leg: { dx: number; dy: number; reach: number }) => {
       g.beginPath();
       g.moveTo(0, 0);

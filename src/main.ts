@@ -41,7 +41,9 @@ function startGame(): void {
     },
     scene: [GameScene, HelloScene],
   };
-  new Phaser.Game(config);
+  const game = new Phaser.Game(config);
+  // Solo para las pruebas de rendimiento (`?debug` en la dirección)
+  if (location.search.includes('debug')) (window as unknown as { __game: Phaser.Game }).__game = game;
 }
 
 loadFonts().then(startGame);

@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "cap:sync": "npm run build && npx cap sync android",
     "test:e2e": "node e2e/run.mjs",
-    "test:audio": "node e2e/run.mjs --audio"
+    "test:audio": "node e2e/run.mjs --audio",
+    "test:perf": "node e2e/run.mjs --perf"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
