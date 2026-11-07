@@ -170,7 +170,9 @@ export function evaluateAndAdapt(
 
   updated.gamesWon++;
 
-  const safeActualTaps = Math.max(result.actualTaps, 1);
+  // Cada pista cuenta como un toque más: corrige una pieza sin que el jugador la gire
+  const hintsUsed = result.hintsUsed ?? 0;
+  const safeActualTaps = Math.max(result.actualTaps + hintsUsed, 1);
   const safeMinTaps = Math.max(result.minTaps, 1);
   const tapEfficiency = Math.min(1.0, safeMinTaps / safeActualTaps);
 
@@ -183,18 +185,22 @@ export function evaluateAndAdapt(
 
   // Criterios de atasco (Struggle):
   // - Necesitó más de 3.2x los toques mínimos Y tardó más del doble del tiempo esperado.
-  // - O usó más de 2 pistas.
+  // - O usó 2 o más pistas.
   // En modo relajado nunca se considera atasco (sin penalización por lentitud ni reintentos).
   const isStruggle =
     updated.mode !== 'relaxed' &&
     ((safeActualTaps >= safeMinTaps * 3.2 && result.elapsedSeconds > expectedSeconds * 1.8) ||
-    (result.hintsUsed !== undefined && result.hintsUsed >= 2));
+    hintsUsed >= 2);
 
   // Criterio de maestría:
   // - Eficiencia de toques >= 0.6 y tiempo dentro de lo esperado.
   // minTaps considera giros en ambos sentidos; un jugador que solo gira en sentido horario
   // y no desperdicia ningún toque ronda ~0.67 de eficiencia, así que 0.6 no lo penaliza.
-  const isMastery = tapEfficiency >= MASTERY_MIN_EFFICIENCY && result.elapsedSeconds <= expectedSeconds * 1.25;
+  // La maestría exige haberlo resuelto sin pistas: si no, resolver con ayuda subiría la dificultad.
+  const isMastery =
+    hintsUsed === 0 &&
+    tapEfficiency >= MASTERY_MIN_EFFICIENCY &&
+    result.elapsedSeconds <= expectedSeconds * 1.25;
 
   let deltaRating = 0;
   if (isMastery) {

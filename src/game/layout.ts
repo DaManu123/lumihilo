@@ -17,15 +17,20 @@ export const MARGIN = 24;
 export const GAP = 16;
 export const BUTTON_H = 92;
 export const DIRECTION_BTN_H = 112;
+/** Lado de los botones de icono (≈ 49 dp en un teléfono típico). */
+export const ICON_BTN = 92;
 
-export const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+/** Tipografía de títulos y números: ancha y rotunda, como un letrero luminoso. */
+export const FONT_DISPLAY = '"Unbounded Variable", "Arial Black", system-ui, sans-serif';
+/** Tipografía de interfaz: diseñada para ser legible por personas de todas las edades. */
+export const FONT_UI = '"Atkinson Hyperlegible Next Variable", system-ui, "Segoe UI", Roboto, sans-serif';
 
 /** Tamaños de texto en píxeles lógicos. */
 export const FONT = {
-  title: 38,
-  level: 30,
+  title: 28,
+  display: 34,
   stats: 28,
-  button: 26,
+  button: 27,
   small: 24,
 } as const;
 
@@ -44,48 +49,63 @@ export interface Rect {
   h: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export interface HudLayout {
-  titleY: number;
-  modeBtn: Rect;
-  themeBtn: Rect;
-  levelY: number;
-  diffY: number;
-  statsY: number;
-  tapsX: number;
-  timeX: number;
-  resetBtn: Rect;
-  undoBtn: Rect;
+  /** Título, alineado a la izquierda. */
+  titlePos: Point;
+  /** Botón de estadísticas (a la derecha del título). */
+  statsBtn: Rect;
+  /** Borde derecho del marcador de Chispas (justo a la izquierda del botón de estadísticas). */
+  sparksRight: Point;
+  /** Barra segmentada de modo / reto diario / tema. */
+  modeBar: Rect;
+  modeSegments: [Rect, Rect, Rect];
+  /** Texto del nivel (izquierda) y bloque de tiempo y toques (derecha). */
+  levelPos: Point;
+  timePos: Point;
+  tapsPos: Point;
+  /** Barra segmentada de reiniciar / deshacer / pista. */
+  toolbar: Rect;
+  toolSegments: [Rect, Rect, Rect];
   dirBtn: Rect;
   /** Y donde empieza la zona del tablero. */
   boardTop: number;
 }
 
-export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
-  const halfW = (width - 2 * MARGIN - GAP) / 2;
-  const leftX = MARGIN + halfW / 2;
-  const rightX = width - MARGIN - halfW / 2;
+function segmentsOf(bar: Rect): [Rect, Rect, Rect] {
+  const w = bar.w / 3;
+  const seg = (i: number): Rect => ({ x: bar.x - bar.w / 2 + w / 2 + i * w, y: bar.y, w, h: bar.h });
+  return [seg(0), seg(1), seg(2)];
+}
 
-  const titleY = 52;
-  const topRowY = 146;
-  const levelY = 230;
-  const diffY = 266;
-  const statsY = 312;
-  const controlsY = 396;
-  const dirY = controlsY + BUTTON_H / 2 + 22 + DIRECTION_BTN_H / 2;
+export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
+  const barW = width - 2 * MARGIN;
+  const titleY = 56;
+  const modeBarY = 158;
+  const toolbarY = 378;
+  const dirY = toolbarY + BUTTON_H / 2 + 22 + DIRECTION_BTN_H / 2;
   const boardTop = dirY + DIRECTION_BTN_H / 2 + 24;
 
+  const statsBtn: Rect = { x: width - MARGIN - ICON_BTN / 2, y: titleY, w: ICON_BTN, h: ICON_BTN };
+  const modeBar: Rect = { x: width / 2, y: modeBarY, w: barW, h: BUTTON_H };
+  const toolbar: Rect = { x: width / 2, y: toolbarY, w: barW, h: BUTTON_H };
+
   return {
-    titleY,
-    modeBtn: { x: leftX, y: topRowY, w: halfW, h: BUTTON_H },
-    themeBtn: { x: rightX, y: topRowY, w: halfW, h: BUTTON_H },
-    levelY,
-    diffY,
-    statsY,
-    tapsX: leftX,
-    timeX: rightX,
-    resetBtn: { x: leftX, y: controlsY, w: halfW, h: BUTTON_H },
-    undoBtn: { x: rightX, y: controlsY, w: halfW, h: BUTTON_H },
-    dirBtn: { x: width / 2, y: dirY, w: width - 2 * MARGIN, h: DIRECTION_BTN_H },
+    titlePos: { x: MARGIN, y: titleY },
+    statsBtn,
+    sparksRight: { x: statsBtn.x - ICON_BTN / 2 - 16, y: titleY },
+    modeBar,
+    modeSegments: segmentsOf(modeBar),
+    levelPos: { x: MARGIN, y: 254 },
+    timePos: { x: width - MARGIN, y: 246 },
+    tapsPos: { x: width - MARGIN, y: 286 },
+    toolbar,
+    toolSegments: segmentsOf(toolbar),
+    dirBtn: { x: width / 2, y: dirY, w: barW, h: DIRECTION_BTN_H },
     boardTop,
   };
 }

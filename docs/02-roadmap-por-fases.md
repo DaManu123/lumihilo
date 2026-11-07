@@ -91,14 +91,15 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 - [ ] Arte final simple y coherente (paleta, tipografía, icono)
 - [ ] Sonido y vibración al rotar, conectar y ganar (con opción de silencio)
 - [ ] Efecto de "energía fluyendo" al completar el circuito
-- [ ] **Sistema de estímulos y economía interna:**
+- [x] **Sistema de estímulos y economía interna:**
   - Puntos / Chispas de energía ganadas por nivel resuelto (bonos por resolver en toques mínimos y bajo tiempo)
   - Saldo acumulativo local en `StorageService`
-- [ ] **Comodines y pistas inteligentes:**
-  - Comodín de alineación: reorienta automáticamente una pieza fuera de lugar usando `solver.ts`
-  - Costo en chispas o uso balanceado por partida
-- [ ] **Reto diario:** semilla derivada de la fecha, idéntica para todos los jugadores
-- [ ] **Racha diaria** y estadísticas (mejor tiempo, partidas resueltas, racha de días activos)
+- [x] **Comodines y pistas inteligentes:**
+  - Comodín de alineación: reorienta automáticamente la pieza mal colocada más cercana a la fuente (`src/core/hints.ts`)
+  - Cuesta 10 Chispas; usar pistas quita el bono de eficiencia y cuenta para el ajuste de dificultad
+- [x] **Reto diario:** semilla derivada de la fecha, idéntica para todos los jugadores
+- [x] **Racha diaria** y estadísticas (mejor tiempo por tier, niveles resueltos, racha de días activos)
+- [x] Progreso guardado: el jugador retoma en su último nivel y no repite niveles (semilla base propia)
 - [ ] Reinicio instantáneo tras ganar
 
 **Entregable:** versión con bucle de retención, economía interna de chispas, pistas inteligentes y reto diario.

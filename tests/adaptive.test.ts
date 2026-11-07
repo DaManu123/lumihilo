@@ -134,6 +134,38 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
     expect(res.evaluation.isMastery).toBe(true);
   });
 
+  it('resolver con pistas nunca cuenta como maestría, aunque no se toque nada', () => {
+    const res = evaluateAndAdapt(createDefaultProfile('normal'), {
+      minTaps: 11,
+      actualTaps: 0, // todo resuelto con pistas
+      elapsedSeconds: 5,
+      hintsUsed: 9,
+    });
+
+    expect(res.evaluation.isMastery).toBe(false);
+    expect(res.evaluation.isStruggle).toBe(true);
+    expect(res.evaluation.deltaRating).toBeLessThan(0);
+  });
+
+  it('una sola pista no da maestría ni penaliza: el resultado es neutro', () => {
+    const res = evaluateAndAdapt(createDefaultProfile('normal'), {
+      minTaps: 10,
+      actualTaps: 9,
+      elapsedSeconds: 20,
+      hintsUsed: 1,
+    });
+
+    expect(res.evaluation.isMastery).toBe(false);
+    expect(res.evaluation.isStruggle).toBe(false);
+    expect(res.evaluation.deltaRating).toBeGreaterThan(0);
+  });
+
+  it('cada pista cuenta como un toque en la eficiencia', () => {
+    const sin = evaluateAndAdapt(createDefaultProfile('normal'), { minTaps: 10, actualTaps: 20, elapsedSeconds: 30 });
+    const con = evaluateAndAdapt(createDefaultProfile('normal'), { minTaps: 10, actualTaps: 20, elapsedSeconds: 30, hintsUsed: 1 });
+    expect(con.evaluation.tapEfficiency).toBeLessThan(sin.evaluation.tapEfficiency);
+  });
+
   it('maestría excepcional incrementa rating y acelera la progresión', () => {
     let profile = createDefaultProfile('normal');
     const initialRating = profile.rating;
