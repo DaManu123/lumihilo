@@ -17,3 +17,9 @@ android/local.properties
 .idea/
 .vscode/
 *.iml
+
+# Versión de escritorio
+desktop/node_modules/
+desktop/release/
+*.p12
+*.pfx

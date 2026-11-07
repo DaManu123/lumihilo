@@ -32,6 +32,7 @@ import {
   spendSparks,
 } from '../../core/progress';
 import { findHintCell, hintRotationDelta } from '../../core/hints';
+import { HAPTIC_LABELS, HAPTIC_LEVELS, HapticLevel, isHapticLevel } from '../../core/haptics';
 import { THEME, setActiveTheme } from '../theme';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -46,7 +47,7 @@ import {
   computeHudLayout,
   computeBoardGeometry,
 } from '../layout';
-import { storage, UserSettings, RotationDirection } from '../../services';
+import { storage, feedback, UserSettings, RotationDirection } from '../../services';
 import { APP_NAME } from '../../config';
 
 interface CellView {
@@ -173,6 +174,15 @@ export class GameScene extends Phaser.Scene {
     setActiveTheme(this.settings.theme);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.currentLevelIndex = this.progress.currentLevel;
+    if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
+    feedback.configure({
+      sound: this.settings.soundEnabled,
+      music: this.settings.musicEnabled,
+      haptics: this.settings.hapticsEnabled,
+      hapticsLevel: this.settings.hapticsLevel,
+    });
+    // Los navegadores solo permiten audio tras un gesto: se habilita con el primer toque
+    this.input.once('pointerdown', () => feedback.unlock());
 
     const { width } = this.cameras.main;
     this.applyBackground();
@@ -207,6 +217,11 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(THEME.background);
     document.documentElement.style.backgroundColor = toCss(THEME.background);
     document.body.style.backgroundColor = toCss(THEME.background);
+  }
+
+  /** Cantidad de casillas con energía (para detectar cuándo un giro conecta algo nuevo). */
+  private poweredCount(): number {
+    return computePowerFlow(this.board).reduce((total, row) => total + row.filter(Boolean).length, 0);
   }
 
   /** Respeta la preferencia del sistema de reducir el movimiento. */
@@ -508,6 +523,7 @@ export class GameScene extends Phaser.Scene {
     this.settings.rotationDirection = this.rotationDirection;
     storage.saveSettings(this.settings);
     this.renderDirectionButton();
+    feedback.toggle();
 
     if (!this.reducedMotion()) {
       // Pequeño "pulso" de confirmación (sin parpadeos)
@@ -575,7 +591,10 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------------------
 
   /** Crea una tarjeta modal con fondo atenuado. Devuelve el contenedor y el ancho de la tarjeta. */
-  private createCard(cardH: number, depth: number): { overlay: Phaser.GameObjects.Container; w: number } {
+  private createCard(
+    cardH: number,
+    depth: number
+  ): { overlay: Phaser.GameObjects.Container; w: number; backdrop: Phaser.GameObjects.Rectangle } {
     const { width, height } = this.cameras.main;
     const w = Math.min(width - 2 * MARGIN, 648);
     const overlay = this.add.container(width / 2, height / 2).setDepth(depth);
@@ -587,7 +606,7 @@ export class GameScene extends Phaser.Scene {
     card.lineStyle(3, THEME.cardBorder, 1);
     card.strokeRoundedRect(-w / 2, -cardH / 2, w, cardH, 34);
     overlay.add([backdrop, card]);
-    return { overlay, w };
+    return { overlay, w, backdrop };
   }
 
   /** Fila "etiqueta ... valor" con una línea divisoria debajo. */
@@ -625,6 +644,118 @@ export class GameScene extends Phaser.Scene {
       line.strokePath();
       overlay.add(line);
     }
+  }
+
+  /** Fila de ajuste con interruptor (fila táctil de 84 px de alto). */
+  private addToggleRow(
+    overlay: Phaser.GameObjects.Container,
+    cardW: number,
+    y: number,
+    label: string,
+    initial: boolean,
+    onChange: (value: boolean) => void
+  ): void {
+    const left = -cardW / 2 + 44;
+    const right = cardW / 2 - 44;
+    const switchW = 96;
+    const switchH = 52;
+    let value = initial;
+
+    const track = this.add.graphics();
+    const draw = () => {
+      track.clear();
+      const x = right - switchW;
+      if (value) {
+        track.fillStyle(THEME.primary, 1);
+        track.fillRoundedRect(x, y - switchH / 2, switchW, switchH, switchH / 2);
+        track.fillStyle(THEME.surface, 1);
+        track.fillCircle(x + switchW - switchH / 2, y, switchH / 2 - 7);
+      } else {
+        track.lineStyle(3, THEME.wireOff, 1);
+        track.strokeRoundedRect(x, y - switchH / 2, switchW, switchH, switchH / 2);
+        track.fillStyle(THEME.wireOff, 1);
+        track.fillCircle(x + switchH / 2, y, switchH / 2 - 9);
+      }
+    };
+    draw();
+
+    const text = this.uiText(left, y, label, { size: 29, weight: '600' });
+    const stateText = this.uiText(right - switchW - 18, y, '', { size: FONT.small, weight: '500', color: THEME.mutedText, originX: 1 });
+    const refreshText = () => stateText.setText(value ? 'Activado' : 'Desactivado');
+    refreshText();
+
+    const zone = this.hitZone({ x: 0, y, w: cardW - 40, h: 84 }, () => {
+      value = !value;
+      draw();
+      refreshText();
+      onChange(value);
+    });
+    overlay.add([text, stateText, track, zone]);
+  }
+
+  /**
+   * Selector de una opción entre varias (control segmentado). Cada segmento mide ≥ 48 dp de alto.
+   * Devuelve una función para activarlo o desactivarlo (atenuado e ignorando toques).
+   */
+  private addChoiceRow(
+    overlay: Phaser.GameObjects.Container,
+    cardW: number,
+    y: number,
+    label: string,
+    options: ReadonlyArray<{ value: string; label: string }>,
+    initial: string,
+    onChange: (value: string) => void
+  ): (enabled: boolean) => void {
+    const left = -cardW / 2 + 44;
+    const width = cardW - 88;
+    const height = 88;
+    const top = y + 40;
+    const segW = width / options.length;
+    let value = initial;
+    let enabled = true;
+
+    const group = this.add.container(0, 0);
+    const panel = this.add.graphics();
+    const labels: Phaser.GameObjects.Text[] = [];
+    const draw = () => {
+      panel.clear();
+      panel.lineStyle(2, THEME.divider, 1);
+      panel.strokeRoundedRect(left, top, width, height, 26);
+      options.forEach((option, i) => {
+        const selected = option.value === value;
+        if (selected) {
+          panel.fillStyle(THEME.primary, 1);
+          panel.fillRoundedRect(left + i * segW + 6, top + 6, segW - 12, height - 12, 21);
+        }
+        labels[i].setColor(selected ? THEME.onPrimary : THEME.text);
+      });
+    };
+
+    group.add(this.uiText(left, y, label, { size: 29, weight: '600' }));
+    group.add(panel);
+    options.forEach((option, i) => {
+      const text = this.uiText(left + i * segW + segW / 2, top + height / 2, option.label, {
+        size: FONT.button,
+        weight: '700',
+        originX: 0.5,
+      });
+      labels.push(text);
+      group.add(text);
+      group.add(
+        this.hitZone({ x: left + i * segW + segW / 2, y: top + height / 2, w: segW, h: height }, () => {
+          if (!enabled || value === option.value) return;
+          value = option.value;
+          draw();
+          onChange(value);
+        })
+      );
+    });
+    draw();
+    overlay.add(group);
+    return (on: boolean) => {
+      enabled = on;
+      group.setAlpha(on ? 1 : 0.4);
+    };
   }
 
   /** Botón relleno (acción principal) o con contorno (secundaria) dentro de una tarjeta. */
@@ -700,10 +831,6 @@ export class GameScene extends Phaser.Scene {
     const best = stats.bestTimeByTier[String(tier)];
     const shownStreak = currentStreak(streak, today);
 
-    const cardH = 860;
-    const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Estadísticas', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
-
     const days = (n: number) => `${n} ${n === 1 ? 'día' : 'días'}`;
     const rows: Array<[string, string, IconKind?]> = [
       ['Chispas', String(this.progress.sparks), 'spark'],
@@ -716,13 +843,83 @@ export class GameScene extends Phaser.Scene {
       ['Nivel de habilidad', String(tier)],
       ['Puntuación', String(this.profile.rating)],
     ];
+
+    const rowH = 58;
+    const cardH = 150 + rows.length * rowH + 190;
+    const { overlay, w } = this.createCard(cardH, 200);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Estadísticas', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
     let y = -cardH / 2 + 160;
     rows.forEach(([label, value, icon], i) => {
       this.addRow(overlay, w, y, label, value, { icon, last: i === rows.length - 1 });
-      y += 58;
+      y += rowH;
     });
 
-    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Cerrar', () => overlay.destroy(), true);
+    // Dos botones: Ajustes (secundario) y Cerrar (principal)
+    const btnW = (w - 88 - 18) / 2;
+    const btnY = cardH / 2 - 84;
+    this.addCardButton(
+      overlay,
+      { x: -(btnW + 18) / 2, y: btnY, w: btnW, h: 100 },
+      'Ajustes',
+      () => {
+        overlay.destroy();
+        this.showSettingsModal();
+      },
+      false
+    );
+    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, 'Cerrar', () => overlay.destroy(), true);
+  }
+
+  /** Ajustes: efectos de sonido, música, vibración y su intensidad. Se guardan al instante. */
+  private showSettingsModal(): void {
+    const cardH = 150 + 3 * 84 + 170 + 190;
+    const { overlay, w } = this.createCard(cardH, 200);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Ajustes', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    let y = -cardH / 2 + 170;
+    this.addToggleRow(overlay, w, y, 'Efectos', this.settings.soundEnabled, (value) => {
+      this.settings.soundEnabled = value;
+      storage.saveSettings(this.settings);
+      feedback.configure({ sound: value });
+      feedback.toggle(); // al activarlos suena una muestra
+    });
+    y += 84;
+    this.addToggleRow(overlay, w, y, 'Música', this.settings.musicEnabled, (value) => {
+      this.settings.musicEnabled = value;
+      storage.saveSettings(this.settings);
+      feedback.configure({ music: value });
+    });
+    y += 84;
+
+    let setIntensityEnabled: (enabled: boolean) => void = () => undefined;
+    this.addToggleRow(overlay, w, y, 'Vibración', this.settings.hapticsEnabled, (value) => {
+      this.settings.hapticsEnabled = value;
+      storage.saveSettings(this.settings);
+      feedback.configure({ haptics: value });
+      setIntensityEnabled(value);
+      feedback.previewHaptics(); // al activarla vibra una vez
+    });
+    y += 84 + 6;
+
+    setIntensityEnabled = this.addChoiceRow(
+      overlay,
+      w,
+      y,
+      'Intensidad de la vibración',
+      HAPTIC_LEVELS.map((level) => ({ value: level, label: HAPTIC_LABELS[level] })),
+      this.settings.hapticsLevel,
+      (value) => {
+        const level = value as HapticLevel;
+        this.settings.hapticsLevel = level;
+        storage.saveSettings(this.settings);
+        feedback.configure({ hapticsLevel: level });
+        feedback.previewHaptics(); // se nota al momento qué intensidad se eligió
+      }
+    );
+    setIntensityEnabled(this.settings.hapticsEnabled);
+
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
   }
 
   // ---------------------------------------------------------------------------
@@ -802,6 +999,7 @@ export class GameScene extends Phaser.Scene {
     const newThemeName = this.settings.theme === 'light' ? 'dark' : 'light';
     this.settings.theme = newThemeName;
     storage.saveSettings(this.settings);
+    feedback.toggle();
 
     setActiveTheme(newThemeName);
     this.applyBackground();
@@ -956,11 +1154,16 @@ export class GameScene extends Phaser.Scene {
 
   private updateFlowVisuals(): void {
     const powered = computePowerFlow(this.board);
+    let lit = 0;
     for (let r = 0; r < this.board.rows; r++) {
       for (let c = 0; c < this.board.cols; c++) {
         this.drawCell(this.cellViews[r][c], powered[r][c]);
+        if (powered[r][c]) lit++;
       }
     }
+    // La música gana capas a medida que el circuito se enciende (la fuente, sola, cuenta como 0)
+    const total = this.board.rows * this.board.cols;
+    feedback.setIntensity(total > 1 ? (lit - 1) / (total - 1) : 0);
   }
 
   /**
@@ -982,7 +1185,12 @@ export class GameScene extends Phaser.Scene {
     this.updateUndoButtonState();
 
     // Rotar en el modelo lógico
+    const poweredBefore = this.poweredCount();
     rotateCell(this.board, view.row, view.col, step);
+
+    // Sonido y vibración: la nota de la casilla y, si el giro enciende algo nuevo, una campanita
+    feedback.rotate(view.row, view.col);
+    if (this.poweredCount() > poweredBefore) feedback.connected(view.row, view.col);
 
     // Animación fluida de giro
     const targetAngle = view.container.angle + step * 90;
@@ -1013,6 +1221,7 @@ export class GameScene extends Phaser.Scene {
 
     this.moveHistory.pop();
     this.updateUndoButtonState();
+    feedback.undo(lastMove.row, lastMove.col);
 
     view.isRotating = true;
     // Deshacer gira en el sentido contrario al de la jugada original
@@ -1051,6 +1260,7 @@ export class GameScene extends Phaser.Scene {
 
     const afterPurchase = spendSparks(this.progress, HINT_COST);
     if (!afterPurchase) {
+      feedback.denied();
       this.showToast(`Necesitas ${HINT_COST} Chispas para una pista.\nResuelve niveles para ganar más.`);
       return;
     }
@@ -1058,6 +1268,7 @@ export class GameScene extends Phaser.Scene {
     this.progress = afterPurchase;
     storage.saveProgress(this.progress);
     this.hintsUsed++;
+    feedback.hint();
 
     // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
     this.moveHistory = [];
@@ -1098,6 +1309,11 @@ export class GameScene extends Phaser.Scene {
     const { rows, cols, source } = this.board;
     const powered = computePowerFlow(this.board);
     let maxDelay = 0;
+    const maxStep = rows - 1 - source.row + (cols - 1 - source.col);
+    // Una nota por cada paso de la onda de luz: la melodía asciende con ella
+    for (let step = 0; step <= maxStep; step++) {
+      this.time.delayedCall(step * PULSE_STEP_MS, () => feedback.winStep(step));
+    }
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -1197,8 +1413,9 @@ export class GameScene extends Phaser.Scene {
         this.isDaily || evaluation.newTier === playedTier ? null : evaluation.newTier > playedTier ? 'up' : 'down',
     };
 
-    // Primero la luz recorre el circuito; después aparece el resultado
+    // Primero la luz recorre el circuito (con su melodía); después suena el acorde y aparece el resultado
     const pulseMs = this.playWinPulse();
+    this.time.delayedCall(Math.max(0, pulseMs - 360), () => feedback.win());
     this.time.delayedCall(Math.min(1100, pulseMs * 0.8), () => this.showVictoryModal(evaluation, info));
   }
 
@@ -1241,8 +1458,31 @@ export class GameScene extends Phaser.Scene {
     // La tarjeta se ajusta a la cantidad de filas
     const breakdownH = reward.total > 0 ? 84 : 24;
     const cardH = 200 + rows.length * 58 + breakdownH + 270;
-    const { overlay, w } = this.createCard(cardH, 200);
+    const { overlay, w, backdrop } = this.createCard(cardH, 200);
     overlay.setAlpha(0);
+
+    // Siguiente nivel con un solo gesto: botón, toque fuera de la tarjeta o Enter / Espacio
+    let armed = false;
+    const goNext = () => {
+      if (!armed || !overlay.active) return;
+      overlay.destroy();
+      if (info.isDaily) {
+        this.isDaily = false;
+        this.startLevel(this.progress.currentLevel);
+      } else {
+        this.startLevel(this.currentLevelIndex + 1);
+      }
+    };
+    // Se arma tras un instante para que un toque accidental no se salte el resultado
+    this.time.delayedCall(700, () => (armed = true));
+    backdrop.on('pointerdown', goNext);
+    const keyboard = this.input.keyboard;
+    keyboard?.on('keydown-ENTER', goNext);
+    keyboard?.on('keydown-SPACE', goNext);
+    overlay.once('destroy', () => {
+      keyboard?.off('keydown-ENTER', goNext);
+      keyboard?.off('keydown-SPACE', goNext);
+    });
 
     overlay.add(this.uiText(0, -cardH / 2 + 70, 'Circuito completo', { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
     overlay.add(
@@ -1284,13 +1524,8 @@ export class GameScene extends Phaser.Scene {
       { x: 0, y: cardH / 2 - 196, w: w - 88, h: 104 },
       info.isDaily ? 'Volver al juego' : 'Siguiente nivel',
       () => {
-        overlay.destroy();
-        if (info.isDaily) {
-          this.isDaily = false;
-          this.startLevel(this.progress.currentLevel);
-        } else {
-          this.startLevel(this.currentLevelIndex + 1);
-        }
+        armed = true;
+        goNext();
       },
       true
     );

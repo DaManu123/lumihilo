@@ -1,11 +1,24 @@
 import { Capacitor } from '@capacitor/core';
 import { HybridStorageService, storage } from './StorageService';
 import { MonetizationService, NoopMonetizationService } from './MonetizationService';
-import { HapticService, NoopHapticService } from './HapticService';
+import { CapacitorHapticService, HapticService } from './HapticService';
+import { AudioEngine, AudioService, WebAudioService } from './AudioService';
+import { MusicPlayer, WebMusicPlayer } from './MusicService';
+import { FeedbackService } from './FeedbackService';
 
 export * from './StorageService';
 export * from './MonetizationService';
 export * from './HapticService';
+export * from './AudioService';
+export * from './MusicService';
+export * from './FeedbackService';
+
+/** Sonido y vibración compartidos por todo el juego. */
+const engine = new AudioEngine();
+export const audio: AudioService = new WebAudioService(engine);
+export const music: MusicPlayer = new WebMusicPlayer(engine);
+export const haptics: HapticService = new CapacitorHapticService();
+export const feedback = new FeedbackService(audio, haptics, music);
 
 export interface ServiceContainer {
   storage: HybridStorageService;
@@ -26,6 +39,6 @@ export function createServices(): ServiceContainer {
   return {
     storage,
     ads: new NoopMonetizationService(),
-    haptics: new NoopHapticService(),
+    haptics,
   };
 }
