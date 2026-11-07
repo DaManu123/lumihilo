@@ -423,6 +423,44 @@ export async function runGameScenarios(out) {
     await g.close();
   }
 
+  section('16. Idioma: español e inglés');
+  {
+    const g = await openGame({ label: 'idioma', seed: { user_settings: { hasSeenTutorial: true, language: 'klingon' } }, out });
+    check('con un idioma inválido guardado el juego arranca', !!(await g.page.$('canvas')));
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSettings, 500);
+    await g.tap(...g.pos.accessibility, 600);
+    await g.tap(...g.pos.langEn, 700);
+    let s = await g.state();
+    check('elegir English lo guarda', s.settings?.language === 'en', `guardado ${s.settings?.language}`);
+    await g.shot('e16-idioma-ingles');
+    await g.tap(...g.pos.accDone, 400);
+    await g.tap(...g.pos.settingsDone, 400);
+    await g.tap(...g.pos.hint, 600);
+    await g.shot('e16-juego-ingles');
+    await g.reload();
+    s = await g.state();
+    check('el idioma persiste al recargar', s.settings?.language === 'en');
+    await g.tap(...g.pos.stats, 500);
+    await g.shot('e16-estadisticas-ingles');
+    await g.tap(...g.pos.statsSettings, 500);
+    await g.tap(...g.pos.accessibility, 600);
+    await g.tap(...g.pos.langEs, 700);
+    s = await g.state();
+    check('volver a Español lo guarda', s.settings?.language === 'es');
+    await g.tap(...g.pos.langAuto, 700);
+    s = await g.state();
+    check('Automático lo guarda', s.settings?.language === 'auto');
+    await g.close();
+
+    // En automático sigue el idioma del dispositivo
+    const ctxEn = await openGame({ label: 'idioma-auto-en', seed: SEEN_TUTORIAL, out, locale: 'en-US' });
+    await ctxEn.tap(...ctxEn.pos.stats, 500);
+    await ctxEn.shot('e16-auto-ingles');
+    check('con el dispositivo en inglés y el ajuste en automático el juego funciona', !!(await ctxEn.page.$('canvas')));
+    await ctxEn.close();
+  }
+
   section('Errores de consola durante toda la batería');
   const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));

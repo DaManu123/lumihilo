@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Haptics } from '@capacitor/haptics';
+import { t } from '../core/i18n';
 import {
   HAPTIC_PROFILES,
   HapticDiagnostics,
@@ -37,7 +38,7 @@ export class NoopHapticService implements HapticService {
     return null;
   }
   async test(): Promise<string> {
-    return 'Sin vibración en este dispositivo.';
+    return t('Sin vibración en este dispositivo.');
   }
 }
 
@@ -139,12 +140,12 @@ export class CapacitorHapticService implements HapticService {
   async test(): Promise<string> {
     if (!Capacitor.isNativePlatform()) {
       await this.generic('win');
-      return 'Estás en el navegador: la prueba real solo funciona en el teléfono (APK).';
+      return t('Estás en el navegador: la prueba real solo funciona en el teléfono (APK).');
     }
     const result = await this.fire('win');
-    if (!result) return 'El plugin de vibración del teléfono no respondió; se usó la vibración genérica.';
-    const done = result.performed ? `Enviada por: ${result.performed}.` : 'No se pudo enviar por ninguna vía.';
-    const failed = result.errors ? ` Errores: ${result.errors}` : '';
+    if (!result) return t('El plugin de vibración del teléfono no respondió; se usó la vibración genérica.');
+    const done = result.performed ? t('Enviada por: {0}.', result.performed) : t('No se pudo enviar por ninguna vía.');
+    const failed = result.errors ? t(' Errores: {0}', result.errors) : '';
     return done + failed;
   }
 }

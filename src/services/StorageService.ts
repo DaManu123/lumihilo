@@ -5,6 +5,7 @@ import { PlayerProgress, sanitizeProgress } from '../core/progress';
 import type { HapticLevel, HapticMode } from '../core/haptics';
 import type { MusicStyle } from '../core/music';
 import type { AnimationSpeed } from '../core/accessibility';
+import type { LanguageSetting } from '../core/i18n';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -26,6 +27,8 @@ export interface UserSettings {
   /** Marcas en las esquinas de las piezas encendidas (no depender solo del color). */
   litMarks: boolean;
   animationSpeed: AnimationSpeed;
+  /** Idioma de la interfaz: el del dispositivo (auto), español o inglés. */
+  language: LanguageSetting;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -42,6 +45,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   highContrast: false,
   litMarks: false,
   animationSpeed: 'normal',
+  language: 'auto',
 };
 
 export interface StorageService {

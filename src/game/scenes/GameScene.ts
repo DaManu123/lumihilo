@@ -62,6 +62,7 @@ import {
   isAnimationSpeed,
   motionDisabled,
 } from '../../core/accessibility';
+import { LANGUAGES, LanguageSetting, isLanguageSetting, resolveLanguage, setLanguage, t } from '../../core/i18n';
 import { THEME, setActiveTheme } from '../theme';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -235,6 +236,8 @@ export class GameScene extends Phaser.Scene {
     this.profile = storage.loadProfile();
     this.progress = storage.loadProgress();
     this.settings = storage.loadSettings();
+    if (!isLanguageSetting(this.settings.language)) this.settings.language = 'auto';
+    this.applyLanguage();
     setActiveTheme(this.settings.theme, this.settings.highContrast === true);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.currentLevelIndex = this.progress.currentLevel;
@@ -296,6 +299,12 @@ export class GameScene extends Phaser.Scene {
   /** Cantidad de casillas con energía (para detectar cuándo un giro conecta algo nuevo). */
   private poweredCount(): number {
     return computePowerFlow(this.board).reduce((total, row) => total + row.filter(Boolean).length, 0);
+  }
+
+  /** Aplica el idioma elegido (o el del dispositivo si está en automático). */
+  private applyLanguage(): void {
+    const device = typeof navigator !== 'undefined' ? navigator.language : undefined;
+    setLanguage(resolveLanguage(this.settings.language, device));
   }
 
   /** Preferencia del sistema de reducir el movimiento. */
@@ -424,7 +433,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private modeLabel(mode: GameMode): string {
-    return mode === 'relaxed' ? 'Relajado' : mode === 'challenge' ? 'Reto' : 'Normal';
+    return mode === 'relaxed' ? t('Relajado') : mode === 'challenge' ? t('Reto') : t('Normal');
   }
 
   // ---------------------------------------------------------------------------
@@ -476,9 +485,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.levelText || !this.currentParams) return;
     const { width, height } = this.currentParams;
 
-    this.levelText.setText(this.isDaily ? 'Reto diario' : `Nivel ${this.currentLevelIndex}`);
+    this.levelText.setText(this.isDaily ? t('Reto diario') : t('Nivel {0}', this.currentLevelIndex));
     this.timerText.setText(this.formatTime(this.elapsedTime));
-    this.tapsText.setText(`${this.tapCount} ${this.tapCount === 1 ? 'toque' : 'toques'}`);
+    this.tapsText.setText(t(this.tapCount === 1 ? '{0} toque' : '{0} toques', this.tapCount));
 
     // Etiqueta con el tamaño del tablero, junto al nombre del nivel
     this.levelChipText.setText(`${width}×${height}`);
@@ -510,17 +519,17 @@ export class GameScene extends Phaser.Scene {
     if (!this.modeSeg) return;
     const dailyDone = this.progress.lastDailyCompleted === dateKey(new Date());
 
-    this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: 'Modo' });
+    this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: t('Modo') });
     this.setSegment(
       this.dailySeg,
       this.isDaily
-        ? { label: 'Volver', kind: 'home', sub: 'al juego' }
-        : { label: 'Diario', kind: 'calendar', sub: dailyDone ? 'hecho hoy' : 'reto de hoy' }
+        ? { label: t('Volver'), kind: 'home', sub: t('al juego') }
+        : { label: t('Diario'), kind: 'calendar', sub: dailyDone ? t('hecho hoy') : t('reto de hoy') }
     );
     this.setSegment(this.themeSeg, {
-      label: this.settings.theme === 'light' ? 'Claro' : 'Oscuro',
+      label: this.settings.theme === 'light' ? t('Claro') : t('Oscuro'),
       kind: this.settings.theme === 'light' ? 'sun' : 'moon',
-      sub: 'Tema',
+      sub: t('Tema'),
     });
   }
 
@@ -552,7 +561,7 @@ export class GameScene extends Phaser.Scene {
     ]);
     this.undoSeg = undo;
     this.hintSeg = hint;
-    this.setSegment(reset, { label: 'Reiniciar', kind: 'reset' });
+    this.setSegment(reset, { label: t('Reiniciar'), kind: 'reset' });
 
     this.createDirectionButton(this.hud.dirBtn);
     c.add(this.dirBtn);
@@ -570,7 +579,7 @@ export class GameScene extends Phaser.Scene {
     this.dirPanel = this.add.graphics();
     this.dirIcon = this.add.graphics();
     this.dirTitle = this.uiText(40, -20, '', { size: 32, display: true, originX: 0.5 });
-    const sub = this.uiText(40, 26, 'Toca para cambiar el sentido', {
+    const sub = this.uiText(40, 26, t('Toca para cambiar el sentido'), {
       size: FONT.small,
       weight: '500',
       color: THEME.mutedText,
@@ -596,7 +605,7 @@ export class GameScene extends Phaser.Scene {
     this.dirPanel.lineStyle(4, color, 1);
     this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
 
-    this.dirTitle.setText(clockwise ? 'Giro horario' : 'Giro antihorario').setColor(colorCss);
+    this.dirTitle.setText(clockwise ? t('Giro horario') : t('Giro antihorario')).setColor(colorCss);
 
     this.dirIcon.clear();
     drawArrowCircle(this.dirIcon, -w / 2 + 84, 0, 28, color, 9, clockwise ? 1 : -1);
@@ -619,7 +628,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.undoSeg) return;
     const canUndo = this.moveHistory.length > 0 && !this.isWon;
     this.setSegment(this.undoSeg, {
-      label: 'Deshacer',
+      label: t('Deshacer'),
       kind: 'undo',
       iconColor: canUndo ? THEME.primary : THEME.wireOff,
       labelColor: canUndo ? THEME.text : THEME.mutedText,
@@ -630,7 +639,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.hintSeg) return;
     const canHint = this.progress.sparks >= HINT_COST && !this.isWon;
     this.setSegment(this.hintSeg, {
-      label: 'Pista',
+      label: t('Pista'),
       kind: 'bulb',
       sub: String(HINT_COST),
       subIcon: 'spark',
@@ -765,7 +774,7 @@ export class GameScene extends Phaser.Scene {
 
     const text = this.uiText(left, y, label, { size: 29, weight: '600' });
     const stateText = this.uiText(right - switchW - 18, y, '', { size: FONT.small, weight: '500', color: THEME.mutedText, originX: 1 });
-    const refreshText = () => stateText.setText(value ? 'Activado' : 'Desactivado');
+    const refreshText = () => stateText.setText(value ? t('Activado') : t('Desactivado'));
     refreshText();
 
     const zone = this.hitZone({ x: 0, y, w: cardW - 40, h: 84 }, () => {
@@ -984,14 +993,14 @@ export class GameScene extends Phaser.Scene {
     const cardH = 700;
     const { overlay, w } = this.createCard(cardH, 100);
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Cómo se juega', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
     const lines = [
-      'Toca una pieza para girarla.',
-      'El botón grande cambia el sentido del giro.',
-      'Conecta todo el circuito a la fuente.',
-      'Gana Chispas y úsalas en las pistas.',
-      'Cada día hay un reto nuevo. Cuida tu racha.',
+      t('Toca una pieza para girarla.'),
+      t('El botón grande cambia el sentido del giro.'),
+      t('Conecta todo el circuito a la fuente.'),
+      t('Gana Chispas y úsalas en las pistas.'),
+      t('Cada día hay un reto nuevo. Cuida tu racha.'),
     ];
     let y = -cardH / 2 + 160;
     for (const line of lines) {
@@ -1007,7 +1016,7 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(
       overlay,
       { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
-      'Entendido',
+      t('Entendido'),
       () => {
         this.settings.hasSeenTutorial = true;
         storage.saveSettings(this.settings);
@@ -1025,23 +1034,23 @@ export class GameScene extends Phaser.Scene {
     const best = stats.bestTimeByTier[String(tier)];
     const shownStreak = currentStreak(streak, today);
 
-    const days = (n: number) => `${n} ${n === 1 ? 'día' : 'días'}`;
+    const days = (n: number) => t(n === 1 ? '{0} día' : '{0} días', n);
     const rows: Array<[string, string, IconKind?]> = [
-      ['Chispas', String(this.progress.sparks), 'spark'],
-      ['Racha actual', days(shownStreak)],
-      ['Mejor racha', days(streak.best)],
-      ['Niveles resueltos', String(stats.levelsSolved)],
-      ['Sin pistas y sin fallos', String(stats.perfectSolves)],
-      ['Retos diarios', String(stats.dailyCompleted)],
-      [`Mejor tiempo (habilidad ${tier})`, best !== undefined ? this.formatTime(best) : '—'],
-      ['Nivel de habilidad', String(tier)],
-      ['Puntuación', String(this.profile.rating)],
+      [t('Chispas'), String(this.progress.sparks), 'spark'],
+      [t('Racha actual'), days(shownStreak)],
+      [t('Mejor racha'), days(streak.best)],
+      [t('Niveles resueltos'), String(stats.levelsSolved)],
+      [t('Sin pistas y sin fallos'), String(stats.perfectSolves)],
+      [t('Retos diarios'), String(stats.dailyCompleted)],
+      [t('Mejor tiempo (habilidad {0})', tier), best !== undefined ? this.formatTime(best) : '—'],
+      [t('Nivel de habilidad'), String(tier)],
+      [t('Puntuación'), String(this.profile.rating)],
     ];
 
     const rowH = 58;
     const cardH = 150 + rows.length * rowH + 190;
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Estadísticas', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Estadísticas'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
     let y = -cardH / 2 + 160;
     rows.forEach(([label, value, icon], i) => {
@@ -1055,24 +1064,24 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(
       overlay,
       { x: -(btnW + 18) / 2, y: btnY, w: btnW, h: 100 },
-      'Ajustes',
+      t('Ajustes'),
       () => {
         overlay.destroy();
         this.showSettingsModal();
       },
       false
     );
-    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, 'Cerrar', () => overlay.destroy(), true);
+    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, t('Cerrar'), () => overlay.destroy(), true);
   }
 
   /** Ajustes: efectos, música (estilo y volumen), vibración (intensidad y prueba). Se guardan al instante. */
   private showSettingsModal(): void {
     const cardH = 1150;
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Ajustes', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Ajustes'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
     let y = -cardH / 2 + 170;
-    this.addToggleRow(overlay, w, y, 'Efectos', this.settings.soundEnabled, (value) => {
+    this.addToggleRow(overlay, w, y, t('Efectos'), this.settings.soundEnabled, (value) => {
       this.settings.soundEnabled = value;
       storage.saveSettings(this.settings);
       feedback.configure({ sound: value });
@@ -1083,7 +1092,7 @@ export class GameScene extends Phaser.Scene {
     // Estilo y volumen de la música solo tienen sentido con la música encendida
     let setStyleEnabled: (enabled: boolean) => void = () => undefined;
     let setVolumeEnabled: (enabled: boolean) => void = () => undefined;
-    this.addToggleRow(overlay, w, y, 'Música', this.settings.musicEnabled, (value) => {
+    this.addToggleRow(overlay, w, y, t('Música'), this.settings.musicEnabled, (value) => {
       this.settings.musicEnabled = value;
       storage.saveSettings(this.settings);
       feedback.configure({ music: value });
@@ -1096,8 +1105,8 @@ export class GameScene extends Phaser.Scene {
       overlay,
       w,
       y,
-      'Estilo de la música',
-      MUSIC_STYLES.map((style) => ({ value: style, label: MUSIC_STYLE_LABELS[style] })),
+      t('Estilo de la música'),
+      MUSIC_STYLES.map((style) => ({ value: style, label: t(MUSIC_STYLE_LABELS[style]) })),
       this.settings.musicStyle,
       (value) => {
         this.settings.musicStyle = value as MusicStyle;
@@ -1107,13 +1116,13 @@ export class GameScene extends Phaser.Scene {
     );
     y += 170;
 
-    setVolumeEnabled = this.addSliderRow(overlay, w, y, 'Volumen de la música', {
+    setVolumeEnabled = this.addSliderRow(overlay, w, y, t('Volumen de la música'), {
       min: MUSIC_VOLUME_MIN,
       max: MUSIC_VOLUME_MAX,
       step: 5,
       value: this.settings.musicVolume,
       marker: MUSIC_VOLUME_DEFAULT,
-      markerLabel: 'estándar',
+      markerLabel: t('estándar'),
       format: (value) => `${value} %`,
       onChange: (value) => feedback.configure({ musicVolume: value }), // se oye mientras se arrastra
       onCommit: (value) => {
@@ -1126,7 +1135,7 @@ export class GameScene extends Phaser.Scene {
     setVolumeEnabled(this.settings.musicEnabled);
 
     let setIntensityEnabled: (enabled: boolean) => void = () => undefined;
-    this.addToggleRow(overlay, w, y, 'Vibración', this.settings.hapticsEnabled, (value) => {
+    this.addToggleRow(overlay, w, y, t('Vibración'), this.settings.hapticsEnabled, (value) => {
       this.settings.hapticsEnabled = value;
       storage.saveSettings(this.settings);
       feedback.configure({ haptics: value });
@@ -1139,8 +1148,8 @@ export class GameScene extends Phaser.Scene {
       overlay,
       w,
       y,
-      'Intensidad de la vibración',
-      HAPTIC_LEVELS.map((level) => ({ value: level, label: HAPTIC_LABELS[level] })),
+      t('Intensidad de la vibración'),
+      HAPTIC_LEVELS.map((level) => ({ value: level, label: t(HAPTIC_LABELS[level]) })),
       this.settings.hapticsLevel,
       (value) => {
         const level = value as HapticLevel;
@@ -1158,26 +1167,30 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(
       overlay,
       { x: -(half + 18) / 2, y, w: half, h: 88 },
-      'Accesibilidad',
+      t('Accesibilidad'),
       () => {
         overlay.destroy();
         this.showAccessibilityModal();
       },
       false
     );
-    this.addCardButton(overlay, { x: (half + 18) / 2, y, w: half, h: 88 }, '¿No vibra?', () => this.showHapticsModal(), false);
+    this.addCardButton(overlay, { x: (half + 18) / 2, y, w: half, h: 88 }, t('¿No vibra?'), () => this.showHapticsModal(), false);
 
-    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Listo'), () => overlay.destroy(), true);
+  }
+
+  private languageLabel(language: LanguageSetting): string {
+    return language === 'auto' ? t('Automático') : language === 'es' ? t('Español') : t('English');
   }
 
   /** Accesibilidad: alto contraste, marcas en las piezas encendidas y velocidad de animación. */
   private showAccessibilityModal(): void {
-    const cardH = 800;
+    const cardH = 990;
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Accesibilidad', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Accesibilidad'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
     let y = -cardH / 2 + 170;
-    this.addToggleRow(overlay, w, y, 'Alto contraste', this.settings.highContrast, (value) => {
+    this.addToggleRow(overlay, w, y, t('Alto contraste'), this.settings.highContrast, (value) => {
       this.settings.highContrast = value;
       storage.saveSettings(this.settings);
       feedback.toggle();
@@ -1192,7 +1205,7 @@ export class GameScene extends Phaser.Scene {
     });
     y += 90;
 
-    this.addToggleRow(overlay, w, y, 'Marcas de energía', this.settings.litMarks, (value) => {
+    this.addToggleRow(overlay, w, y, t('Marcas de energía'), this.settings.litMarks, (value) => {
       this.settings.litMarks = value;
       storage.saveSettings(this.settings);
       feedback.toggle();
@@ -1200,7 +1213,7 @@ export class GameScene extends Phaser.Scene {
     });
     y += 90;
 
-    const hint = this.uiText(-w / 2 + 44, y - 4, 'Cuatro puntos en las esquinas de cada pieza con energía, para distinguirlas sin depender del color.', {
+    const hint = this.uiText(-w / 2 + 44, y - 4, t('Cuatro puntos en las esquinas de cada pieza con energía, para distinguirlas sin depender del color.'), {
       size: 22,
       weight: '500',
       color: THEME.mutedText,
@@ -1214,8 +1227,8 @@ export class GameScene extends Phaser.Scene {
       overlay,
       w,
       y,
-      'Velocidad de las animaciones',
-      ANIMATION_SPEEDS.map((speed) => ({ value: speed, label: ANIMATION_LABELS[speed] })),
+      t('Velocidad de las animaciones'),
+      ANIMATION_SPEEDS.map((speed) => ({ value: speed, label: t(ANIMATION_LABELS[speed]) })),
       this.settings.animationSpeed,
       (value) => {
         this.settings.animationSpeed = value as AnimationSpeed;
@@ -1223,8 +1236,30 @@ export class GameScene extends Phaser.Scene {
         feedback.toggle();
       }
     );
+    y += 170;
 
-    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
+    this.addChoiceRow(
+      overlay,
+      w,
+      y,
+      t('Idioma'),
+      LANGUAGES.map((language) => ({ value: language, label: this.languageLabel(language) })),
+      this.settings.language,
+      (value) => {
+        this.settings.language = value as LanguageSetting;
+        storage.saveSettings(this.settings);
+        this.applyLanguage();
+        feedback.toggle();
+        // Toda la interfaz se redibuja en el idioma nuevo y se reabre esta tarjeta
+        overlay.destroy();
+        this.buildUi();
+        this.buildBoard();
+        this.updateFlowVisuals();
+        this.showAccessibilityModal();
+      }
+    );
+
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Listo'), () => overlay.destroy(), true);
   }
 
   /**
@@ -1234,10 +1269,10 @@ export class GameScene extends Phaser.Scene {
   private showHapticsModal(): void {
     const cardH = 1150;
     const { overlay, w } = this.createCard(cardH, 210);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Vibración', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Vibración'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
     const left = -w / 2 + 44;
-    const info = this.uiText(left, -cardH / 2 + 130, 'Leyendo los ajustes del teléfono…', {
+    const info = this.uiText(left, -cardH / 2 + 130, t('Leyendo los ajustes del teléfono…'), {
       size: FONT.small,
       weight: '500',
       color: THEME.mutedText,
@@ -1249,7 +1284,7 @@ export class GameScene extends Phaser.Scene {
     void feedback.lastCrash().then((crash) => {
       if (!crash || !info.active) return;
       // El cierre anterior de la app: lo enseñamos para poder corregirlo
-      info.setText('La app se cerró antes por:\n' + crash.split('\n').slice(0, 7).join('\n').slice(0, 520));
+      info.setText(t('La app se cerró antes por:\n{0}', crash.split('\n').slice(0, 7).join('\n').slice(0, 520)));
       info.setFontSize(20);
     });
 
@@ -1257,7 +1292,7 @@ export class GameScene extends Phaser.Scene {
       if (!info.active) return; // la tarjeta ya se cerró
       if (!diagnostics) {
         info.setText(
-          'Estos datos solo se pueden leer en la app de Android (APK). En el navegador no hay motor de vibración que diagnosticar.'
+          t('Estos datos solo se pueden leer en la app de Android (APK). En el navegador no hay motor de vibración que diagnosticar.')
         );
         return;
       }
@@ -1265,8 +1300,8 @@ export class GameScene extends Phaser.Scene {
       const blockers = vibrationBlockers(diagnostics);
       info.setText(
         (blockers.length
-          ? 'Posibles causas:\n' + blockers.map((b) => `• ${b}`).join('\n')
-          : 'No se detectó ningún ajuste del teléfono que bloquee la vibración.') +
+          ? t('Posibles causas:\n{0}', blockers.map((b) => `• ${b}`).join('\n'))
+          : t('No se detectó ningún ajuste del teléfono que bloquee la vibración.')) +
           '\n\n' +
           describeDiagnostics(diagnostics).join('\n')
       );
@@ -1275,7 +1310,7 @@ export class GameScene extends Phaser.Scene {
     const result = this.uiText(left, 0, '', { size: FONT.small, weight: '600', color: THEME.text, wrap: w - 88 });
     result.setOrigin(0, 0).setLineSpacing(6);
     const runTest = () => {
-      result.setText('Probando…');
+      result.setText(t('Probando…'));
       void feedback.testHaptics().then((text) => {
         if (result.active) result.setText(text);
       });
@@ -1286,8 +1321,8 @@ export class GameScene extends Phaser.Scene {
       overlay,
       w,
       methodY,
-      'Método (Auto suele bastar)',
-      HAPTIC_MODES.map((mode) => ({ value: mode, label: HAPTIC_MODE_LABELS[mode] })),
+      t('Método (Auto suele bastar)'),
+      HAPTIC_MODES.map((mode) => ({ value: mode, label: t(HAPTIC_MODE_LABELS[mode]) })),
       this.settings.hapticsMode,
       (value) => {
         this.settings.hapticsMode = value as HapticMode;
@@ -1302,8 +1337,8 @@ export class GameScene extends Phaser.Scene {
 
     const buttonsY = cardH / 2 - 84;
     const btnW = (w - 88 - 18) / 2;
-    this.addCardButton(overlay, { x: -(btnW + 18) / 2, y: buttonsY, w: btnW, h: 100 }, 'Probar', runTest, false);
-    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: buttonsY, w: btnW, h: 100 }, 'Listo', () => overlay.destroy(), true);
+    this.addCardButton(overlay, { x: -(btnW + 18) / 2, y: buttonsY, w: btnW, h: 100 }, t('Probar'), runTest, false);
+    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: buttonsY, w: btnW, h: 100 }, t('Listo'), () => overlay.destroy(), true);
   }
 
   // ---------------------------------------------------------------------------
@@ -1685,7 +1720,7 @@ export class GameScene extends Phaser.Scene {
 
     const target = findHintCell(this.board);
     if (!target) {
-      this.showToast('Todo está bien colocado.');
+      this.showToast(t('Todo está bien colocado.'));
       return;
     }
 
@@ -1695,7 +1730,7 @@ export class GameScene extends Phaser.Scene {
     const afterPurchase = spendSparks(this.progress, HINT_COST);
     if (!afterPurchase) {
       feedback.denied();
-      this.showToast(`Necesitas ${HINT_COST} Chispas para una pista.\nResuelve niveles para ganar más.`);
+      this.showToast(t('Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.', HINT_COST));
       return;
     }
 
@@ -1859,23 +1894,23 @@ export class GameScene extends Phaser.Scene {
     const minTaps = this.currentLevelData.minTaps;
     const efficiency = Math.round(evaluation.tapEfficiency * 100);
     const rows: Array<{ label: string; value: string; color?: string; icon?: IconKind }> = [
-      { label: 'Tiempo', value: this.formatTime(this.elapsedTime), color: info.isNewRecord ? THEME.primaryCss : undefined },
+      { label: t('Tiempo'), value: this.formatTime(this.elapsedTime), color: info.isNewRecord ? THEME.primaryCss : undefined },
     ];
-    if (info.isNewRecord) rows.push({ label: 'Récord personal', value: 'Nuevo', color: THEME.primaryCss });
-    rows.push({ label: 'Toques', value: `${this.tapCount}  (mínimo ${minTaps})` });
-    rows.push({ label: this.hintsUsed > 0 ? 'Eficiencia (sin pistas)' : 'Eficiencia', value: this.hintsUsed > 0 ? '—' : `${efficiency} %` });
-    if (this.hintsUsed > 0) rows.push({ label: 'Pistas usadas', value: String(this.hintsUsed) });
+    if (info.isNewRecord) rows.push({ label: t('Récord personal'), value: t('Nuevo'), color: THEME.primaryCss });
+    rows.push({ label: t('Toques'), value: t('{0}  (mínimo {1})', this.tapCount, minTaps) });
+    rows.push({ label: this.hintsUsed > 0 ? t('Eficiencia (sin pistas)') : t('Eficiencia'), value: this.hintsUsed > 0 ? '—' : `${efficiency} %` });
+    if (this.hintsUsed > 0) rows.push({ label: t('Pistas usadas'), value: String(this.hintsUsed) });
     if (info.difficultyChange) {
       rows.push({
-        label: 'Dificultad',
-        value: info.difficultyChange === 'up' ? 'Sube un nivel' : 'Baja un nivel',
+        label: t('Dificultad'),
+        value: info.difficultyChange === 'up' ? t('Sube un nivel') : t('Baja un nivel'),
       });
     }
     rows.push(
       info.isDaily && !info.firstDailyToday
-        ? { label: 'Chispas', value: 'Ya cobradas hoy' }
+        ? { label: t('Chispas'), value: t('Ya cobradas hoy') }
         : {
-            label: reward.multiplier === 2 ? 'Chispas (doble por el reto)' : 'Chispas',
+            label: reward.multiplier === 2 ? t('Chispas (doble por el reto)') : t('Chispas'),
             value: `+${reward.total}`,
             color: THEME.primaryCss,
             icon: 'spark',
@@ -1883,8 +1918,8 @@ export class GameScene extends Phaser.Scene {
     );
     if (info.streak > 0) {
       rows.push({
-        label: 'Racha',
-        value: `${info.streak} ${info.streak === 1 ? 'día' : 'días'}`,
+        label: t('Racha'),
+        value: t(info.streak === 1 ? '{0} día' : '{0} días', info.streak),
         color: info.streakIncreased ? THEME.primaryCss : undefined,
       });
     }
@@ -1918,9 +1953,9 @@ export class GameScene extends Phaser.Scene {
       keyboard?.off('keydown-SPACE', goNext);
     });
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Circuito completo', { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
     overlay.add(
-      this.uiText(0, -cardH / 2 + 124, info.isDaily ? 'Reto diario superado' : `Nivel ${this.currentLevelIndex} superado`, {
+      this.uiText(0, -cardH / 2 + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
         size: 28,
         weight: '500',
         color: THEME.mutedText,
@@ -1940,10 +1975,10 @@ export class GameScene extends Phaser.Scene {
           0,
           y + 14,
           [
-            `Base ${reward.base}`,
-            reward.efficiencyBonus > 0 ? `eficiencia ${reward.efficiencyBonus}` : '',
-            reward.speedBonus > 0 ? `rapidez ${reward.speedBonus}` : '',
-            reward.recordBonus > 0 ? `récord ${reward.recordBonus}` : '',
+            t('Base {0}', reward.base),
+            reward.efficiencyBonus > 0 ? t('eficiencia {0}', reward.efficiencyBonus) : '',
+            reward.speedBonus > 0 ? t('rapidez {0}', reward.speedBonus) : '',
+            reward.recordBonus > 0 ? t('récord {0}', reward.recordBonus) : '',
           ]
             .filter(Boolean)
             .join(' + '),
@@ -1956,7 +1991,7 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(
       overlay,
       { x: 0, y: cardH / 2 - 196, w: w - 88, h: 104 },
-      info.isDaily ? 'Volver al juego' : 'Siguiente nivel',
+      info.isDaily ? t('Volver al juego') : t('Siguiente nivel'),
       () => {
         armed = true;
         goNext();
@@ -1967,7 +2002,7 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(
       overlay,
       { x: 0, y: cardH / 2 - 80, w: w - 88, h: 92 },
-      info.isDaily ? 'Repetir el reto' : 'Repetir este nivel',
+      info.isDaily ? t('Repetir el reto') : t('Repetir este nivel'),
       () => {
         overlay.destroy();
         this.startLevel(this.currentLevelIndex);

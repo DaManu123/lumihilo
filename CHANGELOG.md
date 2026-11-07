@@ -5,6 +5,9 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 ## [Sin publicar]
 
 ### Añadido
+- Inglés y español: automático según el dispositivo o a elegir en Ajustes → Accesibilidad → Idioma.
+- Versión web jugable en GitHub Pages (`/play/`), página de presentación y política de privacidad pública (sin anuncios).
+- El flujo de publicación genera y verifica el `.aab` de Google Play.
 - Ajustes → Accesibilidad: alto contraste (en tema oscuro y claro), marcas de energía en las esquinas de las piezas encendidas y velocidad de animación (normal, rápida, ninguna).
 
 ## [0.1.0-beta.5] - 2026-11-07
