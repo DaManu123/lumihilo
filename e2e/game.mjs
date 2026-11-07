@@ -371,7 +371,7 @@ export async function runGameScenarios(out) {
     check('elegir la vía "Motor" la guarda', s.settings?.hapticsMode === 'motor');
     await g.tap(...g.pos.modeAll, 500);
     s = await g.state();
-    check('elegir "Todos" la guarda', s.settings?.hapticsMode === 'all');
+    check('elegir "Auto" la guarda', s.settings?.hapticsMode === 'all');
     const vib1 = (await g.audio()).vib;
     check('al elegir una vía se hace una prueba de vibración', vib1 > vib0, `${vib0} → ${vib1}`);
     await g.tap(...g.pos.hapticsTest, 600);

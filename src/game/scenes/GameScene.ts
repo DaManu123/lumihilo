@@ -1167,7 +1167,7 @@ export class GameScene extends Phaser.Scene {
       overlay,
       w,
       methodY,
-      'Método (elige el que sientas)',
+      'Método (Auto suele bastar)',
       HAPTIC_MODES.map((mode) => ({ value: mode, label: HAPTIC_MODE_LABELS[mode] })),
       this.settings.hapticsMode,
       (value) => {
