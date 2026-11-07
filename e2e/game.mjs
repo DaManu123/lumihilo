@@ -385,6 +385,44 @@ export async function runGameScenarios(out) {
     await g.close();
   }
 
+  section('15. Accesibilidad: alto contraste, marcas y velocidad de animación');
+  {
+    const g = await openGame({ label: 'accesibilidad', seed: { user_settings: { hasSeenTutorial: true, animationSpeed: 'turbo' } }, out });
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSettings, 500);
+    await g.tap(...g.pos.accessibility, 600);
+    await g.shot('e15-accesibilidad');
+    let s = await g.state();
+    check('con una velocidad inválida guardada el juego arranca y la tarjeta se abre', !!(await g.page.$('canvas')));
+    await g.tap(...g.pos.accContrast, 700);
+    s = await g.state();
+    check('"Alto contraste" se guarda', s.settings?.highContrast === true);
+    await g.shot('e15-alto-contraste');
+    await g.tap(...g.pos.accMarks, 500);
+    s = await g.state();
+    check('"Marcas de energía" se guarda', s.settings?.litMarks === true);
+    await g.tap(...g.pos.accOff, 500);
+    s = await g.state();
+    check('la velocidad "Ninguna" se guarda', s.settings?.animationSpeed === 'off', `guardado ${s.settings?.animationSpeed}`);
+    await g.tap(...g.pos.accFast, 500);
+    s = await g.state();
+    check('la velocidad "Rápida" se guarda', s.settings?.animationSpeed === 'fast');
+    await g.tap(...g.pos.accDone, 400);
+    await g.tap(...g.pos.settingsDone, 400);
+    // Con las marcas puestas, una pieza encendida (la fuente) debe verse con ellas; se juega con normalidad
+    await g.tap(...g.pos.hint, 600);
+    await g.shot('e15-juego-accesible');
+    check('se puede jugar con alto contraste, marcas y animación rápida', !!(await g.page.$('canvas')));
+    await g.reload();
+    s = await g.state();
+    check('las opciones de accesibilidad persisten al recargar', s.settings?.highContrast === true && s.settings?.litMarks === true && s.settings?.animationSpeed === 'fast');
+    await g.tap(...g.pos.theme, 700);
+    s = await g.state();
+    check('cambiar de tema conserva el alto contraste', s.settings?.theme === 'light' && s.settings?.highContrast === true);
+    await g.shot('e15-claro-alto-contraste');
+    await g.close();
+  }
+
   section('Errores de consola durante toda la batería');
   const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));

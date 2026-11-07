@@ -152,7 +152,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     volume: (percent) => [92 + (536 * percent) / 200, H / 2 + 9],
     setHaptics: [360, H / 2 + 109],
     levelSoft: [360 - 186.7, H / 2 + 283], levelNormal: [360, H / 2 + 283], levelStrong: [360 + 186.7, H / 2 + 283],
-    diagnose: [360, H / 2 + 369], settingsDone: [360, H / 2 + 491],
+    accessibility: [215.5, H / 2 + 377], diagnose: [504.5, H / 2 + 377], settingsDone: [360, H / 2 + 491],
+    // Accesibilidad (tarjeta de 800 px)
+    accContrast: [360, H / 2 - 230], accMarks: [360, H / 2 - 140],
+    accNormal: [173, H / 2 + 164], accFast: [360, H / 2 + 164], accOff: [547, H / 2 + 164], accDone: [360, H / 2 + 316],
     // Diagnóstico de vibración (tarjeta de 1150 px)
     modeAll: [136, H / 2 + 199], modeSystem: [248, H / 2 + 199], modeMotor: [360, H / 2 + 199], modeTouch: [472, H / 2 + 199], modeAlarm: [584, H / 2 + 199],
     hapticsTest: [360 - 144.5, H / 2 + 491], hapticsDone: [360 + 144.5, H / 2 + 491],

@@ -101,13 +101,40 @@ export const THEME_LIGHT: GameTheme = {
   hintRing: 0x14204a,
 };
 
-export function getTheme(mode: 'dark' | 'light'): GameTheme {
-  return mode === 'light' ? THEME_LIGHT : THEME_DARK;
+/**
+ * Variantes de alto contraste: mismas paletas, pero con trazas apagadas, bordes, divisores y texto
+ * secundario mucho más marcados (verificado en tests/theme.test.ts: trazas ≥ 4,5:1 y textos ≥ 7:1).
+ */
+export const THEME_DARK_HC: GameTheme = {
+  ...THEME_DARK,
+  text: '#ffffff',
+  mutedText: '#d6dbf7',
+  divider: 0x5a67ad,
+  borderOff: 0x6f7dc4,
+  cardBorder: 0x95a2e6,
+  wireOff: 0x7f8ddc,
+  wireOffHub: 0x9aa6e8,
+};
+
+export const THEME_LIGHT_HC: GameTheme = {
+  ...THEME_LIGHT,
+  text: '#080f2a',
+  mutedText: '#1f2a55',
+  divider: 0x9aa8cc,
+  borderOff: 0x7f8fb8,
+  cardBorder: 0x56668f,
+  wireOff: 0x3a4570,
+  wireOffHub: 0x2a3560,
+};
+
+export function getTheme(mode: 'dark' | 'light', highContrast = false): GameTheme {
+  if (mode === 'light') return highContrast ? THEME_LIGHT_HC : THEME_LIGHT;
+  return highContrast ? THEME_DARK_HC : THEME_DARK;
 }
 
 export let THEME: GameTheme = THEME_DARK;
 
-export function setActiveTheme(mode: 'dark' | 'light'): GameTheme {
-  THEME = getTheme(mode);
+export function setActiveTheme(mode: 'dark' | 'light', highContrast = false): GameTheme {
+  THEME = getTheme(mode, highContrast);
   return THEME;
 }

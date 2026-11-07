@@ -2,6 +2,11 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
+## [Sin publicar]
+
+### Añadido
+- Ajustes → Accesibilidad: alto contraste (en tema oscuro y claro), marcas de energía en las esquinas de las piezas encendidas y velocidad de animación (normal, rápida, ninguna).
+
 ## [0.1.0-beta.5] - 2026-11-07
 
 ### Mejorado
