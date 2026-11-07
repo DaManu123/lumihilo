@@ -1,5 +1,6 @@
 import { mulberry32 } from './rng';
 import { noteFrequency } from './sound';
+import { swingBarEvents } from './musicSwing';
 
 /**
  * Música generativa del juego (lógica pura, sin Web Audio).
@@ -18,10 +19,50 @@ export const BEATS_PER_BAR = 4;
 export const BEAT_SECONDS = 60 / TEMPO_BPM;
 export const BAR_SECONDS = BEAT_SECONDS * BEATS_PER_BAR;
 
+/** Estilos de música: el ambiental (colchón y arpa de cristal) y el swing (jazz de sala con groove). */
+export type MusicStyle = 'ambient' | 'swing';
+
+export const MUSIC_STYLES: readonly MusicStyle[] = ['swing', 'ambient'];
+
+export const MUSIC_STYLE_LABELS: Record<MusicStyle, string> = {
+  swing: 'Swing',
+  ambient: 'Ambiental',
+};
+
+export function isMusicStyle(value: unknown): value is MusicStyle {
+  return typeof value === 'string' && (MUSIC_STYLES as readonly string[]).includes(value);
+}
+
+export const STYLE_TEMPO: Record<MusicStyle, number> = { ambient: TEMPO_BPM, swing: 90 };
+
+export function beatSeconds(style: MusicStyle): number {
+  return 60 / STYLE_TEMPO[style];
+}
+
+export function barSeconds(style: MusicStyle): number {
+  return beatSeconds(style) * BEATS_PER_BAR;
+}
+
+/** Volumen de la música: 100 % es el estándar del juego; se puede bajar a 0 o subir hasta el doble. */
+export const MUSIC_VOLUME_MIN = 0;
+export const MUSIC_VOLUME_DEFAULT = 100;
+export const MUSIC_VOLUME_MAX = 200;
+
+/** Valida un volumen guardado (puede venir corrupto o de una versión antigua). */
+export function normalizeMusicVolume(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return MUSIC_VOLUME_DEFAULT;
+  return Math.min(MUSIC_VOLUME_MAX, Math.max(MUSIC_VOLUME_MIN, Math.round(raw)));
+}
+
+/** Multiplicador de amplitud para un volumen en porcentaje (100 % → 1). */
+export function musicGainScale(percent: number): number {
+  return normalizeMusicVolume(percent) / 100;
+}
+
 /** Grados de la escala: 0 = do, 1 = re, 2 = mi, 3 = sol, 4 = la. */
 export type Degree = 0 | 1 | 2 | 3 | 4;
 
-export type MusicVoice = 'pad' | 'bass' | 'arp' | 'bell';
+export type MusicVoice = 'pad' | 'bass' | 'arp' | 'bell' | 'keys' | 'lead' | 'ride' | 'snare' | 'kick';
 
 export interface MusicEvent {
   voice: MusicVoice;
@@ -83,7 +124,11 @@ export function chordAt(bar: number, seed: number): Chord {
  * Notas de un compás. `intensity` (0 a 1) es cuánto circuito está encendido: con 0 solo hay colchón,
  * bajo y alguna campanita suelta; con 1 la arpa suena casi en cada corchea.
  */
-export function barEvents(bar: number, intensity: number, seed: number): MusicEvent[] {
+export function barEvents(bar: number, intensity: number, seed: number, style: MusicStyle = 'ambient'): MusicEvent[] {
+  return style === 'swing' ? swingBarEvents(bar, intensity, seed) : ambientBarEvents(bar, intensity, seed);
+}
+
+function ambientBarEvents(bar: number, intensity: number, seed: number): MusicEvent[] {
   const level = clamp01(intensity);
   const chord = chordAt(bar, seed);
   const rng = mulberry32((seed + Math.imul(bar + 1, 977)) >>> 0);

@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cap:sync": "npm run build && npx cap sync android"
+    "cap:sync": "npm run build && npx cap sync android",
+    "test:e2e": "node e2e/run.mjs",
+    "test:audio": "node e2e/run.mjs --audio"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

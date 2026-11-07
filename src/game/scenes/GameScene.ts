@@ -32,7 +32,28 @@ import {
   spendSparks,
 } from '../../core/progress';
 import { findHintCell, hintRotationDelta } from '../../core/hints';
-import { HAPTIC_LABELS, HAPTIC_LEVELS, HapticLevel, isHapticLevel } from '../../core/haptics';
+import {
+  HAPTIC_LABELS,
+  HAPTIC_LEVELS,
+  HAPTIC_MODES,
+  HAPTIC_MODE_LABELS,
+  HapticLevel,
+  HapticMode,
+  describeDiagnostics,
+  isHapticLevel,
+  isHapticMode,
+  vibrationBlockers,
+} from '../../core/haptics';
+import {
+  MUSIC_STYLES,
+  MUSIC_STYLE_LABELS,
+  MUSIC_VOLUME_DEFAULT,
+  MUSIC_VOLUME_MAX,
+  MUSIC_VOLUME_MIN,
+  MusicStyle,
+  isMusicStyle,
+  normalizeMusicVolume,
+} from '../../core/music';
 import { THEME, setActiveTheme } from '../theme';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -174,12 +195,19 @@ export class GameScene extends Phaser.Scene {
     setActiveTheme(this.settings.theme);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.currentLevelIndex = this.progress.currentLevel;
+    // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
     if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
+    if (!isHapticMode(this.settings.hapticsMode)) this.settings.hapticsMode = 'all';
+    if (!isMusicStyle(this.settings.musicStyle)) this.settings.musicStyle = 'swing';
+    this.settings.musicVolume = normalizeMusicVolume(this.settings.musicVolume);
     feedback.configure({
       sound: this.settings.soundEnabled,
       music: this.settings.musicEnabled,
+      musicStyle: this.settings.musicStyle,
+      musicVolume: this.settings.musicVolume,
       haptics: this.settings.hapticsEnabled,
       hapticsLevel: this.settings.hapticsLevel,
+      hapticsMode: this.settings.hapticsMode,
     });
     // Los navegadores solo permiten audio tras un gesto: se habilita con el primer toque
     this.input.once('pointerdown', () => feedback.unlock());
@@ -758,6 +786,116 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * Barra deslizante (se arrastra o se toca en cualquier punto). `marker` señala el valor estándar con una
+   * marca. Devuelve una función para activarla o desactivarla (atenuada e ignorando toques).
+   * `onChange` se llama mientras se arrastra (para oír el cambio al momento) y `onCommit` al soltar.
+   */
+  private addSliderRow(
+    overlay: Phaser.GameObjects.Container,
+    cardW: number,
+    y: number,
+    label: string,
+    opts: {
+      min: number;
+      max: number;
+      step: number;
+      value: number;
+      marker: number;
+      markerLabel: string;
+      format: (value: number) => string;
+      onChange: (value: number) => void;
+      onCommit: (value: number) => void;
+    }
+  ): (enabled: boolean) => void {
+    const left = -cardW / 2 + 56;
+    const right = cardW / 2 - 56;
+    const trackY = y + 70;
+    const span = opts.max - opts.min;
+    const toX = (v: number) => left + ((v - opts.min) / span) * (right - left);
+    let value = opts.value;
+    let enabled = true;
+    let dragging = false;
+
+    const group = this.add.container(0, 0);
+    const valueText = this.uiText(cardW / 2 - 44, y, '', { size: 28, display: true, weight: '600', color: THEME.primaryCss, originX: 1 });
+    const graphics = this.add.graphics();
+    const draw = () => {
+      graphics.clear();
+      const x = toX(value);
+      graphics.fillStyle(THEME.divider, 1);
+      graphics.fillRoundedRect(left, trackY - 8, right - left, 16, 8);
+      graphics.fillStyle(THEME.primary, 1);
+      graphics.fillRoundedRect(left, trackY - 8, Math.max(8, x - left), 16, 8);
+      // Marca del valor estándar
+      const mx = toX(opts.marker);
+      graphics.fillStyle(THEME.wireOffHub, 1);
+      graphics.fillRoundedRect(mx - 2, trackY - 22, 4, 44, 2);
+      // Tirador
+      graphics.fillStyle(THEME.primary, 1);
+      graphics.fillCircle(x, trackY, 28);
+      graphics.fillStyle(THEME.surface, 1);
+      graphics.fillCircle(x, trackY, 12);
+      valueText.setText(opts.format(value));
+    };
+
+    const valueFromPointer = (pointer: Phaser.Input.Pointer): number => {
+      const local = pointer.x - overlay.x;
+      const t = Math.min(1, Math.max(0, (local - left) / (right - left)));
+      let v = opts.min + Math.round((t * span) / opts.step) * opts.step;
+      // Cerca del valor estándar "se pega" a él, para poder volver a él con facilidad
+      if (Math.abs(v - opts.marker) <= opts.step * 1.5) v = opts.marker;
+      return Math.min(opts.max, Math.max(opts.min, v));
+    };
+    const update = (pointer: Phaser.Input.Pointer) => {
+      const next = valueFromPointer(pointer);
+      if (next === value) return;
+      value = next;
+      draw();
+      opts.onChange(value);
+    };
+    const finish = () => {
+      if (!dragging) return;
+      dragging = false;
+      this.input.off('pointermove', onMove);
+      this.input.off('pointerup', finish);
+      opts.onCommit(value);
+    };
+    const onMove = (pointer: Phaser.Input.Pointer) => {
+      if (dragging && pointer.isDown) update(pointer);
+    };
+
+    const zone = this.add.zone(0, trackY, cardW - 20, 96).setInteractive({ useHandCursor: true });
+    zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (!enabled) return;
+      dragging = true;
+      update(pointer);
+      this.input.on('pointermove', onMove);
+      this.input.on('pointerup', finish);
+    });
+    // Si la tarjeta se cierra a mitad de un arrastre no quedan escuchas colgadas
+    overlay.once('destroy', () => {
+      this.input.off('pointermove', onMove);
+      this.input.off('pointerup', finish);
+    });
+
+    group.add([this.uiText(-cardW / 2 + 44, y, label, { size: 29, weight: '600' }), valueText, graphics, zone]);
+    group.add(
+      this.uiText(toX(opts.marker), trackY + 44, opts.markerLabel, {
+        size: FONT.small,
+        weight: '500',
+        color: THEME.mutedText,
+        originX: 0.5,
+      })
+    );
+    draw();
+    overlay.add(group);
+    return (on: boolean) => {
+      enabled = on;
+      group.setAlpha(on ? 1 : 0.4);
+    };
+  }
+
   /** Botón relleno (acción principal) o con contorno (secundaria) dentro de una tarjeta. */
   private addCardButton(
     overlay: Phaser.GameObjects.Container,
@@ -871,9 +1009,9 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(overlay, { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, 'Cerrar', () => overlay.destroy(), true);
   }
 
-  /** Ajustes: efectos de sonido, música, vibración y su intensidad. Se guardan al instante. */
+  /** Ajustes: efectos, música (estilo y volumen), vibración (intensidad y prueba). Se guardan al instante. */
   private showSettingsModal(): void {
-    const cardH = 150 + 3 * 84 + 170 + 190;
+    const cardH = 1150;
     const { overlay, w } = this.createCard(cardH, 200);
     overlay.add(this.uiText(0, -cardH / 2 + 70, 'Ajustes', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
@@ -885,12 +1023,51 @@ export class GameScene extends Phaser.Scene {
       feedback.toggle(); // al activarlos suena una muestra
     });
     y += 84;
+
+    // Estilo y volumen de la música solo tienen sentido con la música encendida
+    let setStyleEnabled: (enabled: boolean) => void = () => undefined;
+    let setVolumeEnabled: (enabled: boolean) => void = () => undefined;
     this.addToggleRow(overlay, w, y, 'Música', this.settings.musicEnabled, (value) => {
       this.settings.musicEnabled = value;
       storage.saveSettings(this.settings);
       feedback.configure({ music: value });
+      setStyleEnabled(value);
+      setVolumeEnabled(value);
     });
-    y += 84;
+    y += 90;
+
+    setStyleEnabled = this.addChoiceRow(
+      overlay,
+      w,
+      y,
+      'Estilo de la música',
+      MUSIC_STYLES.map((style) => ({ value: style, label: MUSIC_STYLE_LABELS[style] })),
+      this.settings.musicStyle,
+      (value) => {
+        this.settings.musicStyle = value as MusicStyle;
+        storage.saveSettings(this.settings);
+        feedback.configure({ musicStyle: this.settings.musicStyle });
+      }
+    );
+    y += 170;
+
+    setVolumeEnabled = this.addSliderRow(overlay, w, y, 'Volumen de la música', {
+      min: MUSIC_VOLUME_MIN,
+      max: MUSIC_VOLUME_MAX,
+      step: 5,
+      value: this.settings.musicVolume,
+      marker: MUSIC_VOLUME_DEFAULT,
+      markerLabel: 'estándar',
+      format: (value) => `${value} %`,
+      onChange: (value) => feedback.configure({ musicVolume: value }), // se oye mientras se arrastra
+      onCommit: (value) => {
+        this.settings.musicVolume = value;
+        storage.saveSettings(this.settings);
+      },
+    });
+    y += 170;
+    setStyleEnabled(this.settings.musicEnabled);
+    setVolumeEnabled(this.settings.musicEnabled);
 
     let setIntensityEnabled: (enabled: boolean) => void = () => undefined;
     this.addToggleRow(overlay, w, y, 'Vibración', this.settings.hapticsEnabled, (value) => {
@@ -900,7 +1077,7 @@ export class GameScene extends Phaser.Scene {
       setIntensityEnabled(value);
       feedback.previewHaptics(); // al activarla vibra una vez
     });
-    y += 84 + 6;
+    y += 90;
 
     setIntensityEnabled = this.addChoiceRow(
       overlay,
@@ -918,8 +1095,89 @@ export class GameScene extends Phaser.Scene {
       }
     );
     setIntensityEnabled(this.settings.hapticsEnabled);
+    y += 170;
+
+    this.addCardButton(
+      overlay,
+      { x: 0, y, w: w - 88, h: 88 },
+      '¿No vibra? Probar y diagnosticar',
+      () => this.showHapticsModal(),
+      false
+    );
 
     this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
+  }
+
+  /**
+   * Prueba y diagnóstico de la vibración. En el teléfono lee los ajustes que pueden bloquearla (intensidades,
+   * silencio, "No molestar", ahorro de batería) y deja elegir por qué vía se envía, probando cada una al momento.
+   */
+  private showHapticsModal(): void {
+    const cardH = 1150;
+    const { overlay, w } = this.createCard(cardH, 210);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Vibración', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    const left = -w / 2 + 44;
+    const info = this.uiText(left, -cardH / 2 + 130, 'Leyendo los ajustes del teléfono…', {
+      size: FONT.small,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+    });
+    info.setOrigin(0, 0).setLineSpacing(4);
+    overlay.add(info);
+
+    void feedback.diagnoseHaptics().then((diagnostics) => {
+      if (!info.active) return; // la tarjeta ya se cerró
+      if (!diagnostics) {
+        info.setText(
+          'Estos datos solo se pueden leer en la app de Android (APK). En el navegador no hay motor de vibración que diagnosticar.'
+        );
+        return;
+      }
+      // Lo más importante primero: qué puede estar bloqueando la vibración; después, los datos del teléfono
+      const blockers = vibrationBlockers(diagnostics);
+      info.setText(
+        (blockers.length
+          ? 'Posibles causas:\n' + blockers.map((b) => `• ${b}`).join('\n')
+          : 'No se detectó ningún ajuste del teléfono que bloquee la vibración.') +
+          '\n\n' +
+          describeDiagnostics(diagnostics).join('\n')
+      );
+    });
+
+    const result = this.uiText(left, 0, '', { size: FONT.small, weight: '600', color: THEME.text, wrap: w - 88 });
+    result.setOrigin(0, 0).setLineSpacing(6);
+    const runTest = () => {
+      result.setText('Probando…');
+      void feedback.testHaptics().then((text) => {
+        if (result.active) result.setText(text);
+      });
+    };
+
+    const methodY = -cardH / 2 + 130 + 560;
+    this.addChoiceRow(
+      overlay,
+      w,
+      methodY,
+      'Método (elige el que sientas)',
+      HAPTIC_MODES.map((mode) => ({ value: mode, label: HAPTIC_MODE_LABELS[mode] })),
+      this.settings.hapticsMode,
+      (value) => {
+        this.settings.hapticsMode = value as HapticMode;
+        storage.saveSettings(this.settings);
+        feedback.configure({ hapticsMode: this.settings.hapticsMode });
+        runTest(); // se prueba al elegir, para notar la diferencia al momento
+      }
+    );
+
+    result.setPosition(left, methodY + 150);
+    overlay.add(result);
+
+    const buttonsY = cardH / 2 - 84;
+    const btnW = (w - 88 - 18) / 2;
+    this.addCardButton(overlay, { x: -(btnW + 18) / 2, y: buttonsY, w: btnW, h: 100 }, 'Probar', runTest, false);
+    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: buttonsY, w: btnW, h: 100 }, 'Listo', () => overlay.destroy(), true);
   }
 
   // ---------------------------------------------------------------------------

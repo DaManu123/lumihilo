@@ -5,7 +5,8 @@ import {
   noteForCell,
   winStepNote,
 } from '../core/sound';
-import type { HapticLevel } from '../core/haptics';
+import type { HapticDiagnostics, HapticLevel, HapticMode } from '../core/haptics';
+import { MUSIC_VOLUME_DEFAULT, MusicStyle } from '../core/music';
 import type { AudioService } from './AudioService';
 import type { HapticService } from './HapticService';
 import { MusicPlayer, NoopMusicPlayer } from './MusicService';
@@ -15,8 +16,12 @@ export interface FeedbackSettings {
   sound: boolean;
   /** Música de fondo. */
   music: boolean;
+  musicStyle: MusicStyle;
+  /** Volumen de la música en porcentaje: 100 es el estándar. */
+  musicVolume: number;
   haptics: boolean;
   hapticsLevel: HapticLevel;
+  hapticsMode: HapticMode;
 }
 
 /**
@@ -24,7 +29,15 @@ export interface FeedbackSettings {
  * victoria…) tiene aquí su respuesta sensorial, y los ajustes del jugador se respetan en un solo sitio.
  */
 export class FeedbackService {
-  private settings: FeedbackSettings = { sound: true, music: true, haptics: true, hapticsLevel: 'normal' };
+  private settings: FeedbackSettings = {
+    sound: true,
+    music: true,
+    musicStyle: 'swing',
+    musicVolume: MUSIC_VOLUME_DEFAULT,
+    haptics: true,
+    hapticsLevel: 'normal',
+    hapticsMode: 'all',
+  };
   /** El audio solo puede empezar tras el primer gesto del usuario. */
   private unlocked = false;
 
@@ -37,6 +50,10 @@ export class FeedbackService {
   configure(settings: Partial<FeedbackSettings>): void {
     this.settings = { ...this.settings, ...settings };
     this.haptics.setLevel(this.settings.hapticsLevel);
+    this.haptics.setMode(this.settings.hapticsMode);
+    // Estilo y volumen se pasan siempre: la música los aplica al empezar o al instante si ya suena
+    this.music.setStyle(this.settings.musicStyle);
+    this.music.setVolume(this.settings.musicVolume);
     // La música se enciende o se apaga al instante, pero solo si ya hubo un gesto del usuario
     if (this.unlocked) {
       if (this.settings.music) this.music.start();
@@ -68,6 +85,16 @@ export class FeedbackService {
   /** Cuánto circuito está encendido (0 a 1): la música gana capas a medida que el jugador avanza. */
   setIntensity(value: number): void {
     if (this.settings.music) this.music.setIntensity(value);
+  }
+
+  /** Prueba de la vibración con la vía actual. Funciona aunque la vibración esté desactivada: es una prueba explícita. */
+  testHaptics(): Promise<string> {
+    return this.haptics.test();
+  }
+
+  /** Ajustes del teléfono que afectan a la vibración (null si no es el APK). */
+  diagnoseHaptics(): Promise<HapticDiagnostics | null> {
+    return this.haptics.diagnose();
   }
 
   /** Muestra de la vibración actual (al cambiar la intensidad en Ajustes). */
