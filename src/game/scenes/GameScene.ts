@@ -1127,6 +1127,13 @@ export class GameScene extends Phaser.Scene {
     info.setOrigin(0, 0).setLineSpacing(4);
     overlay.add(info);
 
+    void feedback.lastCrash().then((crash) => {
+      if (!crash || !info.active) return;
+      // El cierre anterior de la app: lo enseñamos para poder corregirlo
+      info.setText('La app se cerró antes por:\n' + crash.split('\n').slice(0, 7).join('\n').slice(0, 520));
+      info.setFontSize(20);
+    });
+
     void feedback.diagnoseHaptics().then((diagnostics) => {
       if (!info.active) return; // la tarjeta ya se cerró
       if (!diagnostics) {

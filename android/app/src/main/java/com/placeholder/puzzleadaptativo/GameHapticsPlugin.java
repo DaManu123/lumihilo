@@ -21,6 +21,10 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
+
 import org.json.JSONException;
 
 /**
@@ -70,6 +74,19 @@ public class GameHapticsPlugin extends Plugin {
 
     @PluginMethod
     public void trigger(PluginCall call) {
+        // Capacitor convierte cualquier excepción no capturada en un cierre de la app: aquí nunca debe escapar ninguna
+        try {
+            doTrigger(call);
+        } catch (Throwable t) {
+            call.reject("trigger: " + describe(t));
+        }
+    }
+
+    private static String describe(Throwable t) {
+        return t.getClass().getSimpleName() + ": " + t.getMessage();
+    }
+
+    private void doTrigger(PluginCall call) {
         final String kind = call.getString("kind", "tap");
         final String mode = call.getString("mode", "all");
         final int duration = clamp(call.getInt("duration", 30), 5, 400);
@@ -95,6 +112,11 @@ public class GameHapticsPlugin extends Plugin {
         }
         // La respuesta táctil del sistema es un toque corto: en la victoria (patrón largo) no se usa
         // con "all" para no interrumpir el patrón que acaba de empezar.
+        if (hasMotor && "alarm".equals(mode)) {
+            String error = motorWithUsage(vibrator, AudioAttributes.USAGE_ALARM, duration, amplitude, pattern);
+            if (error == null) performed.append("alarm ");
+            else errors.append("alarm: ").append(error).append("; ");
+        }
         boolean useSystem = "system".equals(mode) || (all && pattern == null);
         if (useSystem) {
             String error = system(kind);
@@ -107,6 +129,20 @@ public class GameHapticsPlugin extends Plugin {
         result.put("performed", performed.toString().trim());
         result.put("errors", errors.toString().trim());
         call.resolve(result);
+    }
+
+    private String motorWithUsage(Vibrator vibrator, int usage, int duration, int amplitude, long[] pattern) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return motor(vibrator, false, duration, amplitude, pattern);
+            VibrationEffect effect = pattern != null
+                ? VibrationEffect.createWaveform(pattern, -1)
+                : VibrationEffect.createOneShot(duration, vibrator.hasAmplitudeControl() ? amplitude : VibrationEffect.DEFAULT_AMPLITUDE);
+            AudioAttributes attributes = new AudioAttributes.Builder().setUsage(usage).build();
+            vibrator.vibrate(effect, attributes);
+            return null;
+        } catch (Throwable e) {
+            return describe(e);
+        }
     }
 
     /** Vibra con el motor. Devuelve null si todo fue bien o el texto del error. */
@@ -137,8 +173,8 @@ public class GameHapticsPlugin extends Plugin {
                 vibrator.vibrate(duration);
             }
             return null;
-        } catch (Exception e) {
-            return e.getClass().getSimpleName() + ": " + e.getMessage();
+        } catch (Throwable e) {
+            return describe(e);
         }
     }
 
@@ -148,10 +184,16 @@ public class GameHapticsPlugin extends Plugin {
             final View view = getBridge().getWebView();
             final int constant = hapticConstant(kind);
             // La vista solo se puede tocar desde el hilo de la interfaz
-            getActivity().runOnUiThread(() -> view.performHapticFeedback(constant));
+            getActivity().runOnUiThread(() -> {
+                try {
+                    view.performHapticFeedback(constant);
+                } catch (Throwable ignored) {
+                    // en el hilo de la interfaz una excepción cerraría la app
+                }
+            });
             return null;
-        } catch (Exception e) {
-            return e.getClass().getSimpleName() + ": " + e.getMessage();
+        } catch (Throwable e) {
+            return describe(e);
         }
     }
 
@@ -165,40 +207,111 @@ public class GameHapticsPlugin extends Plugin {
         return HapticFeedbackConstants.VIRTUAL_KEY;
     }
 
-    /** Ajustes del teléfono que pueden impedir que la app vibre (solo lectura). */
+    private static int readSetting(ContentResolver resolver, String name) {
+        try {
+            return Settings.System.getInt(resolver, name, -1);
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    private static void put(JSObject result, String key, Object value) {
+        try {
+            result.put(key, value);
+        } catch (Throwable ignored) {
+            // un dato que no se pueda leer no debe impedir mostrar el resto
+        }
+    }
+
+    /** Ajustes del teléfono que pueden impedir que la app vibre (solo lectura). Nunca lanza excepciones. */
     @PluginMethod
     public void diagnose(PluginCall call) {
-        Context context = getContext();
-        ContentResolver resolver = context.getContentResolver();
-        Vibrator vibrator = vibrator();
-
         JSObject result = new JSObject();
-        result.put("sdk", Build.VERSION.SDK_INT);
-        result.put("manufacturer", Build.MANUFACTURER);
-        result.put("model", Build.MODEL);
-        result.put("hasMotor", vibrator != null && vibrator.hasVibrator());
-        result.put(
-            "hasAmplitudeControl",
-            vibrator != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && vibrator.hasAmplitudeControl()
-        );
+        StringBuilder problems = new StringBuilder();
+        Context context = getContext();
+        ContentResolver resolver = null;
+        Vibrator vibrator = null;
+        try {
+            resolver = context.getContentResolver();
+            vibrator = vibrator();
+        } catch (Throwable t) {
+            problems.append("contexto: ").append(describe(t)).append("; ");
+        }
+
+        put(result, "sdk", Build.VERSION.SDK_INT);
+        put(result, "manufacturer", String.valueOf(Build.MANUFACTURER));
+        put(result, "model", String.valueOf(Build.MODEL));
+
+        boolean hasMotor = false;
+        boolean hasAmplitude = false;
+        try {
+            hasMotor = vibrator != null && vibrator.hasVibrator();
+            hasAmplitude = vibrator != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && vibrator.hasAmplitudeControl();
+        } catch (Throwable t) {
+            problems.append("motor: ").append(describe(t)).append("; ");
+        }
+        put(result, "hasMotor", hasMotor);
+        put(result, "hasAmplitudeControl", hasAmplitude);
 
         // 0 = desactivada, 1 = baja, 2 = media, 3 = alta, -1 = el teléfono no la expone
-        result.put("hapticFeedbackEnabled", Settings.System.getInt(resolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, -1));
-        result.put("touchIntensity", Settings.System.getInt(resolver, "haptic_feedback_intensity", -1));
-        result.put("mediaIntensity", Settings.System.getInt(resolver, "media_vibration_intensity", -1));
-        result.put("notificationIntensity", Settings.System.getInt(resolver, "notification_vibration_intensity", -1));
-        result.put("ringIntensity", Settings.System.getInt(resolver, "ring_vibration_intensity", -1));
+        put(result, "hapticFeedbackEnabled", resolver == null ? -1 : readSetting(resolver, Settings.System.HAPTIC_FEEDBACK_ENABLED));
+        put(result, "touchIntensity", resolver == null ? -1 : readSetting(resolver, "haptic_feedback_intensity"));
+        put(result, "mediaIntensity", resolver == null ? -1 : readSetting(resolver, "media_vibration_intensity"));
+        put(result, "notificationIntensity", resolver == null ? -1 : readSetting(resolver, "notification_vibration_intensity"));
+        put(result, "ringIntensity", resolver == null ? -1 : readSetting(resolver, "ring_vibration_intensity"));
 
-        AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        result.put("ringerMode", audio == null ? -1 : audio.getRingerMode()); // 0 silencio, 1 vibrar, 2 normal
+        int ringer = -1; // 0 silencio, 1 vibrar, 2 normal
+        try {
+            AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (audio != null) ringer = audio.getRingerMode();
+        } catch (Throwable t) {
+            problems.append("sonido: ").append(describe(t)).append("; ");
+        }
+        put(result, "ringerMode", ringer);
 
-        NotificationManager notifications = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        // 1 todo permitido, 2 solo prioritarias, 3 nada, 4 solo alarmas
-        result.put("interruptionFilter", notifications == null ? -1 : notifications.getCurrentInterruptionFilter());
+        int filter = -1; // 1 todo permitido, 2 solo prioritarias, 3 nada, 4 solo alarmas
+        try {
+            NotificationManager notifications = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notifications != null) filter = notifications.getCurrentInterruptionFilter();
+        } catch (Throwable t) {
+            problems.append("no molestar: ").append(describe(t)).append("; ");
+        }
+        put(result, "interruptionFilter", filter);
 
-        PowerManager power = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        result.put("powerSave", power != null && power.isPowerSaveMode());
+        boolean powerSave = false;
+        try {
+            PowerManager power = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            powerSave = power != null && power.isPowerSaveMode();
+        } catch (Throwable t) {
+            problems.append("batería: ").append(describe(t)).append("; ");
+        }
+        put(result, "powerSave", powerSave);
+        put(result, "problems", problems.toString().trim());
 
+        call.resolve(result);
+    }
+
+    /** Texto del último cierre inesperado de la app (si lo hubo); se borra al leerlo. */
+    @PluginMethod
+    public void lastCrash(PluginCall call) {
+        JSObject result = new JSObject();
+        String text = "";
+        try {
+            File file = new File(getContext().getFilesDir(), CrashLog.FILE_NAME);
+            if (file.exists()) {
+                try (FileInputStream in = new FileInputStream(file); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = in.read(buffer)) > 0 && out.size() < 6000) out.write(buffer, 0, read);
+                    text = out.toString("UTF-8");
+                }
+                //noinspection ResultOfMethodCallIgnored
+                file.delete();
+            }
+        } catch (Throwable ignored) {
+            // sin registro, sin problema
+        }
+        put(result, "text", text);
         call.resolve(result);
     }
 }

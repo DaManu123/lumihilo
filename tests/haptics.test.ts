@@ -76,7 +76,7 @@ describe('Perfiles de vibración (src/core/haptics.ts)', () => {
     it('reconoce solo los modos válidos y cada uno tiene su etiqueta', () => {
       for (const mode of HAPTIC_MODES) expect(isHapticMode(mode)).toBe(true);
       for (const bad of ['', 'todos', null, undefined, 4, {}]) expect(isHapticMode(bad)).toBe(false);
-      expect(HAPTIC_MODES.map((m) => HAPTIC_MODE_LABELS[m])).toEqual(['Todos', 'Sistema', 'Motor', 'Táctil']);
+      expect(HAPTIC_MODES.map((m) => HAPTIC_MODE_LABELS[m])).toEqual(['Todos', 'Sistema', 'Motor', 'Táctil', 'Alarma']);
     });
 
     it('la potencia crece con la intensidad y está en el rango válido de Android (1 a 255)', () => {

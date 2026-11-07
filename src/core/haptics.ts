@@ -64,16 +64,18 @@ export function patternPulses(pattern: readonly number[]): Pulse[] {
  * - `system`: la respuesta táctil del sistema (la de los botones de cualquier app).
  * - `motor`: el motor de vibración directamente.
  * - `touch`: el motor, marcando la vibración como respuesta a un toque.
+ * - `alarm`: el motor, marcada como alarma (Android casi nunca la bloquea).
  */
-export type HapticMode = 'all' | 'system' | 'motor' | 'touch';
+export type HapticMode = 'all' | 'system' | 'motor' | 'touch' | 'alarm';
 
-export const HAPTIC_MODES: readonly HapticMode[] = ['all', 'system', 'motor', 'touch'];
+export const HAPTIC_MODES: readonly HapticMode[] = ['all', 'system', 'motor', 'touch', 'alarm'];
 
 export const HAPTIC_MODE_LABELS: Record<HapticMode, string> = {
   all: 'Todos',
   system: 'Sistema',
   motor: 'Motor',
   touch: 'Táctil',
+  alarm: 'Alarma',
 };
 
 export function isHapticMode(value: unknown): value is HapticMode {
@@ -121,6 +123,8 @@ export interface HapticDiagnostics {
   /** 1 = todo permitido, 2 = solo prioritarias, 3 = silencio total, 4 = solo alarmas. */
   interruptionFilter: number;
   powerSave: boolean;
+  /** Datos que el teléfono no dejó leer (vacío si todo fue bien). */
+  problems?: string;
 }
 
 const INTENSITY_TEXT: Record<number, string> = { 0: 'Desactivada', 1: 'Baja', 2: 'Media', 3: 'Alta' };

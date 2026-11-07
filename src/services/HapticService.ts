@@ -23,6 +23,8 @@ export interface HapticService {
   diagnose(): Promise<HapticDiagnostics | null>;
   /** Prueba la vibración de victoria con la vía actual y cuenta qué pasó. */
   test(): Promise<string>;
+  /** Motivo del último cierre inesperado de la app (solo APK); cadena vacía si no hubo. */
+  lastCrash?(): Promise<string>;
 }
 
 export class NoopHapticService implements HapticService {
@@ -48,6 +50,7 @@ interface TriggerResult {
 interface GameHapticsPlugin {
   trigger(options: TriggerOptions): Promise<TriggerResult>;
   diagnose(): Promise<HapticDiagnostics>;
+  lastCrash(): Promise<{ text: string }>;
 }
 
 /** Plugin nativo propio (android/.../GameHapticsPlugin.java); en el navegador no existe. */
@@ -121,6 +124,15 @@ export class CapacitorHapticService implements HapticService {
       return await GameHaptics.diagnose();
     } catch {
       return null;
+    }
+  }
+
+  async lastCrash(): Promise<string> {
+    if (!Capacitor.isNativePlatform()) return '';
+    try {
+      return (await GameHaptics.lastCrash()).text ?? '';
+    } catch {
+      return '';
     }
   }
 

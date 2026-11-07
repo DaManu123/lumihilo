@@ -97,6 +97,15 @@ export class FeedbackService {
     return this.haptics.diagnose();
   }
 
+  /** Motivo del último cierre inesperado de la app (APK); cadena vacía si no hubo. */
+  async lastCrash(): Promise<string> {
+    try {
+      return (await this.haptics.lastCrash?.()) ?? '';
+    } catch {
+      return '';
+    }
+  }
+
   /** Muestra de la vibración actual (al cambiar la intensidad en Ajustes). */
   previewHaptics(): void {
     this.vibrate(() => this.haptics.mediumTap());

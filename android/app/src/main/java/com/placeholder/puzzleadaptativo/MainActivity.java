@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // Los plugins propios de la app se registran antes de iniciar el puente de Capacitor
+        CrashLog.install(getApplicationContext());
         registerPlugin(GameHapticsPlugin.class);
         super.onCreate(savedInstanceState);
     }
