@@ -1,0 +1,63 @@
+name: Publicar la web
+
+# Publica en GitHub Pages la página de presentación (docs/landing) y el juego jugable en /play/.
+# Se ejecuta al fusionar en main o a mano desde la pestaña Actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'public/**'
+      - 'package*.json'
+      - 'vite.config.ts'
+      - 'docs/landing/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Preparar el sitio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Armar el sitio (presentación en la raíz, juego en /play/)
+        run: |
+          mkdir -p _site/play
+          cp -r docs/landing/. _site/
+          cp -r dist/. _site/play/
+          touch _site/.nojekyll
+          test -f _site/index.html && test -f _site/privacidad.html && test -f _site/play/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Publicar
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
