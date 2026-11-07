@@ -39,7 +39,21 @@ Los contrastes mínimos están protegidos por `tests/theme.test.ts`: texto ≥ 7
 
 Ambas se instalan como paquetes (`@fontsource-variable/*`) y viajan dentro de la app, así que funcionan sin conexión. `src/main.ts` espera a que carguen antes de crear el juego, porque Phaser dibuja el texto una sola vez.
 
+## Sonido y vibración
+
+- **Todo el sonido se sintetiza** (`src/services/AudioService.ts`): no hay archivos de audio, así que pesa cero y funciona sin conexión. Cada nota es un seno con un triángulo una octava arriba (timbre de cristal) y un eco corto.
+- **Escala pentatónica mayor** (do, re, mi, sol, la): cualquier combinación suena consonante, así que jugar rápido o al azar nunca suena disonante. Cada casilla tiene su nota según su posición (`src/core/sound.ts`).
+- **Eventos:** girar (nota de la casilla), conectar (campanita más aguda), deshacer (nota suave), pista (campanita de dos notas), rechazo (nota grave), victoria (melodía ascendente con el pulso de luz y acorde final).
+- **Vibración** con `@capacitor/haptics`: toque ligero al girar, medio al conectar o usar una pista, de éxito al ganar.
+- El jugador puede desactivar cada una desde Estadísticas. El audio solo arranca tras el primer toque (regla de los navegadores).
+
+## Icono y pantalla de carga
+
+- El icono es la casilla de vidrio con un cable en T encendido y la fuente rosa: el juego en una imagen. Se genera como imagen vectorial y se exporta a todas las densidades de Android (adaptativo, clásico y redondo).
+- `docs/store/icon-512.png` es el icono de Google Play (512 × 512) y `public/favicon.svg` el de la web.
+- La pantalla de carga es el fondo azul noche con el logo centrado (`res/drawable/splash.xml`): ya no se deforma en teléfonos alargados.
+
 ## Pendiente
 
-- Icono de la app y pantalla de carga con esta identidad.
 - La landing (`docs/landing/`) todavía usa su propia paleta.
+- Gráfico de funciones de la ficha de Play (1024 × 500) y capturas (issue #54).

@@ -88,9 +88,9 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 
 **Objetivo:** que dé ganas de jugar "una más" y recompensar el avance del jugador.
 
-- [ ] Arte final simple y coherente (paleta, tipografía, icono)
-- [ ] Sonido y vibración al rotar, conectar y ganar (con opción de silencio)
-- [ ] Efecto de "energía fluyendo" al completar el circuito
+- [x] Arte final simple y coherente (paleta, tipografía, icono): identidad "Filamento", ver `07`
+- [x] Sonido y vibración al rotar, conectar y ganar (con opción de silencio): notas pentatónicas sintetizadas, vibración con `@capacitor/haptics`, interruptores en Estadísticas
+- [x] Efecto de "energía fluyendo" al completar el circuito: pulso de luz desde la fuente con una melodía ascendente
 - [x] **Sistema de estímulos y economía interna:**
   - Puntos / Chispas de energía ganadas por nivel resuelto (bonos por resolver en toques mínimos y bajo tiempo)
   - Saldo acumulativo local en `StorageService`
@@ -100,7 +100,7 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 - [x] **Reto diario:** semilla derivada de la fecha, idéntica para todos los jugadores
 - [x] **Racha diaria** y estadísticas (mejor tiempo por tier, niveles resueltos, racha de días activos)
 - [x] Progreso guardado: el jugador retoma en su último nivel y no repite niveles (semilla base propia)
-- [ ] Reinicio instantáneo tras ganar
+- [x] Reinicio instantáneo tras ganar: botón, toque fuera de la tarjeta o Enter / Espacio
 
 **Entregable:** versión con bucle de retención, economía interna de chispas, pistas inteligentes y reto diario.
 **Criterio de salida:** en pruebas con amigos, varios piden "otra partida" sin que se les sugiera.

@@ -88,7 +88,8 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
 - [~] **Fase 4 (En curso):**
   - **Entrega A (hecha, `src/core/progress.ts` y `hints.ts`):** progreso guardado (nivel actual, semilla base propia), Chispas (recompensa base por tier + bonos de eficiencia, rapidez y récord; 30 iniciales), pista de alineación (10 Chispas), reto diario por fecha local (tier según día de la semana, doble recompensa la primera vez, no altera el perfil adaptativo), racha diaria y pantalla de estadísticas. 65 tests.
   - **Identidad visual "Filamento" (hecha, `docs/07-identidad-visual.md`):** paleta Noche/Papel con contrastes verificados por tests, tipografías Unbounded + Atkinson Hyperlegible Next incluidas en la app, iconos dibujados (sin emojis), barras segmentadas, cables con halo y núcleo, pulso de luz al ganar, textos sin jerga. 91 tests.
-  - **Entrega B (pendiente):** sonido pentatónico, vibración (`@capacitor/haptics`), icono de la app y pantalla de carga con la nueva identidad, reinicio instantáneo tras ganar.
+  - **Entrega B (hecha, PR pendiente de fusionar):** sonido pentatónico sintetizado (`src/core/sound.ts`, `src/services/AudioService.ts`, `FeedbackService.ts`), vibración con `@capacitor/haptics`, interruptores de sonido y vibración en Estadísticas, melodía ascendente con el pulso de luz de la victoria, icono de la app (todas las densidades) + icono de Play 512 + favicon, pantalla de carga sin deformación, reinicio instantáneo (toque fuera de la tarjeta o Enter/Espacio). 113 pruebas unitarias + 53 de flujo completo en navegador.
+  - **Criterio de salida de la Fase 4 aún por validar con gente real:** que varios jugadores pidan "otra partida" sin que se les sugiera.
 
 ## 📝 Pendientes conocidos
 - `appId` sigue siendo `com.placeholder.puzzleadaptativo` (fijarlo antes del primer bundle).
