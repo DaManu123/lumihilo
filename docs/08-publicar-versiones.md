@@ -6,7 +6,7 @@ Cada versión del juego se publica sola: al subir una etiqueta `v…`, GitHub Ac
 
 | Plataforma | Archivos | Cómo se hace |
 |---|---|---|
-| Android | `Puzzle-Adaptativo-<versión>-android.apk` (firmado) | Capacitor + Gradle |
+| Android | `Lumihilo-<versión>-android.apk` (firmado) | Capacitor + Gradle |
 | Windows | `…-windows-x64-portable.exe` y `…-windows-x64-instalador.exe` | Electron (`desktop/`) |
 | Linux | `…-linux-x64.AppImage` y `…-linux-x64.tar.gz` | Electron (`desktop/`) |
 | Todas | `SHA256SUMS.txt` | Sumas de verificación |
@@ -69,7 +69,7 @@ Android solo instala un APK firmado, y la firma debe ser **siempre la misma** en
 
 ## El archivo `.aab` para Google Play
 
-Cada versión publicada también genera un **Android App Bundle** (`Puzzle-Adaptativo-<versión>-android.aab`), el formato que exige Google Play para apps nuevas. No se adjunta a la versión pública de GitHub: se descarga desde la pestaña **Actions → ejecución de la versión → Artifacts → `aab-android`** (se conserva 30 días).
+Cada versión publicada también genera un **Android App Bundle** (`Lumihilo-<versión>-android.aab`), el formato que exige Google Play para apps nuevas. No se adjunta a la versión pública de GitHub: se descarga desde la pestaña **Actions → ejecución de la versión → Artifacts → `aab-android`** (se conserva 30 días).
 
 - El flujo comprueba que el AAB contiene el juego y el manifiesto y que está firmado.
 - Hoy se firma con la clave de las betas. Antes de subir a Play Console conviene generar una **clave de subida propia** y activar *Play App Signing* (ver `05-publicacion-play-store.md`), y cambiar el identificador provisional `com.placeholder.puzzleadaptativo` por el definitivo, porque no se puede cambiar después de publicar.

@@ -4,6 +4,9 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Cambiado
+- El juego se llama ahora **Lumihilo** (antes "Puzzle Adaptativo"): título, icono de la app, archivos de las versiones, página web y política de privacidad. Ver `docs/09-nombre.md`.
+
 ### Añadido
 - Inglés y español: automático según el dispositivo o a elegir en Ajustes → Accesibilidad → Idioma.
 - Versión web jugable en GitHub Pages (`/play/`), página de presentación y política de privacidad pública (sin anuncios).

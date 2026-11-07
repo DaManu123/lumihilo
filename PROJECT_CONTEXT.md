@@ -1,5 +1,5 @@
 # 🧠 PROJECT CONTEXT & MASTER ARCHITECTURE MEMORY
-**Proyecto:** Puzzle Adaptativo (Nombre de trabajo provisional; *Lumen Loop* y *Synapse Flow* descartados por colisión en Play Store)  
+**Proyecto:** Lumihilo (antes "Puzzle Adaptativo"; nombre elegido el 2026-11-08, ver `docs/09-nombre.md`; *Lumen Loop* y *Synapse Flow* descartados por colisión en Play Store)  
 **Repositorio GitHub:** [DaManu123/puzzle-adaptativo](https://github.com/DaManu123/puzzle-adaptativo)  
 **Rama activa de trabajo:** `dev`  
 **Última actualización:** Fase 3 completada (noviembre 2026)
@@ -53,7 +53,7 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
 1. **Rama de trabajo:** Siempre `dev`. Nunca push directo a `main`.
 2. **Nombre y Branding:**
    - Nombre visible centralizado en una única constante: `APP_NAME` en `src/config.ts`.
-   - Provisional: `"Puzzle Adaptativo"`.
+   - Elegido: `"Lumihilo"` (ver `docs/09-nombre.md`).
    - *Lumen Loop* y *Synapse Flow*: **Descartados** (ya existen en Play Store).
    - *Zen Circuit*: Candidato con riesgos (mezcla con apps de electrónica).
 3. **Identificador Android (`appId`):**
