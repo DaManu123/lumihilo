@@ -37,7 +37,9 @@ import org.json.JSONException;
  *  - "system": la respuesta táctil del sistema (la que usan los botones de cualquier app).
  *  - "motor":  el motor de vibración directamente, sin tipo de uso.
  *  - "touch":  el motor, marcando la vibración como respuesta a un toque.
- *  - "all":    todas las anteriores (por defecto).
+ *  - "alarm":  el motor, marcado como alarma (casi nunca bloqueado; en el POCO F6 es la única que llega).
+ *  - "all":    todas las anteriores a la vez (por defecto). Android descarta las que el teléfono bloquea y
+ *              se queda con la que sí puede sonar, así que el jugador no tiene que elegir nada.
  *
  * También ofrece un diagnóstico con los ajustes del teléfono que pueden bloquear la vibración.
  */
@@ -112,7 +114,7 @@ public class GameHapticsPlugin extends Plugin {
         }
         // La respuesta táctil del sistema es un toque corto: en la victoria (patrón largo) no se usa
         // con "all" para no interrumpir el patrón que acaba de empezar.
-        if (hasMotor && "alarm".equals(mode)) {
+        if (hasMotor && (all || "alarm".equals(mode))) {
             String error = motorWithUsage(vibrator, AudioAttributes.USAGE_ALARM, duration, amplitude, pattern);
             if (error == null) performed.append("alarm ");
             else errors.append("alarm: ").append(error).append("; ");

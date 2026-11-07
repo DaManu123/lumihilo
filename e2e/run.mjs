@@ -12,10 +12,12 @@ import { pathToFileURL } from 'node:url';
 import { close, launch, results } from './lib.mjs';
 import { runGameScenarios } from './game.mjs';
 import { runAudioCheck } from './audio.mjs';
+import { runPerf } from './perf.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const out = path.resolve(process.env.E2E_OUT || path.join(import.meta.dirname, 'artifacts'));
 const audioMode = process.argv.includes('--audio');
+const perfMode = process.argv.includes('--perf');
 mkdirSync(out, { recursive: true });
 
 if (!process.argv.includes('--no-build')) {
@@ -42,6 +44,7 @@ let exitCode = 0;
 try {
   await launch(audioMode ? ['--autoplay-policy=no-user-gesture-required'] : []);
   if (audioMode) await runAudioCheck();
+  else if (perfMode) await runPerf(out);
   else await runGameScenarios(out);
 } catch (error) {
   console.error('\nLa prueba se interrumpió:', error);
@@ -51,7 +54,7 @@ try {
   await server.close();
 }
 
-if (!audioMode) {
+if (!audioMode) {  // (la medición de rendimiento también imprime su resumen)
   const failed = results.filter((r) => !r.ok);
   console.log(`\nResumen: ${results.length - failed.length}/${results.length} comprobaciones correctas`);
   if (failed.length) {

@@ -60,7 +60,7 @@ export function patternPulses(pattern: readonly number[]): Pulse[] {
 /**
  * Cómo se envía la vibración al teléfono. Android (sobre todo la capa de Xiaomi) puede descartar un tipo
  * de vibración según los ajustes del usuario, así que el juego prueba varias vías:
- * - `all`: todas a la vez (por defecto).
+ * - `all`: automático, todas a la vez (por defecto): Android descarta las que bloquea y deja pasar la que sí puede.
  * - `system`: la respuesta táctil del sistema (la de los botones de cualquier app).
  * - `motor`: el motor de vibración directamente.
  * - `touch`: el motor, marcando la vibración como respuesta a un toque.
@@ -71,7 +71,7 @@ export type HapticMode = 'all' | 'system' | 'motor' | 'touch' | 'alarm';
 export const HAPTIC_MODES: readonly HapticMode[] = ['all', 'system', 'motor', 'touch', 'alarm'];
 
 export const HAPTIC_MODE_LABELS: Record<HapticMode, string> = {
-  all: 'Todos',
+  all: 'Auto',
   system: 'Sistema',
   motor: 'Motor',
   touch: 'Táctil',
