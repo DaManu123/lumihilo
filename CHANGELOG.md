@@ -2,6 +2,14 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
+## [0.1.0-beta.3] - 2026-11-07
+
+### Corregido
+- La app ya no se cierra al diagnosticar la vibración en Xiaomi/HyperOS: el plugin nativo captura cualquier error.
+
+### Añadido
+- Vía de vibración "Alarma" y registro del último cierre inesperado, visible en Ajustes.
+
 ## [0.1.0-beta.2] - 2026-11-07
 
 ### Añadido
