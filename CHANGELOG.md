@@ -2,6 +2,14 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
+## [0.1.0-beta.2] - 2026-11-07
+
+### Añadido
+- Estilo de música **Swing** (nuevo, por defecto) junto al Ambiental.
+- Barra de volumen de la música (0–200 %, 100 % = estándar) y limitador de salida.
+- Plugin nativo de vibración para Android con varias vías y pantalla de diagnóstico en Ajustes.
+- Suite de pruebas de flujo completo (`npm run test:e2e`, `npm run test:audio`) y compilación de Android en el CI.
+
 ## [0.1.0-beta.1] - 2026-11-06
 
 Primera beta pública: APK de Android, `.exe` de Windows y AppImage de Linux.
