@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { THEME_DARK, THEME_LIGHT, GameTheme } from '../src/game/theme';
+import { THEME_DARK, THEME_LIGHT, THEME_DARK_HC, THEME_LIGHT_HC, GameTheme, getTheme } from '../src/game/theme';
 import { contrastRatio, mixColors, toCss, luminance } from '../src/game/color';
 
 const cssToNumber = (css: string) => parseInt(css.replace('#', ''), 16);
@@ -82,6 +82,48 @@ describe('Accesibilidad de los temas', () => {
         expect(cssToNumber(t.counterClockwiseCss)).toBe(t.counterClockwise);
         expect(cssToNumber(t.surfaceCss)).toBe(t.surface);
         expect(cssToNumber(t.backgroundCss)).toBe(t.background);
+      });
+    });
+  }
+});
+
+describe('Temas de alto contraste', () => {
+  const pairs: Array<[string, GameTheme, GameTheme]> = [
+    ['Noche', THEME_DARK, THEME_DARK_HC],
+    ['Papel', THEME_LIGHT, THEME_LIGHT_HC],
+  ];
+
+  for (const [name, normal, hc] of pairs) {
+    describe(name, () => {
+      it('getTheme devuelve la variante de alto contraste solo si se pide', () => {
+        expect(getTheme(normal.name, true)).toBe(hc);
+        expect(getTheme(normal.name, false)).toBe(normal);
+        expect(getTheme(normal.name)).toBe(normal);
+      });
+
+      it('conserva la identidad del tema (nombre, fondo, filamento y fuente)', () => {
+        expect(hc.name).toBe(normal.name);
+        expect(hc.background).toBe(normal.background);
+        expect(hc.primary).toBe(normal.primary);
+        expect(hc.accent).toBe(normal.accent);
+      });
+
+      it('texto y texto atenuado superan 7:1 sobre fondo y vidrio', () => {
+        for (const css of [hc.text, hc.mutedText]) {
+          expect(contrastRatio(cssToNumber(css), hc.background)).toBeGreaterThanOrEqual(7);
+          expect(contrastRatio(cssToNumber(css), hc.surface)).toBeGreaterThanOrEqual(7);
+        }
+      });
+
+      it('las trazas apagadas y los bordes se ven mejor que en el tema normal', () => {
+        expect(contrastRatio(hc.wireOff, hc.surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(hc.wireOff, hc.surface)).toBeGreaterThan(contrastRatio(normal.wireOff, normal.surface));
+        expect(contrastRatio(hc.cardBorder, hc.surface)).toBeGreaterThan(contrastRatio(normal.cardBorder, normal.surface));
+        expect(contrastRatio(hc.borderOff, hc.surface)).toBeGreaterThan(contrastRatio(normal.borderOff, normal.surface));
+      });
+
+      it('el cable apagado sigue distinguiéndose del encendido', () => {
+        expect(contrastRatio(hc.primary, hc.wireOff)).toBeGreaterThanOrEqual(1.6);
       });
     });
   }

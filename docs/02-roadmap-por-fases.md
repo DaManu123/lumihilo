@@ -67,8 +67,8 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 - [ ] Modos elegibles por el jugador: **Relajado / Normal / Reto**
 - [ ] Opciones de accesibilidad y visuales:
   - **Modo Claro** y Modo Oscuro (conmutador rápido y persistencia en `StorageService`)
-  - Alto contraste y modo daltónico (patrones visuales además de color)
-  - Tamaño de piezas y velocidad de animación
+  - Alto contraste y modo daltónico (patrones visuales además de color) — hecho: *Ajustes → Accesibilidad* (alto contraste, marcas de energía en las esquinas)
+  - Tamaño de piezas (el tablero ya ocupa todo el ancho disponible) y velocidad de animación (normal, rápida, ninguna) — hecho
   - Vibración on/off (háptica)
 - [ ] Controles ergonómicos y rotación inversa:
   - Botón grande de **sentido de giro** (↻ horario / ↺ antihorario, cian/magenta): el toque o clic izquierdo gira las piezas hacia donde apunta la flecha; la preferencia se guarda

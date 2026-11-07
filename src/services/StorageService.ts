@@ -4,6 +4,7 @@ import { AdaptiveProfile, createDefaultProfile } from '../core/adaptive';
 import { PlayerProgress, sanitizeProgress } from '../core/progress';
 import type { HapticLevel, HapticMode } from '../core/haptics';
 import type { MusicStyle } from '../core/music';
+import type { AnimationSpeed } from '../core/accessibility';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -20,6 +21,11 @@ export interface UserSettings {
   hapticsLevel: HapticLevel;
   hapticsMode: HapticMode;
   hasSeenTutorial: boolean;
+  /** Trazas, bordes y textos más marcados. */
+  highContrast: boolean;
+  /** Marcas en las esquinas de las piezas encendidas (no depender solo del color). */
+  litMarks: boolean;
+  animationSpeed: AnimationSpeed;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -33,6 +39,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   hapticsLevel: 'normal',
   hapticsMode: 'all',
   hasSeenTutorial: false,
+  highContrast: false,
+  litMarks: false,
+  animationSpeed: 'normal',
 };
 
 export interface StorageService {

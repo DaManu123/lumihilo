@@ -54,6 +54,14 @@ import {
   isMusicStyle,
   normalizeMusicVolume,
 } from '../../core/music';
+import {
+  ANIMATION_LABELS,
+  ANIMATION_SPEEDS,
+  AnimationSpeed,
+  animationDuration,
+  isAnimationSpeed,
+  motionDisabled,
+} from '../../core/accessibility';
 import { THEME, setActiveTheme } from '../theme';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -162,6 +170,8 @@ interface CellLook {
   hintRing: boolean;
   /** Paso de brillo, de 0 a GLOW_STEPS. */
   glowStep: number;
+  /** Marcas en las esquinas de las casillas encendidas. */
+  marks: boolean;
   legs: CellLeg[];
 }
 
@@ -225,13 +235,16 @@ export class GameScene extends Phaser.Scene {
     this.profile = storage.loadProfile();
     this.progress = storage.loadProgress();
     this.settings = storage.loadSettings();
-    setActiveTheme(this.settings.theme);
+    setActiveTheme(this.settings.theme, this.settings.highContrast === true);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.currentLevelIndex = this.progress.currentLevel;
     // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
     if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
     if (!isHapticMode(this.settings.hapticsMode)) this.settings.hapticsMode = 'all';
     if (!isMusicStyle(this.settings.musicStyle)) this.settings.musicStyle = 'swing';
+    if (!isAnimationSpeed(this.settings.animationSpeed)) this.settings.animationSpeed = 'normal';
+    this.settings.highContrast = this.settings.highContrast === true;
+    this.settings.litMarks = this.settings.litMarks === true;
     this.settings.musicVolume = normalizeMusicVolume(this.settings.musicVolume);
     feedback.configure({
       sound: this.settings.soundEnabled,
@@ -285,9 +298,19 @@ export class GameScene extends Phaser.Scene {
     return computePowerFlow(this.board).reduce((total, row) => total + row.filter(Boolean).length, 0);
   }
 
-  /** Respeta la preferencia del sistema de reducir el movimiento. */
-  private reducedMotion(): boolean {
+  /** Preferencia del sistema de reducir el movimiento. */
+  private systemReducedMotion(): boolean {
     return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  /** Sin animaciones decorativas: por el ajuste del juego o por la preferencia del sistema. */
+  private reducedMotion(): boolean {
+    return motionDisabled(this.settings.animationSpeed, this.systemReducedMotion());
+  }
+
+  /** Duración de una animación según la velocidad elegida (1 ms si no hay animaciones). */
+  private dur(ms: number): number {
+    return animationDuration(ms, this.settings.animationSpeed, this.systemReducedMotion());
   }
 
   // ---------------------------------------------------------------------------
@@ -1130,12 +1153,75 @@ export class GameScene extends Phaser.Scene {
     setIntensityEnabled(this.settings.hapticsEnabled);
     y += 170;
 
+    const half = (w - 88 - 18) / 2;
+    y += 8; // un respiro respecto a la fila de intensidad
     this.addCardButton(
       overlay,
-      { x: 0, y, w: w - 88, h: 88 },
-      '¿No vibra? Probar y diagnosticar',
-      () => this.showHapticsModal(),
+      { x: -(half + 18) / 2, y, w: half, h: 88 },
+      'Accesibilidad',
+      () => {
+        overlay.destroy();
+        this.showAccessibilityModal();
+      },
       false
+    );
+    this.addCardButton(overlay, { x: (half + 18) / 2, y, w: half, h: 88 }, '¿No vibra?', () => this.showHapticsModal(), false);
+
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
+  }
+
+  /** Accesibilidad: alto contraste, marcas en las piezas encendidas y velocidad de animación. */
+  private showAccessibilityModal(): void {
+    const cardH = 800;
+    const { overlay, w } = this.createCard(cardH, 200);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, 'Accesibilidad', { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    let y = -cardH / 2 + 170;
+    this.addToggleRow(overlay, w, y, 'Alto contraste', this.settings.highContrast, (value) => {
+      this.settings.highContrast = value;
+      storage.saveSettings(this.settings);
+      feedback.toggle();
+      setActiveTheme(this.settings.theme, value);
+      this.applyBackground();
+      // La interfaz y el tablero se redibujan con la nueva paleta; se reabre esta tarjeta para que también la use
+      overlay.destroy();
+      this.buildUi();
+      this.buildBoard();
+      this.updateFlowVisuals();
+      this.showAccessibilityModal();
+    });
+    y += 90;
+
+    this.addToggleRow(overlay, w, y, 'Marcas de energía', this.settings.litMarks, (value) => {
+      this.settings.litMarks = value;
+      storage.saveSettings(this.settings);
+      feedback.toggle();
+      this.updateFlowVisuals();
+    });
+    y += 90;
+
+    const hint = this.uiText(-w / 2 + 44, y - 4, 'Cuatro puntos en las esquinas de cada pieza con energía, para distinguirlas sin depender del color.', {
+      size: 22,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+    });
+    hint.setOrigin(0, 0).setLineSpacing(4);
+    overlay.add(hint);
+    y += 130;
+
+    this.addChoiceRow(
+      overlay,
+      w,
+      y,
+      'Velocidad de las animaciones',
+      ANIMATION_SPEEDS.map((speed) => ({ value: speed, label: ANIMATION_LABELS[speed] })),
+      this.settings.animationSpeed,
+      (value) => {
+        this.settings.animationSpeed = value as AnimationSpeed;
+        storage.saveSettings(this.settings);
+        feedback.toggle();
+      }
     );
 
     this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, 'Listo', () => overlay.destroy(), true);
@@ -1299,7 +1385,7 @@ export class GameScene extends Phaser.Scene {
     storage.saveSettings(this.settings);
     feedback.toggle();
 
-    setActiveTheme(newThemeName);
+    setActiveTheme(newThemeName, this.settings.highContrast);
     this.applyBackground();
 
     // Reconstruye la interfaz con la nueva paleta conservando el estado de la partida
@@ -1385,11 +1471,12 @@ export class GameScene extends Phaser.Scene {
 
     // El brillo solo se nota en casillas encendidas o en la fuente
     const glowStep = powered || isSource ? Math.round(Math.min(1, Math.max(0, view.glow)) * GLOW_STEPS) : 0;
-    const look: CellLook = { powered, isSource, hintRing: view.hintRing, glowStep, legs };
+    const marks = this.settings.litMarks && powered;
+    const look: CellLook = { powered, isSource, hintRing: view.hintRing, glowStep, marks, legs };
 
-    const prefix = `${this.settings.theme}|${this.geometry.cellSize}|${cellVisual}`;
+    const prefix = `${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.geometry.cellSize}|${cellVisual}`;
     const key =
-      `cell|${prefix}|${powered ? 1 : 0}${isSource ? 1 : 0}${view.hintRing ? 1 : 0}|${glowStep}|` +
+      `cell|${prefix}|${powered ? 1 : 0}${isSource ? 1 : 0}${view.hintRing ? 1 : 0}${marks ? 1 : 0}|${glowStep}|` +
       legs.map((l) => `${l.dx},${l.dy},${l.reach === bridge ? 'b' : 'h'}${l.lit ? 'L' : 'o'}`).join(';');
     if (key === view.textureKey) return;
 
@@ -1438,6 +1525,14 @@ export class GameScene extends Phaser.Scene {
     if (look.hintRing) {
       g.lineStyle(5, THEME.hintRing, 1);
       g.strokeRoundedRect(-half + 3, -half + 3, cellVisual - 6, cellVisual - 6, radius * 0.9);
+    }
+
+    // Marcas de "encendida": cuatro puntos en las esquinas (iguales girando la pieza, no dependen del color)
+    if (look.marks) {
+      const inset = cellVisual * 0.12;
+      const dot = Math.max(4, cellVisual * 0.045);
+      g.fillStyle(isSource ? THEME.accent : THEME.primary, 1);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) g.fillCircle(sx * (half - inset), sy * (half - inset), dot);
     }
 
     const w = Math.max(8, cellVisual * 0.12);
@@ -1537,7 +1632,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: view.container,
       angle: targetAngle,
-      duration: 170,
+      duration: this.dur(170),
       ease: 'Cubic.easeOut',
       onComplete: () => {
         view.isRotating = false;
@@ -1570,7 +1665,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: view.container,
       angle: targetAngle,
-      duration: 150,
+      duration: this.dur(150),
       ease: 'Cubic.easeOut',
       onComplete: () => {
         view.isRotating = false;
@@ -1625,7 +1720,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: view.container,
       angle: view.container.angle + delta * 90,
-      duration: this.reducedMotion() ? 1 : 260,
+      duration: this.dur(260),
       ease: 'Cubic.easeOut',
       onComplete: () => {
         view.isRotating = false;
@@ -1664,7 +1759,7 @@ export class GameScene extends Phaser.Scene {
           this.tweens.addCounter({
             from: 0,
             to: 1,
-            duration: 240,
+            duration: this.dur(240),
             yoyo: true,
             ease: 'Sine.easeOut',
             onUpdate: (tween) => {
@@ -1880,7 +1975,7 @@ export class GameScene extends Phaser.Scene {
       false
     );
 
-    this.tweens.add({ targets: overlay, alpha: 1, duration: this.reducedMotion() ? 1 : 320, ease: 'Power2' });
+    this.tweens.add({ targets: overlay, alpha: 1, duration: this.dur(320), ease: 'Power2' });
   }
 
   private formatTime(seconds: number): string {
