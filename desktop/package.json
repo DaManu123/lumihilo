@@ -1,0 +1,84 @@
+{
+  "name": "puzzle-adaptativo-desktop",
+  "version": "0.1.0-beta.1",
+  "private": true,
+  "description": "Puzzle Adaptativo: puzzle de circuitos de luz con dificultad que se adapta al jugador",
+  "author": "DaManu123",
+  "homepage": "https://github.com/DaManu123/puzzle-adaptativo",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.placeholder.puzzleadaptativo",
+    "productName": "Puzzle Adaptativo",
+    "copyright": "Copyright © 2026 DaManu123",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "build/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "game"
+      }
+    ],
+    "icon": "build/icon.png",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Puzzle-Adaptativo-${version}-windows-x64-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "Puzzle-Adaptativo-${version}-windows-x64-portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "executableName": "puzzle-adaptativo",
+      "category": "Game",
+      "synopsis": "Puzzle de circuitos de luz",
+      "artifactName": "Puzzle-Adaptativo-${version}-linux-x64.${ext}",
+      "syncDesktopName": true
+    },
+    "appImage": {
+      "artifactName": "Puzzle-Adaptativo-${version}-linux-x64.${ext}"
+    },
+    "electronLanguages": [
+      "es",
+      "es-419",
+      "en-US"
+    ]
+  },
+  "desktopName": "puzzle-adaptativo.desktop"
+}

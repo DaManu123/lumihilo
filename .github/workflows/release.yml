@@ -1,0 +1,348 @@
+name: Release
+
+# Publica una versión (APK de Android, .exe de Windows y AppImage de Linux) al subir una etiqueta "v*".
+# Ejemplo: git tag v0.1.0-beta.2 && git push origin v0.1.0-beta.2
+# Si la versión lleva guion (p. ej. 0.1.0-beta.2) se publica como "pre-lanzamiento".
+# Guía completa: docs/08-publicar-versiones.md
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '21'
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  verify:
+    name: Verificar y compilar el juego web
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Comprobar que la etiqueta, los paquetes y las notas coinciden
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          ROOT=$(node -p "require('./package.json').version")
+          DESKTOP=$(node -p "require('./desktop/package.json').version")
+          if [ "$VERSION" != "$ROOT" ] || [ "$VERSION" != "$DESKTOP" ]; then
+            echo "::error::La etiqueta $TAG no coincide con la versión de package.json ($ROOT) y desktop/package.json ($DESKTOP)."
+            exit 1
+          fi
+          if [ ! -f "docs/releases/${TAG}.md" ]; then
+            echo "::error::Faltan las notas de la versión: docs/releases/${TAG}.md"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$VERSION" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobación de tipos
+        run: npm run typecheck
+
+      - name: Pruebas unitarias
+        run: npm test
+
+      - name: Compilar el juego web
+        run: npm run build
+
+      - name: Guardar el juego compilado (se reutiliza en todas las plataformas)
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------------------------
+  android:
+    name: APK de Android
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Comprobar que están los secretos de firma
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE" ] || [ -z "$PASSWORD" ] || [ -z "$ALIAS" ]; then
+            echo "::error::Faltan los secretos de firma de Android (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD). Ver docs/08-publicar-versiones.md."
+            exit 1
+          fi
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Descargar el juego compilado
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Sincronizar Capacitor con el proyecto Android
+        run: npx cap sync android
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Asegurar el SDK de Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
+
+      - name: Preparar la clave de firma
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.p12"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+
+      - name: Compilar el APK firmado
+        working-directory: android
+        env:
+          APP_VERSION: ${{ env.VERSION }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Verificar el APK (firma, versión, juego y plugins)
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+
+          echo "== Firma"
+          "$BT/apksigner" verify --verbose --print-certs "$APK"
+
+          echo "== Datos de la aplicación"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion|application-label:"
+          "$BT/aapt2" dump badging "$APK" | grep -q "versionName='$VERSION'" \
+            || { echo "::error::La versión del APK no es $VERSION"; exit 1; }
+
+          echo "== Contenido"
+          unzip -l "$APK" | grep -q "assets/public/index.html" \
+            || { echo "::error::El APK no contiene el juego (assets/public/index.html)"; exit 1; }
+          unzip -p "$APK" assets/capacitor.plugins.json | tee "$RUNNER_TEMP/plugins.json"
+          grep -q "@capacitor/haptics" "$RUNNER_TEMP/plugins.json" \
+            || { echo "::error::El APK no registra el plugin de vibración"; exit 1; }
+
+          mkdir -p out
+          cp "$APK" "out/Puzzle-Adaptativo-$VERSION-android.apk"
+          ls -la out
+
+      - name: Guardar el APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: out/*.apk
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  desktop:
+    name: Escritorio (${{ matrix.name }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            script: dist:win
+            artifact: release-windows
+            files: |
+              desktop/release/*-instalador.exe
+              desktop/release/*-portable.exe
+          - name: Linux
+            os: ubuntu-latest
+            script: dist:linux
+            artifact: release-linux
+            files: |
+              desktop/release/*.AppImage
+              desktop/release/*.tar.gz
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Descargar el juego compilado
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Instalar dependencias de escritorio
+        working-directory: desktop
+        run: npm ci
+
+      - name: Empaquetar
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run ${{ matrix.script }}
+
+      # La prueba de humo arranca la aplicación empaquetada de verdad y comprueba que el juego carga
+      # (lienzo, tipografías, guardado). Si falla, la versión no se publica.
+      - name: Prueba de humo (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @(
+            @{ Nombre = 'win-unpacked'; Exe = (Resolve-Path 'desktop/release/win-unpacked/Puzzle Adaptativo.exe').Path },
+            @{ Nombre = 'portable'; Exe = (Get-ChildItem 'desktop/release/*-portable.exe' | Select-Object -First 1).FullName }
+          )
+          foreach ($t in $targets) {
+            $informe = Join-Path $env:RUNNER_TEMP ("smoke-" + $t.Nombre + ".json")
+            Remove-Item $informe -ErrorAction SilentlyContinue
+            $env:PUZZLE_SMOKE_TEST = $informe
+            Write-Host "== Probando $($t.Nombre): $($t.Exe)"
+            $p = Start-Process -FilePath $t.Exe -PassThru
+            $fin = (Get-Date).AddSeconds(120)
+            while (-not (Test-Path $informe) -and (Get-Date) -lt $fin) { Start-Sleep -Seconds 1 }
+            Start-Sleep -Seconds 2
+            if (-not $p.HasExited) { $p.WaitForExit(15000) | Out-Null }
+            Get-Process -Name 'Puzzle Adaptativo' -ErrorAction SilentlyContinue | Stop-Process -Force
+            if (-not (Test-Path $informe)) { throw "La prueba de humo de $($t.Nombre) no generó informe" }
+            $datos = Get-Content $informe -Raw | ConvertFrom-Json
+            Write-Host (Get-Content $informe -Raw)
+            if (-not $datos.ok) { throw "La prueba de humo de $($t.Nombre) falló" }
+          }
+
+      - name: Prueba de humo (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb
+          APPIMAGE_FILE=$(ls desktop/release/*.AppImage | head -1)
+          for MODE in unpacked appimage; do
+            REPORT="$RUNNER_TEMP/smoke-$MODE.json"
+            rm -f "$REPORT"
+            echo "== Probando $MODE"
+            # Se deja terminar con cualquier código para poder mostrar siempre el informe
+            if [ "$MODE" = unpacked ]; then
+              PUZZLE_SMOKE_TEST="$REPORT" timeout 150 xvfb-run -a desktop/release/linux-unpacked/puzzle-adaptativo --no-sandbox || true
+            else
+              APPIMAGE=1 PUZZLE_SMOKE_TEST="$REPORT" timeout 150 xvfb-run -a "$APPIMAGE_FILE" --appimage-extract-and-run || true
+            fi
+            [ -f "$REPORT" ] || { echo "::error::La prueba de humo ($MODE) no generó informe"; exit 1; }
+            cat "$REPORT"
+            node -e "process.exit(JSON.parse(require('fs').readFileSync('$REPORT','utf8')).ok ? 0 : 1)" \
+              || { echo "::error::La prueba de humo ($MODE) falló"; exit 1; }
+          done
+
+      - name: Guardar el informe y las capturas de la prueba de humo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.artifact }}
+          path: |
+            ${{ runner.temp }}/smoke-*.json
+            ${{ runner.temp }}/smoke-*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Guardar los instaladores
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  release:
+    name: Publicar la versión
+    needs: [verify, android, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Descargar el código (notas de la versión)
+        uses: actions/checkout@v4
+
+      - name: Reunir los archivos de las tres plataformas
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+
+      - name: Calcular las sumas de verificación
+        run: |
+          cd assets
+          ls -la
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Crear la versión en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          FLAGS=()
+          if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --title "Puzzle Adaptativo $GITHUB_REF_NAME" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
+            --verify-tag \
+            "${FLAGS[@]}"
