@@ -2,6 +2,14 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
+## [0.1.0-beta.5] - 2026-11-07
+
+### Mejorado
+- Rendimiento: cada aspecto de casilla se pinta una vez en una textura en lugar de redibujarse en cada fotograma (unas 6 veces menos CPU por fotograma en el reto diario).
+
+### Añadido
+- `npm run test:perf` para medir el coste de dibujar cada fotograma.
+
 ## [0.1.0-beta.4] - 2026-11-07
 
 ### Cambiado
