@@ -17,7 +17,8 @@ Además, a quien lo eligió le recuerda a **Hermosillo**, su ciudad natal: el so
 
 ## Pendiente de comprobar antes de publicar en tiendas
 
-- Buscar "Lumihilo" directamente en Google Play, App Store y Steam.
+- ~~Steam~~: buscado por el autor, sin resultados iguales (2026-11-07). Faltan Google Play y App Store.
+- El buscador de marcas del IMPI dio error al consultar (2026-11-07); reintentar más adelante.
 - Consultar el registro de marcas (IMPI en México, y USPTO/EUIPO si se publica fuera): existen productos de hilo llamados "Lumi Hilo" (clase de textiles), distintos de un videojuego, pero conviene confirmarlo.
 - Registrar el dominio y los usuarios de redes sociales si se quieren usar.
 - Cambiar el identificador de la aplicación de Android (`com.placeholder.puzzleadaptativo`) por uno definitivo antes de la primera publicación en Play Store; no se puede cambiar después.
