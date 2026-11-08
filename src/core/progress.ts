@@ -1,5 +1,6 @@
 import { LevelParams } from './types';
 import { DIFFICULTY_TIERS } from './adaptive';
+import { SkinId, sanitizeUnlockedSkins } from './skins';
 
 /**
  * Progreso persistente del jugador (Fase 4): nivel actual, Chispas, estadísticas, racha y reto diario.
@@ -33,6 +34,8 @@ export interface PlayerProgress {
   streak: StreakState;
   /** Último día en que se completó el reto diario (solo cuenta la primera vez de cada día). */
   lastDailyCompleted: string | null;
+  /** Aspectos comprados (el inicial siempre está disponible y no se guarda). */
+  unlockedSkins: SkinId[];
 }
 
 export function createDefaultProgress(seedBase: number): PlayerProgress {
@@ -43,6 +46,7 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
     stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, bestTimeByTier: {} },
     streak: { current: 0, best: 0, lastActiveDate: null },
     lastDailyCompleted: null,
+    unlockedSkins: [],
   };
 }
 
@@ -93,6 +97,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
       lastActiveDate: toDateKey(streak.lastActiveDate),
     },
     lastDailyCompleted: toDateKey(r.lastDailyCompleted),
+    unlockedSkins: sanitizeUnlockedSkins(r.unlockedSkins),
   };
 }
 

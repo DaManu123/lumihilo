@@ -461,6 +461,59 @@ export async function runGameScenarios(out) {
     await ctxEn.close();
   }
 
+  section('17. Tienda de aspectos');
+  {
+    // Sin Chispas suficientes no se compra
+    let g = await openGame({ label: 'aspectos-pobre', seed: { user_settings: { hasSeenTutorial: true } }, out });
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSkins, 600);
+    await g.shot('e17-aspectos');
+    await g.tap(...g.pos.skinRow(2), 600);
+    let s = await g.state();
+    check('sin Chispas suficientes el aspecto no se compra ni se equipa', !s.settings?.skin || s.settings.skin === 'filamento');
+    check('y las Chispas no cambian', s.progress?.sparks === 30, `Chispas ${s.progress?.sparks}`);
+    await g.shot('e17-faltan-chispas');
+    await g.close();
+
+    // Con Chispas: compra, equipa, persiste y se puede cambiar de aspecto gratis una vez comprado
+    g = await openGame({ label: 'aspectos', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
+    const before = (await g.state()).progress.sparks;
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSkins, 600);
+    await g.tap(...g.pos.skinRow(1), 800);
+    s = await g.state();
+    check('comprar Cyberpunk lo equipa', s.settings?.skin === 'cyberpunk', `aspecto ${s.settings?.skin}`);
+    check('descuenta 150 Chispas', s.progress?.sparks === before - 150, `${before} → ${s.progress?.sparks}`);
+    check('queda registrado como comprado', s.progress?.unlockedSkins?.includes('cyberpunk'));
+    await g.shot('e17-cyberpunk');
+    await g.tap(...g.pos.skinRow(3), 800);
+    s = await g.state();
+    check('comprar Solar también funciona', s.settings?.skin === 'solar' && s.progress.unlockedSkins.includes('solar'));
+    await g.tap(...g.pos.skinRow(1), 800);
+    s = await g.state();
+    check('volver a un aspecto comprado es gratis', s.settings?.skin === 'cyberpunk' && s.progress.sparks === before - 150 - 400);
+    await g.tap(...g.pos.skinRow(0), 800);
+    s = await g.state();
+    check('el aspecto inicial se puede volver a equipar', s.settings?.skin === 'filamento');
+    await g.tap(...g.pos.skinRow(2), 800);
+    await g.shot('e17-matrix');
+    await g.tap(...g.pos.skinsDone, 500);
+    await g.tap(...g.pos.hint, 600);
+    await g.shot('e17-juego-matrix');
+    await g.reload();
+    s = await g.state();
+    check('el aspecto equipado persiste al recargar', s.settings?.skin === 'matrix');
+    await g.tap(...g.pos.theme, 700);
+    await g.shot('e17-matrix-claro');
+    await g.close();
+
+    // Un aspecto guardado que no se ha comprado no se usa
+    g = await openGame({ label: 'aspectos-trampa', seed: { user_settings: { hasSeenTutorial: true, skin: 'solar' } }, out });
+    check('un aspecto no comprado guardado en los ajustes no rompe el juego', !!(await g.page.$('canvas')));
+    await g.shot('e17-sin-comprar');
+    await g.close();
+  }
+
   section('Errores de consola durante toda la batería');
   const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));

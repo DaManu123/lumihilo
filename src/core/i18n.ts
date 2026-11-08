@@ -79,6 +79,17 @@ export const EN: Record<string, string> = {
   'Ajustes': 'Settings',
   'Cerrar': 'Close',
 
+  // Aspectos
+  'Aspectos': 'Skins',
+  'Equipado': 'Equipped',
+  'Usar': 'Use',
+  'Tus Chispas: {0}': 'Your Sparks: {0}',
+  'Te faltan {0} Chispas para {1}': 'You need {0} more Sparks for {1}',
+  'Filamento': 'Filament',
+  'Cyberpunk': 'Cyberpunk',
+  'Matrix': 'Matrix',
+  'Solar': 'Solar',
+
   // Ajustes
   'Efectos': 'Effects',
   'Música': 'Music',

@@ -5,6 +5,7 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 ## [Sin publicar]
 
 ### Añadido
+- **Tienda de aspectos**: Estadísticas → Aspectos. Paletas Cyberpunk (150 Chispas), Matrix (250) y Solar (400) además del Filamento inicial, cada una en tema oscuro y claro y compatible con el alto contraste. Solo cambia el aspecto, no el juego.
 - Página de presentación y política de privacidad en inglés (`/en/`), con enlace entre idiomas.
 
 ### Corregido

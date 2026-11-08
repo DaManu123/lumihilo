@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { THEME_DARK, THEME_LIGHT, THEME_DARK_HC, THEME_LIGHT_HC, GameTheme, getTheme } from '../src/game/theme';
 import { contrastRatio, mixColors, toCss, luminance } from '../src/game/color';
+import { SKINS } from '../src/core/skins';
 
 const cssToNumber = (css: string) => parseInt(css.replace('#', ''), 16);
 
@@ -127,4 +128,63 @@ describe('Temas de alto contraste', () => {
       });
     });
   }
+});
+
+describe('Aspectos (paletas compradas con Chispas)', () => {
+  for (const skin of SKINS) {
+    for (const mode of ['dark', 'light'] as const) {
+      for (const hc of [false, true]) {
+        describe(`${skin.name} · ${mode}${hc ? ' · alto contraste' : ''}`, () => {
+          const t = getTheme(mode, hc, skin.id);
+
+          it('mantiene modo, aspecto y colores CSS coherentes', () => {
+            expect(t.name).toBe(mode);
+            expect(t.skin).toBe(skin.id);
+            expect(cssToNumber(t.primaryCss)).toBe(t.primary);
+            expect(cssToNumber(t.accentCss)).toBe(t.accent);
+            expect(cssToNumber(t.clockwiseCss)).toBe(t.clockwise);
+            expect(cssToNumber(t.counterClockwiseCss)).toBe(t.counterClockwise);
+            expect(cssToNumber(t.surfaceCss)).toBe(t.surface);
+            expect(cssToNumber(t.backgroundCss)).toBe(t.background);
+          });
+
+          it('el texto es legible (≥ 7:1 el principal, ≥ 4,5:1 el atenuado)', () => {
+            for (const bg of [t.background, t.surface]) {
+              expect(contrastRatio(cssToNumber(t.text), bg), 'texto').toBeGreaterThanOrEqual(7);
+              expect(contrastRatio(cssToNumber(t.mutedText), bg), 'atenuado').toBeGreaterThanOrEqual(hc ? 7 : 4.5);
+            }
+          });
+
+          it('las formas importantes superan 3:1 contra el vidrio', () => {
+            expect(contrastRatio(t.wireOff, t.surface), 'traza apagada').toBeGreaterThanOrEqual(hc ? 4.5 : 3);
+            expect(contrastRatio(t.primary, t.surface), 'filamento').toBeGreaterThanOrEqual(3);
+            expect(contrastRatio(t.accent, t.surface), 'fuente').toBeGreaterThanOrEqual(3);
+            expect(contrastRatio(t.clockwise, t.surface), 'horario').toBeGreaterThanOrEqual(3);
+            expect(contrastRatio(t.counterClockwise, t.surface), 'antihorario').toBeGreaterThanOrEqual(3);
+          });
+
+          it('el texto sobre botones de filamento cumple AA y el cable encendido se distingue del apagado', () => {
+            expect(contrastRatio(cssToNumber(t.onPrimary), t.primary)).toBeGreaterThanOrEqual(4.5);
+            expect(contrastRatio(t.primary, t.wireOff)).toBeGreaterThanOrEqual(1.6);
+          });
+
+          it('filamento, fuente y sentidos de giro tienen colores distintos', () => {
+            expect(new Set([t.clockwise, t.counterClockwise, t.accent, t.primary]).size).toBe(4);
+          });
+        });
+      }
+    }
+  }
+
+  it('el aspecto inicial devuelve exactamente el tema base', () => {
+    expect(getTheme('dark', false, 'filamento')).toBe(THEME_DARK);
+    expect(getTheme('light', true, 'filamento')).toBe(THEME_LIGHT_HC);
+  });
+
+  it('cada aspecto comprado se ve distinto del inicial', () => {
+    for (const skin of SKINS.filter((s) => s.price > 0)) {
+      expect(getTheme('dark', false, skin.id).primary).not.toBe(THEME_DARK.primary);
+      expect(getTheme('light', false, skin.id).primary).not.toBe(THEME_LIGHT.primary);
+    }
+  });
 });
