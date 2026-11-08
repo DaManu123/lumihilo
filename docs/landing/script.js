@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (copyEmailBtn && supportEmailLink) {
     copyEmailBtn.addEventListener('click', async () => {
       const email = supportEmailLink.textContent.trim();
-      const originalText = copyEmailBtn.querySelector('.copy-text')?.textContent || 'Copiar';
+      const originalText = copyEmailBtn.querySelector('.copy-text')?.textContent || (document.documentElement.lang === 'en' ? 'Copy' : 'Copiar');
 
       try {
         if (navigator.clipboard && window.isSecureContext) {
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Feedback visual
         copyEmailBtn.style.background = '#38f9d7';
         copyEmailBtn.style.color = '#0a0e17';
-        copyEmailBtn.querySelector('.copy-text').textContent = '¡Copiado!';
+        copyEmailBtn.querySelector('.copy-text').textContent = document.documentElement.lang === 'en' ? 'Copied!' : '¡Copiado!';
 
         setTimeout(() => {
           copyEmailBtn.style.background = '';

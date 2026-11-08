@@ -4,6 +4,12 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- Página de presentación y política de privacidad en inglés (`/en/`), con enlace entre idiomas.
+
+### Corregido
+- La página de presentación aún mostraba el nombre anterior en la cabecera y marcaba como hechos pasos de Play Console que no lo estaban.
+
 ## [0.1.0-beta.7] - 2026-11-08
 
 ### Cambiado
