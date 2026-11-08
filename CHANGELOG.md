@@ -4,6 +4,8 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.1.0-beta.7] - 2026-11-08
+
 ### Cambiado
 - Identificador de Android definitivo `com.damanu.lumihilo`: hay que desinstalar la beta anterior y se pierde el progreso guardado. En escritorio la carpeta de datos pasa a `Lumihilo`.
 - El repositorio pasa a llamarse `lumihilo`.
