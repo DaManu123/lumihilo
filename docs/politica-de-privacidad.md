@@ -5,7 +5,7 @@
 **Última actualización:** 8 de noviembre de 2026
 
 ## 1. Responsable y contacto
-Puzzle Adaptativo (nombre provisional) lo desarrolla y mantiene un desarrollador independiente. Contacto: **myprimemg@gmail.com**.
+Lumihilo lo desarrolla y mantiene un desarrollador independiente. Contacto: **myprimemg@gmail.com**.
 
 ## 2. Datos que no recopilamos
 - Sin cuentas ni contraseñas.
@@ -22,7 +22,7 @@ El juego **no contiene anuncios, analítica ni servicios de terceros** que recoj
 Solo **vibración**.
 
 ## 6. Cómo borrar los datos
-Android: Ajustes › Aplicaciones › Puzzle Adaptativo › Almacenamiento › Borrar datos (o desinstalar). Web: borrar los datos del sitio.
+Android: Ajustes › Aplicaciones › Lumihilo › Almacenamiento › Borrar datos (o desinstalar). Web: borrar los datos del sitio.
 
 ## 7. Menores de edad
 Pensado para público general; no se recopilan datos de nadie.

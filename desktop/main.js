@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Versión de escritorio de Puzzle Adaptativo (Windows y Linux).
+ * Versión de escritorio de Lumihilo (Windows y Linux).
  *
  * Es solo un contenedor: carga el mismo juego web que genera `npm run build` (carpeta `dist/`).
  * Se sirve con un protocolo propio (`app://game/`) en vez de `file://`, que es el patrón recomendado:
@@ -65,7 +65,7 @@ function createWindow() {
     minHeight: 640,
     useContentSize: true,
     backgroundColor: BACKGROUND,
-    title: 'Puzzle Adaptativo',
+    title: 'Lumihilo',
     icon: path.join(__dirname, 'build', 'icon.png'),
     autoHideMenuBar: true,
     show: false,
@@ -160,7 +160,10 @@ async function runSmokeTest(win, reportFile) {
 if (!smokeOutput && !app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.setName('Puzzle Adaptativo');
+  app.setName('Lumihilo');
+  // Los datos guardados (progreso, ajustes) viven en la carpeta del nombre anterior: se conserva para que
+  // quien ya jugaba no pierda su progreso al cambiar el nombre del juego.
+  app.setPath('userData', path.join(app.getPath('appData'), 'Puzzle Adaptativo'));
   app.setAppUserModelId('com.placeholder.puzzleadaptativo');
 
   app.on('second-instance', () => {

@@ -48,13 +48,14 @@ export const RICH = {
  * Abre el juego en un contexto limpio. Devuelve utilidades para tocar el lienzo, leer el estado guardado
  * y contar lo que suena y vibra (se instrumentan AudioContext y navigator.vibrate antes de cargar).
  */
-export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.' } = {}) {
+export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX' } = {}) {
   const ctx = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
     isMobile: mobile,
     hasTouch: mobile,
     reducedMotion,
+    locale,
   });
   const page = await ctx.newPage();
   await page.addInitScript(() => {
@@ -153,9 +154,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     setHaptics: [360, H / 2 + 109],
     levelSoft: [360 - 186.7, H / 2 + 283], levelNormal: [360, H / 2 + 283], levelStrong: [360 + 186.7, H / 2 + 283],
     accessibility: [215.5, H / 2 + 377], diagnose: [504.5, H / 2 + 377], settingsDone: [360, H / 2 + 491],
-    // Accesibilidad (tarjeta de 800 px)
-    accContrast: [360, H / 2 - 230], accMarks: [360, H / 2 - 140],
-    accNormal: [173, H / 2 + 164], accFast: [360, H / 2 + 164], accOff: [547, H / 2 + 164], accDone: [360, H / 2 + 316],
+    // Accesibilidad (tarjeta de 990 px)
+    accContrast: [360, H / 2 - 325], accMarks: [360, H / 2 - 235],
+    accNormal: [173, H / 2 + 69], accFast: [360, H / 2 + 69], accOff: [547, H / 2 + 69],
+    langAuto: [173, H / 2 + 239], langEs: [360, H / 2 + 239], langEn: [547, H / 2 + 239], accDone: [360, H / 2 + 411],
     // Diagnóstico de vibración (tarjeta de 1150 px)
     modeAll: [136, H / 2 + 199], modeSystem: [248, H / 2 + 199], modeMotor: [360, H / 2 + 199], modeTouch: [472, H / 2 + 199], modeAlarm: [584, H / 2 + 199],
     hapticsTest: [360 - 144.5, H / 2 + 491], hapticsDone: [360 + 144.5, H / 2 + 491],

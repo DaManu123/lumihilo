@@ -1,5 +1,5 @@
 /**
- * Script de la Landing Page de Puzzle Adaptativo
+ * Script de la Landing Page de Lumihilo
  * Funcionalidad front-end pura: modal de privacidad, navegación móvil,
  * copia de correo al portapapeles y animaciones de demostración visual.
  * 

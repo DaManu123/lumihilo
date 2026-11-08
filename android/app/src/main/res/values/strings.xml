@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Puzzle Adaptativo</string>
-    <string name="title_activity_main">Puzzle Adaptativo</string>
+    <string name="app_name">Lumihilo</string>
+    <string name="title_activity_main">Lumihilo</string>
     <string name="package_name">com.placeholder.puzzleadaptativo</string>
     <string name="custom_url_scheme">com.placeholder.puzzleadaptativo</string>
 </resources>

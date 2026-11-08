@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 /**
  * Perfiles de vibración (lógica pura). Cada intensidad define cuánto dura cada pulso.
  *
@@ -131,33 +133,34 @@ const INTENSITY_TEXT: Record<number, string> = { 0: 'Desactivada', 1: 'Baja', 2:
 const RINGER_TEXT: Record<number, string> = { 0: 'Silencio', 1: 'Vibrar', 2: 'Normal' };
 const FILTER_TEXT: Record<number, string> = { 1: 'Desactivado', 2: 'Solo prioritarias', 3: 'Silencio total', 4: 'Solo alarmas' };
 
-const intensityText = (value: number) => INTENSITY_TEXT[value] ?? 'No disponible';
-const yesNo = (value: boolean) => (value ? 'Sí' : 'No');
+const intensityText = (value: number) => t(INTENSITY_TEXT[value] ?? 'No disponible');
+const yesNo = (value: boolean) => t(value ? 'Sí' : 'No');
 
 /** Líneas legibles con el diagnóstico, para mostrarlas en pantalla. */
 export function describeDiagnostics(d: HapticDiagnostics): string[] {
+  const phone = `${d.manufacturer} ${d.model}`.replace(/\s+/g, ' ').trim();
   return [
-    `Teléfono: ${d.manufacturer} ${d.model} (Android API ${d.sdk})`.replace('  ', ' ').trim(),
-    `Motor de vibración: ${yesNo(d.hasMotor)}${d.hasMotor && d.hasAmplitudeControl ? ' (con control de potencia)' : ''}`,
-    `Respuesta táctil del sistema: ${d.hapticFeedbackEnabled === -1 ? 'No disponible' : yesNo(d.hapticFeedbackEnabled === 1)}`,
-    `Intensidad táctil: ${intensityText(d.touchIntensity)}`,
-    `Intensidad de medios y juegos: ${intensityText(d.mediaIntensity)}`,
-    `Intensidad de notificaciones: ${intensityText(d.notificationIntensity)}`,
-    `Modo del timbre: ${RINGER_TEXT[d.ringerMode] ?? 'No disponible'}`,
-    `No molestar: ${FILTER_TEXT[d.interruptionFilter] ?? 'No disponible'}`,
-    `Ahorro de batería: ${yesNo(d.powerSave)}`,
+    t('Teléfono: {0} (Android API {1})', phone, d.sdk),
+    t('Motor de vibración: {0}', yesNo(d.hasMotor) + (d.hasMotor && d.hasAmplitudeControl ? t(' (con control de potencia)') : '')),
+    t('Respuesta táctil del sistema: {0}', d.hapticFeedbackEnabled === -1 ? t('No disponible') : yesNo(d.hapticFeedbackEnabled === 1)),
+    t('Intensidad táctil: {0}', intensityText(d.touchIntensity)),
+    t('Intensidad de medios y juegos: {0}', intensityText(d.mediaIntensity)),
+    t('Intensidad de notificaciones: {0}', intensityText(d.notificationIntensity)),
+    t('Modo del timbre: {0}', t(RINGER_TEXT[d.ringerMode] ?? 'No disponible')),
+    t('No molestar: {0}', t(FILTER_TEXT[d.interruptionFilter] ?? 'No disponible')),
+    t('Ahorro de batería: {0}', yesNo(d.powerSave)),
   ];
 }
 
 /** Ajustes del teléfono que probablemente están impidiendo que el juego vibre. */
 export function vibrationBlockers(d: HapticDiagnostics): string[] {
   const blockers: string[] = [];
-  if (!d.hasMotor) blockers.push('El teléfono indica que no tiene motor de vibración.');
-  if (d.hapticFeedbackEnabled === 0) blockers.push('La respuesta táctil del sistema está desactivada.');
-  if (d.touchIntensity === 0) blockers.push('La intensidad de la vibración táctil está desactivada.');
-  if (d.mediaIntensity === 0) blockers.push('La intensidad de la vibración de medios y juegos está desactivada.');
-  if (d.interruptionFilter >= 3) blockers.push('"No molestar" está en modo estricto y puede silenciar las vibraciones.');
-  if (d.powerSave) blockers.push('El ahorro de batería está activo y puede limitar la vibración.');
-  if (d.ringerMode === 0) blockers.push('El teléfono está en modo silencio, y en algunos modelos eso también quita las vibraciones de las apps.');
+  if (!d.hasMotor) blockers.push(t('El teléfono indica que no tiene motor de vibración.'));
+  if (d.hapticFeedbackEnabled === 0) blockers.push(t('La respuesta táctil del sistema está desactivada.'));
+  if (d.touchIntensity === 0) blockers.push(t('La intensidad de la vibración táctil está desactivada.'));
+  if (d.mediaIntensity === 0) blockers.push(t('La intensidad de la vibración de medios y juegos está desactivada.'));
+  if (d.interruptionFilter >= 3) blockers.push(t('"No molestar" está en modo estricto y puede silenciar las vibraciones.'));
+  if (d.powerSave) blockers.push(t('El ahorro de batería está activo y puede limitar la vibración.'));
+  if (d.ringerMode === 0) blockers.push(t('El teléfono está en modo silencio, y en algunos modelos eso también quita las vibraciones de las apps.'));
   return blockers;
 }

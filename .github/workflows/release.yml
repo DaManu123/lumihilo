@@ -177,7 +177,7 @@ jobs:
             || { echo "::error::El APK no registra el plugin de vibración"; exit 1; }
 
           mkdir -p out
-          cp "$APK" "out/Puzzle-Adaptativo-$VERSION-android.apk"
+          cp "$APK" "out/Lumihilo-$VERSION-android.apk"
           ls -la out
 
       - name: Verificar el AAB (el formato que exige Google Play)
@@ -193,7 +193,7 @@ jobs:
           unzip -l "$AAB" | grep -q "base/manifest/AndroidManifest.xml" \
             || { echo "::error::El AAB no tiene manifiesto"; exit 1; }
 
-          cp "$AAB" "out/Puzzle-Adaptativo-$VERSION-android.aab"
+          cp "$AAB" "out/Lumihilo-$VERSION-android.aab"
           ls -la out
 
       - name: Guardar el APK
@@ -273,7 +273,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $targets = @(
-            @{ Nombre = 'win-unpacked'; Exe = (Resolve-Path 'desktop/release/win-unpacked/Puzzle Adaptativo.exe').Path },
+            @{ Nombre = 'win-unpacked'; Exe = (Resolve-Path 'desktop/release/win-unpacked/Lumihilo.exe').Path },
             @{ Nombre = 'portable'; Exe = (Get-ChildItem 'desktop/release/*-portable.exe' | Select-Object -First 1).FullName }
           )
           foreach ($t in $targets) {
@@ -286,7 +286,7 @@ jobs:
             while (-not (Test-Path $informe) -and (Get-Date) -lt $fin) { Start-Sleep -Seconds 1 }
             Start-Sleep -Seconds 2
             if (-not $p.HasExited) { $p.WaitForExit(15000) | Out-Null }
-            Get-Process -Name 'Puzzle Adaptativo' -ErrorAction SilentlyContinue | Stop-Process -Force
+            Get-Process -Name 'Lumihilo' -ErrorAction SilentlyContinue | Stop-Process -Force
             if (-not (Test-Path $informe)) { throw "La prueba de humo de $($t.Nombre) no generó informe" }
             $datos = Get-Content $informe -Raw | ConvertFrom-Json
             Write-Host (Get-Content $informe -Raw)
@@ -305,7 +305,7 @@ jobs:
             echo "== Probando $MODE"
             # Se deja terminar con cualquier código para poder mostrar siempre el informe
             if [ "$MODE" = unpacked ]; then
-              PUZZLE_SMOKE_TEST="$REPORT" timeout 150 xvfb-run -a desktop/release/linux-unpacked/puzzle-adaptativo --no-sandbox || true
+              PUZZLE_SMOKE_TEST="$REPORT" timeout 150 xvfb-run -a desktop/release/linux-unpacked/lumihilo --no-sandbox || true
             else
               APPIMAGE=1 PUZZLE_SMOKE_TEST="$REPORT" timeout 150 xvfb-run -a "$APPIMAGE_FILE" --appimage-extract-and-run || true
             fi
@@ -367,7 +367,7 @@ jobs:
           FLAGS=()
           if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" assets/* \
-            --title "Puzzle Adaptativo $GITHUB_REF_NAME" \
+            --title "Lumihilo $GITHUB_REF_NAME" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
             --verify-tag \
             "${FLAGS[@]}"

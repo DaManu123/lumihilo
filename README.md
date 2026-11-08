@@ -1,4 +1,6 @@
-# Puzzle Adaptativo (nombre provisional)
+# Lumihilo
+
+> Antes llamado *Puzzle Adaptativo*. El significado del nombre está en [docs/09-nombre.md](docs/09-nombre.md).
 
 Juego de puzzle casual para **web y Android**, con anuncios, donde **cada partida es un puzzle nuevo generado por algoritmo** y la **dificultad se ajusta al nivel real del jugador** (no a su edad), para que lo disfruten niños, adultos y personas mayores.
 
