@@ -51,7 +51,7 @@ Partidas de 30–90 segundos, reglas que se entienden en 5 segundos, un puzzle d
 ## Estructura de código planeada
 
 ```
-puzzle-adaptativo/
+lumihilo/
 ├─ src/
 │  ├─ core/          # rng con semilla, generador, solver, dificultad (sin Phaser)
 │  ├─ scenes/        # Menú, Juego, Resultado, Ajustes
@@ -84,8 +84,8 @@ npm install
 - `npm run cap:sync`: Compila el proyecto web y sincroniza los assets con el proyecto nativo Android (`npm run build && npx cap sync android`).
 
 > [!WARNING]
-> **Advertencia crítica sobre el identificador de paquete (`appId`):**  
-> Actualmente el proyecto está configurado con el identificador provisional `com.placeholder.puzzleadaptativo` en `capacitor.config.json`. El `appId` **no se puede modificar una vez publicada la app en Google Play Store**. El nombre de paquete definitivo debe definirse y fijarse obligatoriamente **antes de subir la primera build a Play Console**.
+> **Identificador de paquete (`appId`):**  
+> El identificador definitivo es `com.damanu.lumihilo` (desde la beta.7; antes `com.placeholder.puzzleadaptativo`). **No se puede modificar una vez publicada la app en Google Play Store.**
 
 ## Licencia
 

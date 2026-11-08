@@ -1,10 +1,10 @@
 {
-  "name": "puzzle-adaptativo-desktop",
+  "name": "lumihilo-desktop",
   "version": "0.1.0-beta.6",
   "private": true,
   "description": "Lumihilo: puzzle de circuitos de luz con dificultad que se adapta al jugador",
   "author": "DaManu123",
-  "homepage": "https://github.com/DaManu123/puzzle-adaptativo",
+  "homepage": "https://github.com/DaManu123/lumihilo",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "electron-builder": "26.18.0"
   },
   "build": {
-    "appId": "com.placeholder.puzzleadaptativo",
+    "appId": "com.damanu.lumihilo",
     "productName": "Lumihilo",
     "copyright": "Copyright © 2026 DaManu123",
     "directories": {

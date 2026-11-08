@@ -163,8 +163,8 @@ if (!smokeOutput && !app.requestSingleInstanceLock()) {
   app.setName('Lumihilo');
   // Los datos guardados (progreso, ajustes) viven en la carpeta del nombre anterior: se conserva para que
   // quien ya jugaba no pierda su progreso al cambiar el nombre del juego.
-  app.setPath('userData', path.join(app.getPath('appData'), 'Puzzle Adaptativo'));
-  app.setAppUserModelId('com.placeholder.puzzleadaptativo');
+  app.setPath('userData', path.join(app.getPath('appData'), 'Lumihilo'));
+  app.setAppUserModelId('com.damanu.lumihilo');
 
   app.on('second-instance', () => {
     const [win] = BrowserWindow.getAllWindows();
