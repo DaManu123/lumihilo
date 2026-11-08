@@ -87,7 +87,7 @@ Alternativas por explorar (**ninguna verificada**, hay que buscarlas igual): Glo
 
 Reglas prácticas:
 
-- Mientras tanto se usa un **nombre de trabajo** (el repo se llama `puzzle-adaptativo`).
+- Mientras tanto se usa un **nombre de trabajo** (antes el repo se llamaba `puzzle-adaptativo`; ahora `lumihilo`).
 - El nombre visible va en una sola constante (`APP_NAME`), así cambiarlo es trivial.
 - ⚠️ El **identificador del paquete** de Android (`appId`) **no se puede cambiar una vez publicada la app en Play Store**. En Fase 0 se usa uno provisional; el definitivo se fija **antes de subir la primera build a Play Console**.
 

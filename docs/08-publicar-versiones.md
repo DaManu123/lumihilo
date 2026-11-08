@@ -61,7 +61,7 @@ Android solo instala un APK firmado, y la firma debe ser **siempre la misma** en
 
 ## Cosas a tener en cuenta
 
-- **`appId` provisional** (`com.placeholder.puzzleadaptativo`): las betas se instalan con ese identificador. Al fijar el definitivo (antes de la primera subida a Play) habrá que desinstalar la beta.
+- **`appId` definitivo** (`com.damanu.lumihilo`) desde la beta.7. Las betas 1–6 usaban `com.placeholder.puzzleadaptativo`: hay que desinstalarlas, y el progreso no se traslada.
 - **Windows y Linux sin firmar:** Windows SmartScreen avisa. Firmar el `.exe` requiere un certificado de pago; por ahora se explica en las notas de cada versión.
 - **Capacitor y TypeScript:** la configuración de Capacitor es `capacitor.config.json` (no `.ts`) porque el CLI no puede leer archivos `.ts` con TypeScript 7 en Node 22.
 - **`npm run cap:sync`** hay que ejecutarlo en cada copia de trabajo al cambiar los plugins; el flujo de publicación lo hace solo.
@@ -72,5 +72,5 @@ Android solo instala un APK firmado, y la firma debe ser **siempre la misma** en
 Cada versión publicada también genera un **Android App Bundle** (`Lumihilo-<versión>-android.aab`), el formato que exige Google Play para apps nuevas. No se adjunta a la versión pública de GitHub: se descarga desde la pestaña **Actions → ejecución de la versión → Artifacts → `aab-android`** (se conserva 30 días).
 
 - El flujo comprueba que el AAB contiene el juego y el manifiesto y que está firmado.
-- Hoy se firma con la clave de las betas. Antes de subir a Play Console conviene generar una **clave de subida propia** y activar *Play App Signing* (ver `05-publicacion-play-store.md`), y cambiar el identificador provisional `com.placeholder.puzzleadaptativo` por el definitivo, porque no se puede cambiar después de publicar.
+- Hoy se firma con la clave de las betas. Antes de subir a Play Console conviene generar una **clave de subida propia** y activar *Play App Signing* (ver `05-publicacion-play-store.md`), y cambiar el identificador provisional `com.damanu.lumihilo` por el definitivo, porque no se puede cambiar después de publicar.
 - El CI normal compila también un AAB de depuración (`bundleDebug`) en cada cambio, para detectar a tiempo cualquier problema al empaquetarlo.

@@ -1,4 +1,4 @@
-package com.placeholder.puzzleadaptativo;
+package com.damanu.lumihilo;
 
 import android.app.NotificationManager;
 import android.content.ContentResolver;

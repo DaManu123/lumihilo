@@ -1,5 +1,5 @@
 {
-  "name": "puzzle-adaptativo-e2e",
+  "name": "lumihilo-e2e",
   "version": "0.1.0-beta.1",
   "private": true,
   "description": "Pruebas de flujo completo del juego en un navegador real (Chromium con emulación de móvil)",

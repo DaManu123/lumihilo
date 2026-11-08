@@ -21,4 +21,4 @@ Además, a quien lo eligió le recuerda a **Hermosillo**, su ciudad natal: el so
 - El buscador de marcas del IMPI dio error al consultar (2026-11-07); reintentar más adelante.
 - Consultar el registro de marcas (IMPI en México, y USPTO/EUIPO si se publica fuera): existen productos de hilo llamados "Lumi Hilo" (clase de textiles), distintos de un videojuego, pero conviene confirmarlo.
 - Registrar el dominio y los usuarios de redes sociales si se quieren usar.
-- Cambiar el identificador de la aplicación de Android (`com.placeholder.puzzleadaptativo`) por uno definitivo antes de la primera publicación en Play Store; no se puede cambiar después.
+- ~~Identificador de Android~~: ya es `com.damanu.lumihilo` (beta.7). No se puede cambiar tras publicar en Play Store.

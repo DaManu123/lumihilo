@@ -5,10 +5,10 @@ apply plugin: 'com.android.application'
 def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
 
 android {
-    namespace = "com.placeholder.puzzleadaptativo"
+    namespace = "com.damanu.lumihilo"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.placeholder.puzzleadaptativo"
+        applicationId "com.damanu.lumihilo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv("ANDROID_VERSION_CODE") ?: "1")

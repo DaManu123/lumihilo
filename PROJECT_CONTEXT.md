@@ -1,6 +1,6 @@
 # 🧠 PROJECT CONTEXT & MASTER ARCHITECTURE MEMORY
 **Proyecto:** Lumihilo (antes "Puzzle Adaptativo"; nombre elegido el 2026-11-08, ver `docs/09-nombre.md`; *Lumen Loop* y *Synapse Flow* descartados por colisión en Play Store)  
-**Repositorio GitHub:** [DaManu123/puzzle-adaptativo](https://github.com/DaManu123/puzzle-adaptativo)  
+**Repositorio GitHub:** [DaManu123/lumihilo](https://github.com/DaManu123/lumihilo)  
 **Rama activa de trabajo:** `dev`  
 **Última actualización:** Fase 3 completada (noviembre 2026)
 
@@ -57,7 +57,7 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
    - *Lumen Loop* y *Synapse Flow*: **Descartados** (ya existen en Play Store).
    - *Zen Circuit*: Candidato con riesgos (mezcla con apps de electrónica).
 3. **Identificador Android (`appId`):**
-   - Provisional en Fase 0: `com.placeholder.puzzleadaptativo`.
+   - Definitivo desde la beta.7: `com.damanu.lumihilo` (antes `com.placeholder.puzzleadaptativo`).
    - **No se puede cambiar una vez publicada la app en Play Store**; se fijará antes de subir el primer bundle.
 4. **Accesibilidad desde el inicio:**
    - Áreas táctiles de mínimo 48 dp.
@@ -92,7 +92,7 @@ Un juego de puzzle casual donde **cada partida es un puzzle nuevo generado por a
   - **Criterio de salida de la Fase 4 aún por validar con gente real:** que varios jugadores pidan "otra partida" sin que se les sugiera.
 
 ## 📝 Pendientes conocidos
-- `appId` sigue siendo `com.placeholder.puzzleadaptativo` (fijarlo antes del primer bundle).
+- `appId` definitivo: `com.damanu.lumihilo` (beta.7).
 - La landing tiene placeholders de tráiler y capturas; la política de privacidad es un borrador.
 - `HelloScene` sigue registrada en `main.ts` y hay un `console.log` de depuración.
 - Añadir `.gitattributes` (`* text=auto eol=lf`) para evitar falsos cambios CRLF/LF.

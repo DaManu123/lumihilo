@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Lumihilo</string>
     <string name="title_activity_main">Lumihilo</string>
-    <string name="package_name">com.placeholder.puzzleadaptativo</string>
-    <string name="custom_url_scheme">com.placeholder.puzzleadaptativo</string>
+    <string name="package_name">com.damanu.lumihilo</string>
+    <string name="custom_url_scheme">com.damanu.lumihilo</string>
 </resources>
