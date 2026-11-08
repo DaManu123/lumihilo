@@ -25,12 +25,32 @@ try {
   await g.page.waitForTimeout(900);
   await g.shot('01-tablero'); await g.close();
 
+  // Victoria real: se resuelve girando cada pieza lo justo (sin pistas), por el camino más corto
   g = await open(progress(8), 'victoria');
-  for (let i = 0; i < 80; i++) {
-    await g.tap(...g.pos.hint, 450);
-    if ((await g.state()).progress.stats.levelsSolved > 0) break;
-  }
-  await g.page.waitForTimeout(1800);
+  await g.page.goto('http://localhost:4173/?debug');
+  await g.page.waitForSelector('canvas');
+  await g.page.waitForTimeout(1500);
+  const taps = await g.page.evaluate(async () => {
+    const scene = window.__game.scene.scenes.find((sc) => sc.handleCellTap);
+    const level = scene.currentLevelData;
+    let n = 0;
+    for (let r = 0; r < scene.board.rows; r++) {
+      for (let c = 0; c < scene.board.cols; c++) {
+        const need = (level.solutionRotations[r][c] - scene.board.grid[r][c].rotation + 4) % 4;
+        const view = scene.cellViews[r][c];
+        const times = need === 3 ? 1 : need;
+        for (let i = 0; i < times; i++) {
+          while (view.isRotating) await new Promise((res) => setTimeout(res, 30));
+          scene.handleCellTap(view, need === 3);
+          n++;
+          await new Promise((res) => setTimeout(res, 330));
+        }
+      }
+    }
+    return n;
+  });
+  console.log('Toques para la captura de victoria:', taps);
+  await g.page.waitForTimeout(2200);
   await g.shot('03-victoria'); await g.close();
 
   g = await open(progress(5), 'reto');
