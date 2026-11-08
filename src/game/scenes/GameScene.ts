@@ -63,7 +63,8 @@ import {
   motionDisabled,
 } from '../../core/accessibility';
 import { LANGUAGES, LanguageSetting, isLanguageSetting, resolveLanguage, setLanguage, t } from '../../core/i18n';
-import { THEME, setActiveTheme } from '../theme';
+import { THEME, setActiveTheme, getTheme } from '../theme';
+import { SKINS, SkinId, buySkin, isSkinUnlocked, skinInfo, usableSkin } from '../../core/skins';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
 import {
@@ -238,7 +239,8 @@ export class GameScene extends Phaser.Scene {
     this.settings = storage.loadSettings();
     if (!isLanguageSetting(this.settings.language)) this.settings.language = 'auto';
     this.applyLanguage();
-    setActiveTheme(this.settings.theme, this.settings.highContrast === true);
+    this.settings.skin = usableSkin(this.progress, this.settings.skin);
+    setActiveTheme(this.settings.theme, this.settings.highContrast === true, this.settings.skin);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.currentLevelIndex = this.progress.currentLevel;
     // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
@@ -1058,12 +1060,14 @@ export class GameScene extends Phaser.Scene {
       y += rowH;
     });
 
-    // Dos botones: Ajustes (secundario) y Cerrar (principal)
-    const btnW = (w - 88 - 18) / 2;
+    // Tres botones: Ajustes y Aspectos (secundarios) y Cerrar (principal)
+    const gap = 14;
+    const btnW = (w - 88 - 2 * gap) / 3;
     const btnY = cardH / 2 - 84;
+    const slot = (i: number) => (i - 1) * (btnW + gap);
     this.addCardButton(
       overlay,
-      { x: -(btnW + 18) / 2, y: btnY, w: btnW, h: 100 },
+      { x: slot(0), y: btnY, w: btnW, h: 100 },
       t('Ajustes'),
       () => {
         overlay.destroy();
@@ -1071,7 +1075,118 @@ export class GameScene extends Phaser.Scene {
       },
       false
     );
-    this.addCardButton(overlay, { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, t('Cerrar'), () => overlay.destroy(), true);
+    this.addCardButton(
+      overlay,
+      { x: slot(1), y: btnY, w: btnW, h: 100 },
+      t('Aspectos'),
+      () => {
+        overlay.destroy();
+        this.showSkinsModal();
+      },
+      false
+    );
+    this.addCardButton(overlay, { x: slot(2), y: btnY, w: btnW, h: 100 }, t('Cerrar'), () => overlay.destroy(), true);
+  }
+
+  /**
+   * Tienda de aspectos: paletas que se compran con Chispas. Tocar uno comprado lo equipa; uno bloqueado se compra
+   * (y se equipa) si alcanzan las Chispas. Es solo estética.
+   */
+  private showSkinsModal(message = ''): void {
+    const rowH = 150;
+    const cardH = 160 + SKINS.length * rowH + 150 + 130;
+    const { overlay, w } = this.createCard(cardH, 200);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Aspectos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    const left = -w / 2 + 44;
+    const right = w / 2 - 44;
+    let y = -cardH / 2 + 160 + rowH / 2;
+    for (const skin of SKINS) {
+      const preview = getTheme(this.settings.theme, false, skin.id);
+      const unlocked = isSkinUnlocked(this.progress, skin.id);
+      const equipped = this.settings.skin === skin.id;
+
+      const g = this.add.graphics();
+      // Muestra del aspecto: su fondo con tres colores característicos
+      g.fillStyle(preview.background, 1);
+      g.fillRoundedRect(left, y - 52, 190, 104, 22);
+      g.lineStyle(2, equipped ? THEME.primary : THEME.cardBorder, 1);
+      g.strokeRoundedRect(left, y - 52, 190, 104, 22);
+      [preview.primary, preview.accent, preview.clockwise].forEach((color, i) => {
+        g.fillStyle(color, 1);
+        g.fillCircle(left + 50 + i * 45, y, 17);
+      });
+      if (equipped) {
+        g.lineStyle(4, THEME.primary, 1);
+        g.strokeRoundedRect(-w / 2 + 14, y - rowH / 2 + 8, w - 28, rowH - 16, 26);
+      }
+      overlay.add(g);
+
+      overlay.add(this.uiText(left + 222, y - 18, t(skin.name), { size: 32, display: true, weight: '700', color: THEME.text }));
+      const state = equipped ? t('Equipado') : unlocked ? t('Usar') : '';
+      if (state) {
+        overlay.add(
+          this.uiText(right, y + 22, state, {
+            size: 26,
+            weight: '700',
+            color: equipped ? THEME.primaryCss : THEME.text,
+            originX: 1,
+          })
+        );
+      } else {
+        const affordable = this.progress.sparks >= skin.price;
+        const price = this.uiText(right, y + 22, String(skin.price), {
+          size: 28,
+          display: true,
+          weight: '700',
+          color: affordable ? THEME.primaryCss : THEME.mutedText,
+          originX: 1,
+        });
+        const icon = this.add.graphics();
+        drawIcon(icon, 'spark', right - price.width - 26, y + 22, 30, affordable ? THEME.primary : THEME.wireOff, THEME.surface);
+        overlay.add([price, icon]);
+      }
+      overlay.add(
+        this.hitZone({ x: 0, y, w: w - 28, h: rowH - 16 }, () => this.onSkinTapped(skin.id, overlay))
+      );
+      y += rowH;
+    }
+
+    const balance = this.uiText(0, cardH / 2 - 200, message || t('Tus Chispas: {0}', this.progress.sparks), {
+      size: 26,
+      weight: '600',
+      color: message ? THEME.accentCss : THEME.mutedText,
+      originX: 0.5,
+    });
+    overlay.add(balance);
+
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Listo'), () => overlay.destroy(), true);
+  }
+
+  private onSkinTapped(id: SkinId, overlay: Phaser.GameObjects.Container): void {
+    if (this.settings.skin === id) return;
+    if (!isSkinUnlocked(this.progress, id)) {
+      const bought = buySkin(this.progress, id);
+      if (!bought) {
+        feedback.toggle();
+        overlay.destroy();
+        this.showSkinsModal(t('Te faltan {0} Chispas para {1}', skinInfo(id).price - this.progress.sparks, t(skinInfo(id).name)));
+        return;
+      }
+      this.progress = bought;
+      storage.saveProgress(this.progress);
+    }
+    this.settings.skin = id;
+    storage.saveSettings(this.settings);
+    feedback.toggle();
+    setActiveTheme(this.settings.theme, this.settings.highContrast, id);
+    this.applyBackground();
+    // La interfaz y el tablero se redibujan con la nueva paleta; se reabre esta tarjeta para que también la use
+    overlay.destroy();
+    this.buildUi();
+    this.buildBoard();
+    this.updateFlowVisuals();
+    this.showSkinsModal();
   }
 
   /** Ajustes: efectos, música (estilo y volumen), vibración (intensidad y prueba). Se guardan al instante. */
@@ -1194,7 +1309,7 @@ export class GameScene extends Phaser.Scene {
       this.settings.highContrast = value;
       storage.saveSettings(this.settings);
       feedback.toggle();
-      setActiveTheme(this.settings.theme, value);
+      setActiveTheme(this.settings.theme, value, this.settings.skin);
       this.applyBackground();
       // La interfaz y el tablero se redibujan con la nueva paleta; se reabre esta tarjeta para que también la use
       overlay.destroy();
@@ -1420,7 +1535,7 @@ export class GameScene extends Phaser.Scene {
     storage.saveSettings(this.settings);
     feedback.toggle();
 
-    setActiveTheme(newThemeName, this.settings.highContrast);
+    setActiveTheme(newThemeName, this.settings.highContrast, this.settings.skin);
     this.applyBackground();
 
     // Reconstruye la interfaz con la nueva paleta conservando el estado de la partida
@@ -1509,7 +1624,7 @@ export class GameScene extends Phaser.Scene {
     const marks = this.settings.litMarks && powered;
     const look: CellLook = { powered, isSource, hintRing: view.hintRing, glowStep, marks, legs };
 
-    const prefix = `${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.geometry.cellSize}|${cellVisual}`;
+    const prefix = `${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${this.geometry.cellSize}|${cellVisual}`;
     const key =
       `cell|${prefix}|${powered ? 1 : 0}${isSource ? 1 : 0}${view.hintRing ? 1 : 0}${marks ? 1 : 0}|${glowStep}|` +
       legs.map((l) => `${l.dx},${l.dy},${l.reach === bridge ? 'b' : 'h'}${l.lit ? 'L' : 'o'}`).join(';');

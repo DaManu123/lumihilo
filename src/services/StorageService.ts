@@ -6,6 +6,7 @@ import type { HapticLevel, HapticMode } from '../core/haptics';
 import type { MusicStyle } from '../core/music';
 import type { AnimationSpeed } from '../core/accessibility';
 import type { LanguageSetting } from '../core/i18n';
+import { DEFAULT_SKIN, SkinId } from '../core/skins';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -29,6 +30,8 @@ export interface UserSettings {
   animationSpeed: AnimationSpeed;
   /** Idioma de la interfaz: el del dispositivo (auto), español o inglés. */
   language: LanguageSetting;
+  /** Aspecto (paleta) equipado; solo se usa si está comprado. */
+  skin: SkinId;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -46,6 +49,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   litMarks: false,
   animationSpeed: 'normal',
   language: 'auto',
+  skin: DEFAULT_SKIN,
 };
 
 export interface StorageService {
