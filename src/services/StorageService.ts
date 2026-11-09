@@ -37,6 +37,8 @@ export interface UserSettings {
   puzzle: PuzzleType;
   /** Ya se le explicó cómo se juega Luces. */
   hasSeenLightsTip: boolean;
+  /** Ya se le avisó de qué son las piedras de Luces. */
+  hasSeenStonesTip: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   skin: DEFAULT_SKIN,
   puzzle: 'circuits',
   hasSeenLightsTip: false,
+  hasSeenStonesTip: false,
 };
 
 export interface StorageService {

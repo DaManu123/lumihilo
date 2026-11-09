@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  cloneGrid, createGrid, generateLights, isAllLit, lightsHint, lightsParamsForTier, litCount, solveLights, toggleLights,
+  cloneGrid, createGrid, generateLights, isAllLit, lightsHint, lightsParamsForTier, litCount, playableCount, solveLights, toggleLights,
 } from '../src/core/lights';
 
 describe('Luces: toques', () => {
@@ -52,13 +52,13 @@ describe('Luces: generador y solver', () => {
       for (let seed = 1; seed <= 150; seed++) {
         const level = generateLights(params, seed * 7919);
         expect(isAllLit(level.initial), `tier ${tier} seed ${seed} nace resuelto`).toBe(false);
-        const solution = solveLights(level.initial);
+        const solution = solveLights(level.initial, level.blocked);
         expect(solution, `tier ${tier} seed ${seed} sin solución`).not.toBeNull();
         expect(solution!.length).toBe(level.minTaps);
         expect(level.minTaps).toBeGreaterThan(0);
         expect(level.minTaps).toBeLessThanOrEqual(params.scrambles); // el desorden ya es una solución, la mínima no la supera
         const play = cloneGrid(level.initial);
-        for (const [r, c] of solution!) toggleLights(play, r, c);
+        for (const [r, c] of solution!) toggleLights(play, r, c, level.blocked);
         expect(isAllLit(play), `tier ${tier} seed ${seed}: la solución no enciende todo`).toBe(true);
       }
     }
@@ -82,14 +82,14 @@ describe('Luces: generador y solver', () => {
     const g = cloneGrid(level.initial);
     let remaining = level.minTaps;
     for (let guard = 0; guard < 40 && !isAllLit(g); guard++) {
-      const hint = lightsHint(g)!;
+      const hint = lightsHint(g, level.blocked)!;
       expect(hint).not.toBeNull();
-      toggleLights(g, hint[0], hint[1]);
+      toggleLights(g, hint[0], hint[1], level.blocked);
       remaining--;
-      expect(solveLights(g)!.length).toBe(Math.max(0, remaining));
+      expect(solveLights(g, level.blocked)!.length).toBe(Math.max(0, remaining));
     }
     expect(isAllLit(g)).toBe(true);
-    expect(lightsHint(g)).toBeNull();
+    expect(lightsHint(g, level.blocked)).toBeNull();
   });
 
   it('un tablero sin solución se detecta (no pasa con los generados)', () => {
@@ -105,8 +105,63 @@ describe('Luces: generador y solver', () => {
 
   it('con tableros grandes y núcleo no vacío (5×5) elige la solución más corta', () => {
     // 5×5 tiene núcleo de dimensión 2: hay cuatro soluciones para cada nivel; el mínimo nunca pasa de las casillas tocadas
-    const level = generateLights({ size: 5, scrambles: 20 }, 9);
+    const level = generateLights({ size: 5, scrambles: 20, blocked: 0 }, 9);
     expect(level.minTaps).toBeLessThanOrEqual(20);
     expect(solveLights(level.initial)!.length).toBe(level.minTaps);
+  });
+});
+
+describe('Luces: piedras (casillas bloqueadas)', () => {
+  it('aparecen desde el nivel de habilidad 3 y su número crece sin pasar de 4', () => {
+    expect(lightsParamsForTier(1).blocked).toBe(0);
+    expect(lightsParamsForTier(2).blocked).toBe(0);
+    expect(lightsParamsForTier(3).blocked).toBe(1);
+    let last = 0;
+    for (let tier = 1; tier <= 8; tier++) {
+      const b = lightsParamsForTier(tier).blocked;
+      expect(b).toBeGreaterThanOrEqual(last);
+      expect(b).toBeLessThanOrEqual(4);
+      last = b;
+    }
+  });
+
+  it('una piedra no cambia al tocar a su vecina y tocarla no hace nada', () => {
+    const blocked = createGrid(3, false);
+    blocked[0][1] = true;
+    const g = createGrid(3, true);
+    toggleLights(g, 1, 1, blocked);
+    expect(g[0][1]).toBe(true); // la piedra sigue igual
+    expect(g[1][1]).toBe(false);
+    const before = cloneGrid(g);
+    toggleLights(g, 0, 1, blocked); // tocar la piedra: nada
+    expect(g).toEqual(before);
+    expect(litCount(g, blocked)).toBe(8 - 4);
+    expect(playableCount(g, blocked)).toBe(8);
+  });
+
+  it('todo nivel con piedras tiene el número pedido, es resoluble y su mínimo es correcto', () => {
+    for (let tier = 3; tier <= 8; tier++) {
+      const params = lightsParamsForTier(tier);
+      for (let seed = 1; seed <= 150; seed++) {
+        const level = generateLights(params, seed * 104729);
+        const stones = level.blocked.flat().filter(Boolean).length;
+        expect(stones, `tier ${tier} seed ${seed}`).toBe(params.blocked);
+        expect(isAllLit(level.initial)).toBe(false);
+        // las piedras nunca se apagan
+        for (let r = 0; r < params.size; r++) for (let c = 0; c < params.size; c++) if (level.blocked[r][c]) expect(level.initial[r][c]).toBe(true);
+        const solution = solveLights(level.initial, level.blocked);
+        expect(solution, `tier ${tier} seed ${seed} sin solución`).not.toBeNull();
+        expect(solution!.length).toBe(level.minTaps);
+        expect(solution!.every(([r, c]) => !level.blocked[r][c]), 'la solución no toca piedras').toBe(true);
+        const play = cloneGrid(level.initial);
+        for (const [r, c] of solution!) toggleLights(play, r, c, level.blocked);
+        expect(isAllLit(play)).toBe(true);
+      }
+    }
+  });
+
+  it('los niveles sin piedras no cambian respecto a antes de añadirlas', () => {
+    const level = generateLights(lightsParamsForTier(2), 42);
+    expect(level.blocked.flat().some(Boolean)).toBe(false);
   });
 });

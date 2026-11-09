@@ -16,12 +16,16 @@ export interface LightsParams {
   size: number;
   /** Cuántas casillas distintas se tocan al desordenar. */
   scrambles: number;
+  /** Casillas bloqueadas (piedras): no se tocan ni cambian, y no cuentan para ganar. */
+  blocked: number;
 }
 
 export interface LightsLevel {
   seed: number;
   params: LightsParams;
   initial: LightsGrid;
+  /** Piedras: casillas inertes (en `initial` figuran como encendidas para que `isAllLit` siga valiendo). */
+  blocked: LightsGrid;
   /** Mínimo de toques para resolverlo. */
   minTaps: number;
 }
@@ -31,7 +35,9 @@ export function lightsParamsForTier(tier: number): LightsParams {
   const t = Math.max(1, Math.min(8, Math.floor(tier)));
   const size = t <= 2 ? 3 : t <= 4 ? 4 : t <= 6 ? 5 : 6;
   const scrambles = Math.min(size * size - 1, 2 + t + Math.floor(size / 2));
-  return { size, scrambles };
+  // Desde el nivel de habilidad 3 aparecen piedras que estorban: un cambio de táctica, no solo más tablero
+  const blocked = t < 3 ? 0 : Math.min(4, Math.floor((t - 1) / 2));
+  return { size, scrambles: Math.min(scrambles, size * size - blocked - 1), blocked };
 }
 
 export function createGrid(size: number, lit: boolean): LightsGrid {
@@ -43,11 +49,12 @@ export function cloneGrid(grid: LightsGrid): LightsGrid {
 }
 
 /** Toca una casilla: cambia ella y sus vecinas (arriba, abajo, izquierda y derecha). */
-export function toggleLights(grid: LightsGrid, row: number, col: number): void {
+export function toggleLights(grid: LightsGrid, row: number, col: number, blocked?: LightsGrid): void {
+  if (blocked?.[row]?.[col]) return;
   for (const [dr, dc] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
     const r = row + dr;
     const c = col + dc;
-    if (r >= 0 && r < grid.length && c >= 0 && c < grid.length) grid[r][c] = !grid[r][c];
+    if (r >= 0 && r < grid.length && c >= 0 && c < grid.length && !blocked?.[r]?.[c]) grid[r][c] = !grid[r][c];
   }
 }
 
@@ -55,8 +62,13 @@ export function isAllLit(grid: LightsGrid): boolean {
   return grid.every((row) => row.every(Boolean));
 }
 
-export function litCount(grid: LightsGrid): number {
-  return grid.reduce((total, row) => total + row.filter(Boolean).length, 0);
+export function litCount(grid: LightsGrid, blocked?: LightsGrid): number {
+  return grid.reduce((total, row, r) => total + row.filter((on, c) => on && !blocked?.[r]?.[c]).length, 0);
+}
+
+/** Casillas que cuentan (todas menos las piedras). */
+export function playableCount(grid: LightsGrid, blocked?: LightsGrid): number {
+  return grid.length * grid.length - (blocked ? blocked.reduce((n, row) => n + row.filter(Boolean).length, 0) : 0);
 }
 
 /**
@@ -65,7 +77,7 @@ export function litCount(grid: LightsGrid): number {
  * cualquier combinación del núcleo) elige la de menos casillas. Devuelve null si no tuviera solución
  * (no ocurre con tableros generados desde el estado resuelto).
  */
-export function solveLights(grid: LightsGrid): Array<[number, number]> | null {
+export function solveLights(grid: LightsGrid, blocked?: LightsGrid): Array<[number, number]> | null {
   const n = grid.length;
   const cells = n * n;
   const words = Math.ceil((cells + 1) / 31);
@@ -76,10 +88,11 @@ export function solveLights(grid: LightsGrid): Array<[number, number]> | null {
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       const eq = Array<number>(words).fill(0);
+      if (blocked?.[r]?.[c]) { rows.push(eq); continue; } // una piedra no cambia: su ecuación es vacía
       for (const [dr, dc] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
         const rr = r + dr;
         const cc = c + dc;
-        if (rr >= 0 && rr < n && cc >= 0 && cc < n) setBit(eq, rr * n + cc);
+        if (rr >= 0 && rr < n && cc >= 0 && cc < n && !blocked?.[rr]?.[cc]) setBit(eq, rr * n + cc);
       }
       if (!grid[r][c]) setBit(eq, cells);
       rows.push(eq);
@@ -103,7 +116,7 @@ export function solveLights(grid: LightsGrid): Array<[number, number]> | null {
   for (let r = rank; r < cells; r++) if (getBit(rows[r], cells)) return null; // 0 = 1: sin solución
 
   const freeColumns: number[] = [];
-  for (let col = 0; col < cells; col++) if (pivotOfColumn[col] < 0) freeColumns.push(col);
+  for (let col = 0; col < cells; col++) if (pivotOfColumn[col] < 0 && !blocked?.[Math.floor(col / n)]?.[col % n]) freeColumns.push(col);
 
   // Con las variables libres a 0 sale una solución; probar todas las combinaciones de libres da las demás
   let best: number[] | null = null;
@@ -131,26 +144,34 @@ export function generateLights(params: LightsParams, seed: number): LightsLevel 
   const { size } = params;
   const cells = size * size;
   const rng = mulberry32(seed);
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const grid = createGrid(size, true);
+  const shuffled = () => {
     const order = Array.from({ length: cells }, (_, i) => i);
     for (let i = cells - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
-    for (const index of order.slice(0, Math.min(params.scrambles, cells))) toggleLights(grid, Math.floor(index / size), index % size);
+    return order;
+  };
+  for (let attempt = 0; attempt < 50; attempt++) {
+    // Las piedras se eligen primero (sin gastar números aleatorios si no hay, para no cambiar los niveles sin piedras)
+    const blocked = createGrid(size, false);
+    const stones = params.blocked > 0 ? shuffled().slice(0, params.blocked) : [];
+    for (const index of stones) blocked[Math.floor(index / size)][index % size] = true;
+    const grid = createGrid(size, true);
+    const playable = shuffled().filter((index) => !blocked[Math.floor(index / size)][index % size]);
+    for (const index of playable.slice(0, Math.min(params.scrambles, playable.length))) toggleLights(grid, Math.floor(index / size), index % size, blocked);
     if (isAllLit(grid)) continue; // los toques se anularon entre sí: no puede nacer resuelto
-    const solution = solveLights(grid);
-    if (solution && solution.length > 0) return { seed, params, initial: grid, minTaps: solution.length };
+    const solution = solveLights(grid, blocked);
+    if (solution && solution.length > 0) return { seed, params, initial: grid, blocked, minTaps: solution.length };
   }
-  // Camino seguro (no debería ocurrir): un solo toque en el centro
+  // Camino seguro (no debería ocurrir): un solo toque en el centro, sin piedras
   const grid = createGrid(size, true);
   toggleLights(grid, Math.floor(size / 2), Math.floor(size / 2));
-  return { seed, params, initial: grid, minTaps: 1 };
+  return { seed, params, initial: grid, blocked: createGrid(size, false), minTaps: 1 };
 }
 
 /** Siguiente casilla a tocar para acercarse a la solución más corta (la primera en orden de lectura). */
-export function lightsHint(grid: LightsGrid): [number, number] | null {
-  const solution = solveLights(grid);
+export function lightsHint(grid: LightsGrid, blocked?: LightsGrid): [number, number] | null {
+  const solution = solveLights(grid, blocked);
   return solution && solution.length > 0 ? solution[0] : null;
 }

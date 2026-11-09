@@ -90,6 +90,7 @@ export const EN: Record<string, string> = {
   '¿Atascado? La pista te dice qué casilla tocar.': 'Stuck? The hint tells you which tile to tap.',
   '{0} de {1} luces encendidas': '{0} of {1} lights on',
   'Todo está encendido.': 'Everything is already lit.',
+  'Las piedras no se encienden ni se tocan: no cuentan.': "Stones don't light up and can't be tapped: they don't count.",
   'Todo encendido': 'All lit up',
 
   // Actualizaciones

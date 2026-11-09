@@ -69,6 +69,7 @@ import {
   LightsGrid,
   LightsLevel,
   cloneGrid,
+  playableCount,
   generateLights,
   isAllLit,
   lightsHint,
@@ -195,6 +196,8 @@ interface CellLook {
   legs: CellLeg[];
   /** Casilla del puzzle Luces (`powered` es «encendida», sin cables). */
   lights?: boolean;
+  /** Piedra de Luces: casilla bloqueada. */
+  stone?: boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -221,6 +224,8 @@ export class GameScene extends Phaser.Scene {
   /** Puzzle en juego (Circuitos o Luces) y, en Luces, el estado de las luces y su última casilla tocada. */
   private puzzle: PuzzleType = 'circuits';
   private lightGrid: LightsGrid = [];
+  /** Piedras de Luces: casillas inertes. */
+  private lightBlocked: LightsGrid = [];
   private lastLightsTap: { row: number; col: number } | null = null;
   private dailyKey = '';
 
@@ -648,8 +653,8 @@ export class GameScene extends Phaser.Scene {
     if (this.puzzle === 'lights') {
       // En Luces no se gira nada: el panel cuenta cuántas luces hay encendidas (y al tocarlo explica cómo se juega)
       const { w, h } = this.dirRect;
-      const total = this.board.rows * this.board.cols;
-      const lit = litCount(this.lightGrid);
+      const total = playableCount(this.lightGrid, this.lightBlocked);
+      const lit = litCount(this.lightGrid, this.lightBlocked);
       const fraction = total > 0 ? lit / total : 0;
       this.dirPanel.clear();
       this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.06 + 0.1 * fraction), 1);
@@ -1153,6 +1158,16 @@ export class GameScene extends Phaser.Scene {
       },
       true
     );
+  }
+
+  /** La primera vez que sale un nivel con piedras se explica qué son, con un aviso breve. */
+  private maybeShowStonesTip(hasStones: boolean): void {
+    if (!hasStones || this.settings.hasSeenStonesTip || !this.settings.hasSeenLightsTip) return;
+    this.settings.hasSeenStonesTip = true;
+    storage.saveSettings(this.settings);
+    this.time.delayedCall(900, () => {
+      if (this.puzzle === 'lights' && !this.overlayOpen()) this.showToast(t('Las piedras no se encienden ni se tocan: no cuentan.'));
+    });
   }
 
   /** Primera vez que se juega Luces: muestra el mini tutorial (una sola vez; se vuelve a ver tocando el panel de luces). */
@@ -1850,11 +1865,13 @@ export class GameScene extends Phaser.Scene {
     const size = params.size;
     this.currentParams = { width: size, height: size, extraLoops: 0, branchBias: 0 };
     this.lightGrid = cloneGrid(level.initial);
+    this.lightBlocked = cloneGrid(level.blocked);
     this.lastLightsTap = null;
     const grid = Array.from({ length: size }, (_, row) =>
       Array.from({ length: size }, (_, col) => ({ row, col, baseMask: 0, rotation: 0, isSource: false }))
     );
     this.board = { rows: size, cols: size, grid, source: { row: 0, col: 0 } };
+    this.maybeShowStonesTip(level.blocked.some((row) => row.some(Boolean)));
     this.currentLevelData = {
       seed: level.seed,
       params: this.currentParams,
@@ -2089,10 +2106,11 @@ export class GameScene extends Phaser.Scene {
   private drawLightsCell(view: CellView, lit: boolean): void {
     const { cellVisual, cellSize } = this.geometry;
     const glowStep = lit ? Math.round(Math.min(1, Math.max(0, view.glow)) * GLOW_STEPS) : 0;
-    const marks = this.settings.litMarks && lit;
-    const look: CellLook = { powered: lit, isSource: false, hintRing: view.hintRing, glowStep, marks, legs: [], lights: true };
+    const stone = !!this.lightBlocked[view.row]?.[view.col];
+    const marks = this.settings.litMarks && lit && !stone;
+    const look: CellLook = { powered: lit, isSource: false, hintRing: view.hintRing, glowStep, marks, legs: [], lights: true, stone };
     const prefix = `L|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${cellSize}|${cellVisual}`;
-    const key = `lcell|${prefix}|${lit ? 1 : 0}${view.hintRing ? 1 : 0}${marks ? 1 : 0}|${glowStep}`;
+    const key = `lcell|${prefix}|${lit ? 1 : 0}${view.hintRing ? 1 : 0}${marks ? 1 : 0}${stone ? 'S' : ''}|${glowStep}`;
     if (key === view.textureKey) return;
     this.ensureCellTexture(key, prefix, look);
     view.img.setTexture(key);
@@ -2133,6 +2151,35 @@ export class GameScene extends Phaser.Scene {
     const socket = cellVisual * 0.94;
     const radius = socket * 0.17;
     const recess = mixColors(THEME.surface, THEME.background, 0.55);
+
+    if (look.stone) {
+      // Piedra: bloque macizo y sin luz (nada de vidrio hueco), con facetas y grietas para que no se confunda con una lámpara apagada
+      const base = mixColors(THEME.surface, THEME.wireOff, 0.4);
+      g.fillStyle(base, 1);
+      fillTile(g, style, socket, radius);
+      g.lineStyle(3, THEME.wireOff, 1);
+      strokeTile(g, style, socket, radius);
+      const s = socket * 0.3;
+      const rock = [
+        { x: -s * 1.25, y: s * 0.15 }, { x: -s * 0.7, y: -s * 0.95 }, { x: s * 0.4, y: -s * 1.15 },
+        { x: s * 1.2, y: -s * 0.2 }, { x: s * 0.95, y: s * 0.85 }, { x: -s * 0.2, y: s * 1.1 },
+      ];
+      g.fillStyle(mixColors(base, THEME.wireOff, 0.55), 1);
+      g.fillPoints(rock, true);
+      g.fillStyle(mixColors(base, THEME.text === '#ffffff' ? 0xffffff : THEME.surface, 0.4), 0.9);
+      g.fillPoints([rock[1], rock[2], rock[3], { x: 0, y: -s * 0.1 }], true);
+      g.lineStyle(2, THEME.wireOffHub, 1);
+      g.beginPath();
+      g.moveTo(-s * 0.1, -s * 0.1);
+      g.lineTo(s * 0.35, s * 0.4);
+      g.lineTo(s * 0.2, s * 0.9);
+      g.strokePath();
+      if (look.hintRing) {
+        g.lineStyle(5, THEME.hintRing, 1);
+        strokeTile(g, style, socket, radius, 3);
+      }
+      return;
+    }
 
     // Portalámparas: hundido cuando está apagado, teñido de calor cuando está encendido
     g.fillStyle(lit ? mixColors(THEME.surface, THEME.primary, 0.1 + 0.16 * glow) : recess, 1);
@@ -2255,10 +2302,10 @@ export class GameScene extends Phaser.Scene {
         for (let c = 0; c < this.board.cols; c++) {
           const on = this.lightGrid[r][c];
           this.drawCell(this.cellViews[r][c], on);
-          if (on) lit++;
+          if (on && !this.lightBlocked[r]?.[c]) lit++;
         }
       }
-      const total = this.board.rows * this.board.cols;
+      const total = playableCount(this.lightGrid, this.lightBlocked);
       feedback.setIntensity(total > 0 ? lit / total : 0);
       const glow = this.lightsGlow;
       if (glow?.active) {
@@ -2332,6 +2379,14 @@ export class GameScene extends Phaser.Scene {
   /** Toque en Luces: cambia la casilla y sus vecinas; las que se encienden destellan. */
   private handleLightsTap(view: CellView): void {
     if (this.isWon) return;
+    if (this.lightBlocked[view.row]?.[view.col]) {
+      // Una piedra no hace nada: un golpe seco y un temblor leve, sin gastar toque
+      feedback.denied();
+      if (!this.reducedMotion()) {
+        this.tweens.add({ targets: view.container, x: view.container.x + 8, duration: this.dur(50), yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
+      }
+      return;
+    }
     this.tapCount++;
     this.moveHistory.push({ row: view.row, col: view.col, step: 0 });
     this.updateHud();
@@ -2342,19 +2397,19 @@ export class GameScene extends Phaser.Scene {
 
   /** Cambia las luces de una casilla y sus vecinas con su sonido y destello. `forward` = jugada (no deshacer). */
   private applyLightsToggle(row: number, col: number, forward: boolean): void {
-    const before = litCount(this.lightGrid);
-    toggleLights(this.lightGrid, row, col);
+    const before = litCount(this.lightGrid, this.lightBlocked);
+    toggleLights(this.lightGrid, row, col, this.lightBlocked);
     this.lastLightsTap = { row, col };
     if (forward) {
       feedback.rotate(row, col);
-      if (litCount(this.lightGrid) > before) feedback.connected(row, col);
+      if (litCount(this.lightGrid, this.lightBlocked) > before) feedback.connected(row, col);
     } else {
       feedback.undo(row, col);
     }
     const affected: Array<[number, number]> = [[row, col], [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]];
     for (const [r, c] of affected) {
       const view = this.cellViews[r]?.[c];
-      if (!view) continue;
+      if (!view || this.lightBlocked[r]?.[c]) continue;
       if (this.lightGrid[r][c] && !this.reducedMotion()) {
         this.tweens.addCounter({
           from: 1,
@@ -2485,7 +2540,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Pista en Luces: por 10 Chispas toca por ti la casilla que más acerca a la solución más corta. */
   private useLightsHint(): void {
-    const target = lightsHint(this.lightGrid);
+    const target = lightsHint(this.lightGrid, this.lightBlocked);
     if (!target) {
       this.showToast(t('Todo está encendido.'));
       return;
