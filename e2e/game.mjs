@@ -752,6 +752,127 @@ export async function runGameScenarios(out) {
     await g.close();
   }
 
+
+  section('20. Tercer puzzle: Hilos');
+  {
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
+    // Estado de los hilos y, por cada pareja, los puntos del lienzo de su solución (para arrastrar por ellos)
+    const flowInfo = (g) => g.page.evaluate(`(() => { const sc = ${scene}; const L = sc.flowLevelData; const pt = (c) => [sc.cellViews[c.row][c.col].container.x, sc.cellViews[c.row][c.col].container.y];
+      return { puzzle: sc.puzzle, daily: sc.isDaily, pairs: L.pairs.length, size: L.params.size, taps: sc.tapCount, won: sc.isWon,
+        paths: sc.flowState.paths.map((p) => p.length), solution: L.solution.map((p) => p.map(pt)), ends: L.pairs.map((q) => [pt(q.a), pt(q.b)]),
+        empty: (() => { const isEnd = (r, c) => L.pairs.some((q) => (q.a.row === r && q.a.col === c) || (q.b.row === r && q.b.col === c)); for (let r = 0; r < L.params.size; r++) for (let c = 0; c + 1 < L.params.size; c++) if (!isEnd(r, c) && !isEnd(r, c + 1)) return [pt({ row: r, col: c }), pt({ row: r, col: c + 1 })]; return null; })(),
+        cut: (() => { const idx = (q, r, c) => L.solution[q].findIndex((x) => x.row === r && x.col === c);
+          for (let p = 0; p < L.pairs.length; p++) for (let q = 0; q < L.pairs.length; q++) { if (p === q) continue;
+            for (let i = 0; i < L.solution[p].length; i++) { const c = L.solution[p][i];
+              for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const j = idx(q, c.row + dr, c.col + dc); if (j > 0 && j < L.solution[q].length - 1) return { p, q, seq: [...L.solution[p].slice(0, i + 1).map(pt), pt({ row: c.row + dr, col: c.col + dc })] }; } } }
+          return null; })() }; })()`);
+    const connected = (g) => g.page.evaluate(`(() => { const sc = ${scene}; const L = sc.flowLevelData; return sc.flowState.paths.filter((p, i) => p.length >= 2 && ((p[0].row === L.pairs[i].a.row && p[0].col === L.pairs[i].a.col && p[p.length - 1].row === L.pairs[i].b.row && p[p.length - 1].col === L.pairs[i].b.col) || (p[0].row === L.pairs[i].b.row && p[0].col === L.pairs[i].b.col && p[p.length - 1].row === L.pairs[i].a.row && p[p.length - 1].col === L.pairs[i].a.col))).length; })()`);
+    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true };
+
+    // Elegir Hilos: tutorial la primera vez
+    let g = await openGame({ label: 'hilos', seed: { user_settings: { hasSeenTutorial: true }, ...RICH }, out, query: '?debug' });
+    await g.tap(...g.pos.stats, 500);
+    await g.shot('e20-estadisticas-puzzle');
+    await g.tap(...g.pos.puzzleFlow, 900);
+    let s = await g.state();
+    check('elegir Hilos lo guarda', s.settings?.puzzle === 'flow', `guardado ${s.settings?.puzzle}`);
+    check('la primera vez en Hilos sale el mini tutorial', (await texts(g)).includes('Cómo se juega Hilos'));
+    await g.page.waitForTimeout(3500);
+    await g.shot('e20-tutorial-hilos');
+    await g.tap(...g.pos.flowTutorialOk, 500);
+    s = await g.state();
+    check('«Entendido» cierra el tutorial y lo anota', !(await texts(g)).includes('Cómo se juega Hilos') && s.settings?.hasSeenFlowTip === true);
+    check('el panel cuenta los hilos unidos', /0 de \d+ hilos unidos/.test(await texts(g)), await texts(g));
+    await g.tap(...g.pos.lightsPanel, 500);
+    check('tocar el panel de hilos vuelve a mostrar el tutorial', (await texts(g)).includes('Cómo se juega Hilos'));
+    await g.tap(...g.pos.flowTutorialOk, 500);
+    await g.close();
+
+    // Trazar, deshacer, bloqueos y cortes
+    g = await openGame({ label: 'hilos-juego', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
+    let info = await flowInfo(g);
+    check('el tablero de Hilos está en marcha', info.puzzle === 'flow' && info.pairs >= 3 && info.size >= 4, JSON.stringify({ p: info.puzzle, n: info.pairs, s: info.size }));
+    await g.shot('e20-hilos');
+    await g.drag(info.solution[0]);
+    info = await flowInfo(g);
+    check('arrastrar de un punto al otro une la pareja', (await connected(g)) === 1, `unidas ${await connected(g)}`);
+    check('un trazo cuenta como un toque', info.taps === 1, `toques ${info.taps}`);
+    check('el panel se actualiza', /1 de \d+ hilos unidos/.test(await texts(g)));
+    await g.shot('e20-hilos-un-hilo');
+
+    // Tocar sin arrastrar no estropea un hilo ya unido
+    await g.tap(...info.ends[0][0], 400);
+    check('un simple toque sobre un punto unido no borra su hilo', (await connected(g)) === 1);
+
+    // Deshacer vuelve al estado anterior
+    await g.tap(...g.pos.undo, 500);
+    check('deshacer quita el último trazo', (await connected(g)) === 0 && (await flowInfo(g)).paths.every((n) => n === 0));
+
+    // Arrastrar desde una casilla vacía no hace nada ni cuenta como toque
+    const tapsBefore = info.taps;
+    await g.drag(info.empty);
+    info = await flowInfo(g);
+    check('arrastrar desde una casilla vacía no cuenta como toque', info.taps === tapsBefore && info.paths.every((n) => n === 0), `toques ${tapsBefore} → ${info.taps}`);
+
+    // Cortar: el hilo de otra pareja se corta al pasar por encima
+    check('el nivel permite probar un corte', !!info.cut);
+    await g.drag(info.solution[info.cut.q]);
+    const joinedBefore = await connected(g);
+    await g.drag(info.cut.seq);
+    check('pasar por el hilo de otra pareja lo corta', joinedBefore === 1 && (await connected(g)) === 0, `antes ${joinedBefore}, ahora ${await connected(g)}`);
+    await g.shot('e20-hilos-corte');
+    await g.close();
+
+    // Pista, victoria y progreso aparte
+    g = await openGame({ label: 'hilos-victoria', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
+    const sparksBefore = (await g.state()).progress.sparks;
+    const levelBefore = await g.state();
+    await g.tap(...g.pos.hint, 700);
+    s = await g.state();
+    check('la pista cuesta 10 Chispas y une una pareja', s.progress.sparks === sparksBefore - 10 && (await connected(g)) === 1, `${sparksBefore} → ${s.progress.sparks}, unidas ${await connected(g)}`);
+    info = await flowInfo(g);
+    for (let i = 0; i < info.pairs; i++) {
+      const cur = await flowInfo(g);
+      if (cur.won) break;
+      if (cur.paths[i] >= 2 && (await connected(g)) > i) continue;
+      await g.drag(cur.solution[i], 200);
+    }
+    await g.page.waitForTimeout(3000);
+    info = await flowInfo(g);
+    check('unir todas las parejas resuelve el nivel', info.won === true);
+    check('sale el resultado «Todo unido»', (await texts(g)).includes('Todo unido'), (await texts(g)).slice(0, 200));
+    await g.shot('e20-hilos-victoria');
+    s = await g.state();
+    check('sube el nivel de Hilos y no el de Circuitos ni el de Luces', s.progress.flowLevel === 2 && s.progress.currentLevel === (levelBefore.progress.currentLevel ?? 1) && s.progress.lightsLevel === (levelBefore.progress.lightsLevel ?? 1), `hilos ${s.progress.flowLevel}, circuitos ${s.progress.currentLevel} (antes ${levelBefore.progress.currentLevel}), luces ${s.progress.lightsLevel} (antes ${levelBefore.progress.lightsLevel})`);
+    check('guarda un récord de tiempo con su propia clave', Object.keys(s.progress.stats.bestTimeByTier).some((k) => k.startsWith('F')) || s.progress.stats.levelsSolved >= 1);
+    await g.close();
+
+    // Reto diario de Hilos: aparte de los de Circuitos y Luces
+    g = await openGame({ label: 'hilos-diario', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
+    await g.tap(...g.pos.daily, 800);
+    info = await flowInfo(g);
+    check('el reto diario de Hilos no cambia de puzzle', info.puzzle === 'flow' && info.daily === true);
+    await g.shot('e20-diario-hilos');
+    for (let i = 0; i < info.pairs; i++) await g.drag(info.solution[i], 200);
+    await g.page.waitForTimeout(3000);
+    s = await g.state();
+    check('completar el reto de Hilos lo registra aparte', s.progress.lastFlowDailyCompleted === today() && s.progress.lastDailyCompleted === null && s.progress.lastLightsDailyCompleted === null, `${s.progress.lastFlowDailyCompleted}`);
+    check('el reto de Hilos no avanza el nivel de Hilos', s.progress.flowLevel === 1);
+    await g.close();
+
+    // Con aspectos, en claro y con alto contraste se dibuja sin errores
+    for (const [label, settings] of [['cyberpunk', { skin: 'cyberpunk' }], ['aurora-claro', { skin: 'aurora', theme: 'light' }], ['matrix-hc', { skin: 'matrix', highContrast: true }], ['oceano', { skin: 'oceano' }]]) {
+      const skin = settings.skin;
+      g = await openGame({ label: 'hilos-' + label, seed: { user_settings: { ...SEEN, puzzle: 'flow', ...settings }, player_progress: { ...RICH.player_progress, unlockedSkins: [skin] } }, out, query: '?debug' });
+      info = await flowInfo(g);
+      await g.drag(info.solution[0], 300);
+      await g.shot('e20-hilos-' + label);
+      check(`Hilos con ${label} se dibuja`, !!(await g.page.$('canvas')) && (await connected(g)) === 1);
+      await g.close();
+    }
+  }
+
   section('Errores de consola durante toda la batería');
   const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403|status of 404/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));

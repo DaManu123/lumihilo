@@ -106,6 +106,15 @@ export async function runAudioCheck() {
     check('Luces: no suena mucho más fuerte que el estilo ambiental (diferencia menor de 8 dB)', Math.abs(box.rms - levels.ambient.rms) < 8, `${(box.rms - levels.ambient.rms).toFixed(1)} dB`);
     await g.close();
 
+    g = await openGame({ label: 'audio-hilos-musica', seed: { user_settings: { hasSeenTutorial: true, hasSeenFlowTip: true, puzzle: 'flow', soundEnabled: false } } });
+    await g.tap(360, 1100, 100);
+    await g.page.waitForTimeout(3500);
+    const thread = await sample(g, 'Música de Hilos (cuerda pulsada) al 100 %, 14 s', 14000);
+    check('Hilos: la cuerda pulsada se oye (volumen medio entre −52 y −24 dBFS)', thread.rms > -52 && thread.rms < -24, `${thread.rms.toFixed(1)} dBFS`);
+    check('Hilos: sin distorsión (pico por debajo de −3 dBFS)', thread.peak < -3, `${thread.peak.toFixed(1)} dBFS`);
+    check('Hilos: no suena mucho más fuerte que el estilo ambiental (diferencia menor de 8 dB)', Math.abs(thread.rms - levels.ambient.rms) < 8, `${(thread.rms - levels.ambient.rms).toFixed(1)} dB`);
+    await g.close();
+
     g = await openGame({ label: 'audio-luces-mezcla', seed: { user_settings: { ...seed, musicVolume: 200 } } });
     await g.tap(360, 1100, 100);
     await g.page.waitForTimeout(3500);

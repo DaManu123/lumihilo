@@ -34,12 +34,12 @@ export function isMusicStyle(value: unknown): value is MusicStyle {
 }
 
 /**
- * Pistas que puede sonar: las dos que elige el jugador y la «cristal», la caja de música propia del puzzle Luces
- * (suena sola en Luces, sea cual sea el estilo elegido).
+ * Pistas que puede sonar: las dos que elige el jugador, la «cristal» (la caja de música propia del puzzle Luces) y la
+ * «hilo» (cuerda pulsada, propia del puzzle Hilos). Las dos propias suenan solas en su puzzle, sea cual sea el estilo elegido.
  */
-export type MusicTrack = MusicStyle | 'cristal';
+export type MusicTrack = MusicStyle | 'cristal' | 'hilo';
 
-export const STYLE_TEMPO: Record<MusicTrack, number> = { ambient: TEMPO_BPM, swing: 90, cristal: 66 };
+export const STYLE_TEMPO: Record<MusicTrack, number> = { ambient: TEMPO_BPM, swing: 90, cristal: 66, hilo: 100 };
 
 export function beatSeconds(style: MusicTrack): number {
   return 60 / STYLE_TEMPO[style];
@@ -68,7 +68,7 @@ export function musicGainScale(percent: number): number {
 /** Grados de la escala: 0 = do, 1 = re, 2 = mi, 3 = sol, 4 = la. */
 export type Degree = 0 | 1 | 2 | 3 | 4;
 
-export type MusicVoice = 'pad' | 'bass' | 'arp' | 'bell' | 'keys' | 'lead' | 'ride' | 'snare' | 'kick';
+export type MusicVoice = 'pad' | 'bass' | 'arp' | 'bell' | 'keys' | 'lead' | 'ride' | 'snare' | 'kick' | 'pluck';
 
 export interface MusicEvent {
   voice: MusicVoice;
@@ -133,7 +133,59 @@ export function chordAt(bar: number, seed: number): Chord {
 export function barEvents(bar: number, intensity: number, seed: number, style: MusicTrack = 'ambient'): MusicEvent[] {
   if (style === 'swing') return swingBarEvents(bar, intensity, seed);
   if (style === 'cristal') return crystalBarEvents(bar, intensity, seed);
+  if (style === 'hilo') return threadBarEvents(bar, intensity, seed);
   return ambientBarEvents(bar, intensity, seed);
+}
+
+/**
+ * Cuerda pulsada de Hilos: una melodía que «se hila» por la escala, nota a nota, subiendo y bajando de forma suave (nunca da
+ * saltos grandes), sobre un colchón cálido y un bajo que late al primer y tercer tiempo. Cada hilo unido hace que la melodía
+ * toque más notas y, con casi todo unido, entra una segunda voz aguda que acompaña a negras.
+ */
+export function threadBarEvents(bar: number, intensity: number, seed: number): MusicEvent[] {
+  const level = clamp01(intensity);
+  const chord = chordAt(bar, seed);
+  const rng = mulberry32((seed + Math.imul(bar + 1, 6007)) >>> 0);
+  const events: MusicEvent[] = [];
+
+  for (const degree of chord.tones) {
+    events.push({ voice: 'pad', beat: 0, degree, octave: -1, length: 4.4, velocity: 0.34 + 0.1 * level });
+  }
+  events.push({ voice: 'bass', beat: 0, degree: chord.root, octave: -2, length: 1.8, velocity: 0.5 });
+  events.push({ voice: 'bass', beat: 2, degree: chord.root, octave: -2, length: 1.6, velocity: 0.36 });
+
+  // Melodía: un paseo por la escala de dos octavas (posiciones 0 a 9) con pasos de uno o dos grados
+  let position = chord.tones[Math.floor(rng() * chord.tones.length)] + 5 * Math.floor(rng() * 2);
+  const chance = clamp01(0.4 + 0.5 * level);
+  for (let step = 0; step < 8; step++) {
+    const move = [-2, -1, -1, 1, 1, 2][Math.floor(rng() * 6)];
+    position = Math.min(9, Math.max(0, position + move));
+    if (step > 0 && rng() > chance) continue; // el primer tiempo siempre suena
+    events.push({
+      voice: 'pluck',
+      beat: step * 0.5,
+      degree: (position % 5) as Degree,
+      octave: Math.floor(position / 5),
+      length: 1,
+      velocity: (step === 0 ? 0.42 : 0.26) + 0.14 * rng(),
+    });
+  }
+
+  // Segunda voz aguda, a negras, cuando casi todo está unido
+  if (level > 0.65) {
+    for (let beat = 0; beat < 4; beat++) {
+      events.push({
+        voice: 'pluck',
+        beat: beat + 0.25,
+        degree: chord.tones[(beat + bar) % chord.tones.length],
+        octave: 2,
+        length: 0.8,
+        velocity: 0.16,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.beat - b.beat);
 }
 
 /** Recorrido de la caja de música por las notas del acorde, en corcheas (sube y baja, como una nana). */

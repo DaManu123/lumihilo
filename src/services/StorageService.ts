@@ -39,6 +39,8 @@ export interface UserSettings {
   hasSeenLightsTip: boolean;
   /** Ya se le avisó de qué son las piedras de Luces. */
   hasSeenStonesTip: boolean;
+  /** Ya se le explicó cómo se juega Hilos. */
+  hasSeenFlowTip: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   puzzle: 'circuits',
   hasSeenLightsTip: false,
   hasSeenStonesTip: false,
+  hasSeenFlowTip: false,
 };
 
 export interface StorageService {

@@ -1,6 +1,7 @@
 import { LevelParams } from './types';
 import { DIFFICULTY_TIERS } from './adaptive';
 import { SkinId, sanitizeUnlockedSkins } from './skins';
+import type { PuzzleType } from './puzzles';
 
 /**
  * Progreso persistente del jugador (Fase 4): nivel actual, Chispas, estadísticas, racha y reto diario.
@@ -31,6 +32,8 @@ export interface PlayerProgress {
   currentLevel: number;
   /** Nivel por el que va en el puzzle Luces (el de Circuitos es `currentLevel`). */
   lightsLevel: number;
+  /** Nivel en el que va el jugador en el puzzle Hilos. */
+  flowLevel: number;
   sparks: number;
   stats: PlayerStats;
   streak: StreakState;
@@ -38,6 +41,8 @@ export interface PlayerProgress {
   lastDailyCompleted: string | null;
   /** Último día en que se completó el reto diario de Luces (cada puzzle tiene el suyo). */
   lastLightsDailyCompleted: string | null;
+  /** Último día en que se completó el reto diario de Hilos. */
+  lastFlowDailyCompleted: string | null;
   /** Aspectos comprados (el inicial siempre está disponible y no se guarda). */
   unlockedSkins: SkinId[];
 }
@@ -47,11 +52,13 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
     seedBase: seedBase >>> 0,
     currentLevel: 1,
     lightsLevel: 1,
+    flowLevel: 1,
     sparks: STARTING_SPARKS,
     stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, bestTimeByTier: {} },
     streak: { current: 0, best: 0, lastActiveDate: null },
     lastDailyCompleted: null,
     lastLightsDailyCompleted: null,
+    lastFlowDailyCompleted: null,
     unlockedSkins: [],
   };
 }
@@ -91,6 +98,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
     seedBase: toInt(r.seedBase, base.seedBase) >>> 0,
     currentLevel: toInt(r.currentLevel, 1, 1),
     lightsLevel: toInt(r.lightsLevel, 1, 1),
+    flowLevel: toInt(r.flowLevel, 1, 1),
     sparks: toInt(r.sparks, STARTING_SPARKS),
     stats: {
       levelsSolved: toInt(stats.levelsSolved, 0),
@@ -105,6 +113,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
     },
     lastDailyCompleted: toDateKey(r.lastDailyCompleted),
     lastLightsDailyCompleted: toDateKey(r.lastLightsDailyCompleted),
+    lastFlowDailyCompleted: toDateKey(r.lastFlowDailyCompleted),
     unlockedSkins: sanitizeUnlockedSkins(r.unlockedSkins),
   };
 }
@@ -253,11 +262,31 @@ export interface LevelOutcome {
   sparksEarned: number;
   hintsUsed: number;
   isDaily: boolean;
-  /** El reto diario completado es el de Luces (lleva su propia fecha de «hecho hoy»). */
-  lightsDaily?: boolean;
+  /** Puzzle del reto diario completado (cada puzzle lleva su propia fecha de «hecho hoy»); Circuitos si no se indica. */
+  dailyPuzzle?: PuzzleType;
   today: string;
   /** Clave del récord de tiempo; por defecto, el nivel de habilidad (el puzzle Luces usa la suya). */
   recordKey?: string;
+}
+
+/** Último día en que se completó el reto diario de un puzzle. */
+export function lastDailyOf(progress: PlayerProgress, puzzle: PuzzleType): string | null {
+  return puzzle === 'lights' ? progress.lastLightsDailyCompleted : puzzle === 'flow' ? progress.lastFlowDailyCompleted : progress.lastDailyCompleted;
+}
+
+/** Nivel en el que va el jugador en un puzzle. */
+export function levelOf(progress: PlayerProgress, puzzle: PuzzleType): number {
+  return puzzle === 'lights' ? progress.lightsLevel : puzzle === 'flow' ? progress.flowLevel : progress.currentLevel;
+}
+
+/** Copia del progreso con el nivel de un puzzle cambiado. */
+export function withLevel(progress: PlayerProgress, puzzle: PuzzleType, level: number): PlayerProgress {
+  return puzzle === 'lights' ? { ...progress, lightsLevel: level } : puzzle === 'flow' ? { ...progress, flowLevel: level } : { ...progress, currentLevel: level };
+}
+
+/** Semilla del reto diario de Hilos (distinta de las de Circuitos y Luces). */
+export function dailyFlowSeed(key: string): number {
+  return fnv1a(`puzzle-adaptativo:daily-flow:${key}`);
 }
 
 /** Aplica el resultado de un nivel resuelto al progreso (estadísticas, Chispas, racha y reto diario). */
@@ -271,7 +300,8 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
     bestTimeByTier[key] = Math.max(1, Math.floor(outcome.elapsedSeconds));
   }
 
-  const lastDaily = outcome.lightsDaily ? progress.lastLightsDailyCompleted : progress.lastDailyCompleted;
+  const dailyPuzzle = outcome.dailyPuzzle ?? 'circuits';
+  const lastDaily = lastDailyOf(progress, dailyPuzzle);
   const firstDailyToday = outcome.isDaily && lastDaily !== outcome.today;
 
   return {
@@ -284,8 +314,9 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
       bestTimeByTier,
     },
     streak: registerActivity(progress.streak, outcome.today),
-    lastDailyCompleted: firstDailyToday && !outcome.lightsDaily ? outcome.today : progress.lastDailyCompleted,
-    lastLightsDailyCompleted: firstDailyToday && outcome.lightsDaily ? outcome.today : progress.lastLightsDailyCompleted,
+    lastDailyCompleted: firstDailyToday && dailyPuzzle === 'circuits' ? outcome.today : progress.lastDailyCompleted,
+    lastLightsDailyCompleted: firstDailyToday && dailyPuzzle === 'lights' ? outcome.today : progress.lastLightsDailyCompleted,
+    lastFlowDailyCompleted: firstDailyToday && dailyPuzzle === 'flow' ? outcome.today : progress.lastFlowDailyCompleted,
   };
 }
 

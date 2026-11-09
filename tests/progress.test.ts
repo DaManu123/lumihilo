@@ -10,6 +10,10 @@ import {
   currentStreak,
   dailySeed,
   dailyLightsSeed,
+  dailyFlowSeed,
+  lastDailyOf,
+  levelOf,
+  withLevel,
   dailyTier,
   dailyParams,
   levelSeed,
@@ -189,7 +193,7 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
 
     it('cada puzzle tiene su reto diario: los dos cuentan el mismo día y cada uno solo una vez', () => {
       const circuits = { ...outcome, isDaily: true };
-      const lights = { ...outcome, isDaily: true, lightsDaily: true };
+      const lights = { ...outcome, isDaily: true, dailyPuzzle: 'lights' as const };
       let p = applyLevelOutcome(createDefaultProgress(1), circuits);
       expect(p.lastDailyCompleted).toBe('2026-11-06');
       expect(p.lastLightsDailyCompleted).toBeNull();
@@ -200,6 +204,24 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
       expect(p.stats.dailyCompleted).toBe(2);
       expect(sanitizeProgress({ lastLightsDailyCompleted: '2026-11-06' }, 1).lastLightsDailyCompleted).toBe('2026-11-06');
       expect(sanitizeProgress({}, 1).lastLightsDailyCompleted).toBeNull();
+    });
+
+    it('Hilos tiene su propio nivel y su propio reto diario', () => {
+      const flow = { ...outcome, isDaily: true, dailyPuzzle: 'flow' as const };
+      let p = applyLevelOutcome(createDefaultProgress(1), flow);
+      expect(p.lastFlowDailyCompleted).toBe('2026-11-06');
+      expect(p.lastDailyCompleted).toBeNull();
+      expect(p.lastLightsDailyCompleted).toBeNull();
+      p = applyLevelOutcome(p, flow);
+      expect(p.stats.dailyCompleted).toBe(1);
+      expect(lastDailyOf(p, 'flow')).toBe('2026-11-06');
+      expect(lastDailyOf(p, 'circuits')).toBeNull();
+      expect(levelOf(withLevel(p, 'flow', 7), 'flow')).toBe(7);
+      expect(levelOf(withLevel(p, 'flow', 7), 'circuits')).toBe(p.currentLevel);
+      expect(sanitizeProgress({ flowLevel: 4, lastFlowDailyCompleted: '2026-11-06' }, 1)).toMatchObject({ flowLevel: 4, lastFlowDailyCompleted: '2026-11-06' });
+      expect(sanitizeProgress({}, 1).flowLevel).toBe(1);
+      expect(dailyFlowSeed('2026-11-06')).not.toBe(dailyLightsSeed('2026-11-06'));
+      expect(dailyFlowSeed('2026-11-06')).not.toBe(dailySeed('2026-11-06'));
     });
 
     it('la semilla del reto de Luces es estable, depende del día y no coincide con la de Circuitos', () => {
