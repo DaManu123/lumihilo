@@ -4,6 +4,8 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.2] - 2026-11-09
+
 ### Añadido
 - Sexto aspecto, **Aurora** (1000 Chispas): casillas de cristal con dos esquinas cortadas, nodos en destello de cuatro puntas, cable de cortina de aurora (velo translúcido con hebras verde y violeta) y fondo de cortinas que ondulan sobre un cielo estrellado. La tienda ajusta el alto de las filas para que quepan las seis.
 
