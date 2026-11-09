@@ -153,7 +153,24 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease bundleRelease
+          ./gradlew --no-daemon assembleRelease
+
+      # El APK (GitHub) busca versiones nuevas en GitHub; el AAB (Google Play) no: lo gestiona la tienda.
+      - name: Recompilar el juego para Google Play y generar el AAB
+        working-directory: ${{ github.workspace }}
+        env:
+          UPDATE_SOURCE: play
+          APP_VERSION: ${{ env.VERSION }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          npm run build
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
 
       - name: Verificar el APK (firma, versión, juego y plugins)
         run: |
@@ -176,6 +193,11 @@ jobs:
           grep -q "@capacitor/haptics" "$RUNNER_TEMP/plugins.json" \
             || { echo "::error::El APK no registra el plugin de vibración"; exit 1; }
 
+          echo "== El APK busca versiones nuevas en GitHub"
+          unzip -p "$APK" 'assets/public/assets/*.js' > "$RUNNER_TEMP/apk-js.txt"
+          grep -q "api.github.com" "$RUNNER_TEMP/apk-js.txt" \
+            || { echo "::error::El APK no lleva el aviso de versión de GitHub"; exit 1; }
+
           mkdir -p out
           cp "$APK" "out/Lumihilo-$VERSION-android.apk"
           ls -la out
@@ -192,6 +214,13 @@ jobs:
             || { echo "::error::El AAB no contiene el juego"; exit 1; }
           unzip -l "$AAB" | grep -q "base/manifest/AndroidManifest.xml" \
             || { echo "::error::El AAB no tiene manifiesto"; exit 1; }
+
+          echo "== El AAB no busca versiones en GitHub (lo gestiona Google Play)"
+          unzip -p "$AAB" 'base/assets/public/assets/*.js' > "$RUNNER_TEMP/aab-js.txt"
+          [ -s "$RUNNER_TEMP/aab-js.txt" ] || { echo "::error::No se encontró el juego dentro del AAB"; exit 1; }
+          if grep -q "api.github.com" "$RUNNER_TEMP/aab-js.txt"; then
+            echo "::error::El AAB lleva el aviso de versión de GitHub: debe compilarse con UPDATE_SOURCE=play"; exit 1
+          fi
 
           cp "$AAB" "out/Lumihilo-$VERSION-android.aab"
           ls -la out

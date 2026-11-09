@@ -73,12 +73,11 @@ La app de Android y la de escritorio buscan, poco después de abrirse, una versi
 
 La lista de versiones sale de dos fuentes, en este orden: `https://damanu123.github.io/lumihilo/releases.json` (un archivo pequeño que el flujo `pages.yml` regenera con cada fusión a `main` y al terminar cada «Release», sin límite de consultas) y, si falla, la API de GitHub. Las betas son *prereleases*, por eso se lee la lista y no `/releases/latest`. Tras publicar una versión, el archivo se actualiza cuando termina el flujo «Publicar la web» que lanza el «Release» (unos minutos).
 
-**Al publicar en Google Play hay que:**
-1. Cambiar `UPDATE_SOURCE` a `'play'` en `src/config.ts`: la app deja de consultar GitHub y no pregunta nada.
-2. Opcional: añadir las *actualizaciones dentro de la app* de Google Play (Play Core / In-App Updates) en un servicio nuevo que implemente `UpdateService`.
-3. Revisar la política de privacidad (`docs/politica-de-privacidad.md`, `landing/privacidad.html`, `landing/en/privacy.html` y el modal de `landing/index.html`): el párrafo del aviso de versión ya dice que se sustituye por Play.
+**Para Google Play no hay que cambiar nada a mano:** `UPDATE_SOURCE` se decide al compilar (variable de entorno `UPDATE_SOURCE=play`, o `npm run build:play` en local). El flujo de publicación compila el APK con `'github'` y, aparte, el AAB con `'play'` (la app deja de consultar GitHub y no pregunta nada), y comprueba que el APK sí lleva el aviso de GitHub y el AAB no. Quedan por hacer:
+1. Opcional: añadir las *actualizaciones dentro de la app* de Google Play (Play Core / In-App Updates) en un servicio nuevo que implemente `UpdateService`.
+2. Revisar la política de privacidad (`docs/politica-de-privacidad.md`, `landing/privacidad.html`, `landing/en/privacy.html` y el modal de `landing/index.html`): el párrafo del aviso de versión ya dice que se sustituye por Play.
 
-Si se sigue repartiendo el APK por GitHub a la vez que Play, las builds de Play deben salir con `'play'` y las de GitHub con `'github'`.
+Si se sigue repartiendo el APK por GitHub a la vez que Play, ya salen cada uno con su fuente (el APK con `'github'`, el AAB con `'play'`).
 
 ## El archivo `.aab` para Google Play
 

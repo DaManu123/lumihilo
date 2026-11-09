@@ -1,7 +1,7 @@
 {
   "name": "lumihilo",
   "private": true,
-  "version": "0.2.0-beta.5",
+  "version": "0.2.0-beta.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:play": "UPDATE_SOURCE=play npm run build",
     "cap:sync": "npm run build && npx cap sync android",
     "test:e2e": "node e2e/run.mjs",
     "test:audio": "node e2e/run.mjs --audio",
