@@ -36,6 +36,8 @@ export interface PlayerProgress {
   streak: StreakState;
   /** Último día en que se completó el reto diario (solo cuenta la primera vez de cada día). */
   lastDailyCompleted: string | null;
+  /** Último día en que se completó el reto diario de Luces (cada puzzle tiene el suyo). */
+  lastLightsDailyCompleted: string | null;
   /** Aspectos comprados (el inicial siempre está disponible y no se guarda). */
   unlockedSkins: SkinId[];
 }
@@ -49,6 +51,7 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
     stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, bestTimeByTier: {} },
     streak: { current: 0, best: 0, lastActiveDate: null },
     lastDailyCompleted: null,
+    lastLightsDailyCompleted: null,
     unlockedSkins: [],
   };
 }
@@ -101,6 +104,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
       lastActiveDate: toDateKey(streak.lastActiveDate),
     },
     lastDailyCompleted: toDateKey(r.lastDailyCompleted),
+    lastLightsDailyCompleted: toDateKey(r.lastLightsDailyCompleted),
     unlockedSkins: sanitizeUnlockedSkins(r.unlockedSkins),
   };
 }
@@ -164,6 +168,11 @@ function fnv1a(text: string): number {
 /** Semilla del reto diario: la misma para todos los jugadores que compartan la fecha. */
 export function dailySeed(key: string): number {
   return fnv1a(`puzzle-adaptativo:daily:${key}`);
+}
+
+/** Semilla del reto diario de Luces (distinta de la de Circuitos para que no se parezcan). */
+export function dailyLightsSeed(key: string): number {
+  return fnv1a(`puzzle-adaptativo:daily-lights:${key}`);
 }
 
 /** Tier del reto diario según el día de la semana (0 = domingo): sube de lunes a sábado. */
@@ -244,6 +253,8 @@ export interface LevelOutcome {
   sparksEarned: number;
   hintsUsed: number;
   isDaily: boolean;
+  /** El reto diario completado es el de Luces (lleva su propia fecha de «hecho hoy»). */
+  lightsDaily?: boolean;
   today: string;
   /** Clave del récord de tiempo; por defecto, el nivel de habilidad (el puzzle Luces usa la suya). */
   recordKey?: string;
@@ -260,7 +271,8 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
     bestTimeByTier[key] = Math.max(1, Math.floor(outcome.elapsedSeconds));
   }
 
-  const firstDailyToday = outcome.isDaily && progress.lastDailyCompleted !== outcome.today;
+  const lastDaily = outcome.lightsDaily ? progress.lastLightsDailyCompleted : progress.lastDailyCompleted;
+  const firstDailyToday = outcome.isDaily && lastDaily !== outcome.today;
 
   return {
     ...progress,
@@ -272,7 +284,8 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
       bestTimeByTier,
     },
     streak: registerActivity(progress.streak, outcome.today),
-    lastDailyCompleted: firstDailyToday ? outcome.today : progress.lastDailyCompleted,
+    lastDailyCompleted: firstDailyToday && !outcome.lightsDaily ? outcome.today : progress.lastDailyCompleted,
+    lastLightsDailyCompleted: firstDailyToday && outcome.lightsDaily ? outcome.today : progress.lastLightsDailyCompleted,
   };
 }
 

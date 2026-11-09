@@ -1,3 +1,4 @@
+import { dailyLightsSeed, dailyTier } from '../src/core/progress';
 import { describe, it, expect } from 'vitest';
 import {
   cloneGrid, createGrid, generateLights, isAllLit, lightsHint, lightsParamsForTier, litCount, playableCount, solveLights, toggleLights,
@@ -108,6 +109,19 @@ describe('Luces: generador y solver', () => {
     const level = generateLights({ size: 5, scrambles: 20, blocked: 0 }, 9);
     expect(level.minTaps).toBeLessThanOrEqual(20);
     expect(solveLights(level.initial)!.length).toBe(level.minTaps);
+  });
+});
+
+describe('Luces: reto diario', () => {
+  it('todos los días de la semana dan un reto con piedras, resoluble y siempre el mismo', () => {
+    for (let day = 1; day <= 60; day++) {
+      const key = `2026-${String(1 + Math.floor((day - 1) / 28)).padStart(2, '0')}-${String(1 + ((day - 1) % 28)).padStart(2, '0')}`;
+      const params = lightsParamsForTier(dailyTier(key));
+      const level = generateLights(params, dailyLightsSeed(key));
+      expect(level.blocked.flat().filter(Boolean).length, key).toBe(params.blocked);
+      expect(solveLights(level.initial, level.blocked), key).not.toBeNull();
+      expect(generateLights(params, dailyLightsSeed(key))).toEqual(level);
+    }
   });
 });
 

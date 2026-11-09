@@ -4,6 +4,9 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- **Reto diario de Luces:** con Luces activo, el botón «Diario» abre el reto de Luces del día (igual para todos, siempre con piedras y dificultad según el día de la semana, como el de Circuitos). Cada puzzle tiene su reto: se pueden hacer los dos el mismo día, cada uno paga doble la primera vez, y el botón marca «hecho hoy» según el puzzle activo. Ya no cambia de puzzle al tocarlo desde Luces.
+
 ## [0.2.0-beta.4] - 2026-11-09
 
 ### Añadido
