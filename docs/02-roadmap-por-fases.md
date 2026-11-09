@@ -11,7 +11,7 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 **Objetivo:** dejar el terreno listo y arrancar los trámites que tardan.
 
 - [ ] Elegir mecánica del MVP (recomendada: rotar tuberías) y nombre provisional
-- [ ] Decidir audiencia declarada (A: 13+ · B: incluye niños), ver `01`
+- [x] Decidir audiencia declarada: **13+** (decidido el 2026-11-09), ver `01`
 - [ ] Crear repo, ramas (`main`, `dev`) y convención de commits
 - [ ] Proyecto base: Vite + TypeScript + Phaser 3
 - [ ] Añadir Capacitor y generar proyecto `android/`; correr "hola mundo" en un teléfono real
@@ -166,7 +166,7 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 - [x] **Tienda de ventajas cosméticas:** desbloqueo de skins y temas visuales adicionales (Cyberpunk, Matrix, Solar) usando las Chispas acumuladas (hecho: Estadísticas → Aspectos)
 - [x] Segundo módulo de puzzle: **Luces** (`src/core/lights.ts`, `src/core/puzzles.ts`; se elige en Estadísticas → Puzzle)
 - [ ] Opción "quitar anuncios" con compra única (Google Play Billing)
-- [ ] Evaluar iOS (requiere Mac y cuenta de Apple Developer)
+- [ ] ~~Evaluar iOS~~ (descartado por ahora: no hay Mac ni dispositivo para probarlo; se retoma si cambia)
 - [ ] Localización (español/inglés al menos)
 
 ---

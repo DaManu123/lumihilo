@@ -4,6 +4,8 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.1.0-beta.10] - 2026-11-09
+
 ### Añadido
 - **Segundo puzzle: Luces.** Tocas una casilla y cambia su luz y la de sus cuatro vecinas; hay que dejar todo el tablero encendido. Cada nivel se genera siempre con solución (parte del tablero resuelto), el tamaño sube con tu nivel de habilidad (de 3×3 a 6×6) y el mínimo de toques y las pistas salen de resolver el sistema sobre GF(2). Se elige en Estadísticas → Puzzle. Tiene nivel propio, récords propios, deshacer y pistas (10 Chispas), usa los aspectos, el tema claro y el alto contraste, y paga Chispas como Circuitos. El reto diario sigue siendo de Circuitos.
 

@@ -30,7 +30,9 @@ Textos, icono, gráfico y capturas: `docs/store/ficha.md`. Categoría **Juegos �
 | **Apps gubernamentales / financieras / de salud** | No. |
 | **Funciones de noticias / COVID** | No. |
 
-## Audiencia objetivo (decisión pendiente, #2)
+## Audiencia objetivo (decidida: 13 años en adelante)
+
+**Decisión del 2026-11-09: Opción A.** En Play Console, declarar que la app **no** está dirigida a menores de 13. Las opciones que se barajaron:
 
 - **Opción A, 13 años en adelante:** más sencilla. Sin requisitos de Familias. Es la recomendada para empezar, y la audiencia se puede ampliar después.
 - **Opción B, incluye menores de 13:** aplica la política de Familias (hoy no hay anuncios ni datos, así que se cumple casi todo, pero habría que respetarla también si luego se añaden anuncios: SDKs autocertificados y tratamiento dirigido a menores).
