@@ -4,6 +4,9 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Cambiado
+- **Fuente de actualizaciones por build:** `UPDATE_SOURCE` ya no se edita a mano en el código: se decide al compilar (`UPDATE_SOURCE=play`, o `npm run build:play`). El flujo de publicación compila el APK de GitHub con `'github'` y el AAB de Google Play con `'play'`, y verifica que cada uno lleva lo que debe.
+
 ## [0.2.0-beta.5] - 2026-11-09
 
 ### Añadido

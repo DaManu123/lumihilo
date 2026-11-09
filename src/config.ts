@@ -19,6 +19,7 @@ export const RELEASES_FEEDS: readonly string[] = [
  * De dónde llegan las actualizaciones:
  * - 'github': se compara con la última versión publicada en GitHub (betas de APK, Windows y Linux).
  * - 'play': las gestiona Google Play (actualizaciones dentro de la app); el juego no busca nada por su cuenta.
- * Al publicar en Play Store hay que cambiarlo a 'play' (ver docs/08-publicar-versiones.md).
+ * Se decide al compilar con la variable de entorno `UPDATE_SOURCE` (`npm run build:play`); sin ella, 'github'.
+ * El flujo de publicación ya compila el AAB (el de Google Play) con 'play' y el APK (el de GitHub) con 'github'.
  */
-export const UPDATE_SOURCE: 'github' | 'play' = 'github';
+export const UPDATE_SOURCE: 'github' | 'play' = typeof __UPDATE_SOURCE__ === 'string' && __UPDATE_SOURCE__ === 'play' ? 'play' : 'github';
