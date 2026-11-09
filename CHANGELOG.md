@@ -6,9 +6,6 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [0.1.0-beta.9] - 2026-11-09
 
-### Mejorado
-- Los aspectos Cyberpunk, Matrix y Solar ya no solo cambian de color: cada uno tiene su forma de casilla, de nodo y de cable, y su propio fondo (cuadrícula con barrido, lluvia de código, órbitas con rayos). Las muestras de la tienda enseñan esas formas. Con alto contraste el fondo se atenúa y se queda quieto; con las animaciones desactivadas también.
-
 ### Añadido
 - **Aviso de versión nueva** (APK y escritorio): al abrir el juego se busca una versión más nueva en GitHub y, si la hay, se pregunta una sola vez por versión si quieres actualizar; con «Ahora no» sigues jugando. La web no consulta nada. Al pasar a Google Play basta con cambiar `UPDATE_SOURCE` a `'play'` (ver `docs/08`). La política de privacidad lo explica.
 - Quinto aspecto, **Océano**: casillas en píldora, nodos de burbuja, cable en onda, olas con haces de luz y burbujas que suben.
