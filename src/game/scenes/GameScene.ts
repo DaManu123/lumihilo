@@ -117,9 +117,10 @@ import {
   computeHudLayout,
   computeBoardGeometry,
 } from '../layout';
-import { storage, feedback, UserSettings, RotationDirection, createUpdateService } from '../../services';
+import { storage, feedback, UserSettings, RotationDirection, createUpdateService, UpdateService } from '../../services';
 import { APP_VERSION } from '../../config';
 import { UpdateInfo, isUpdateAvailable } from '../../core/updates';
+import { parseLastCheck, retryDelay, serializeLastCheck, shouldRecheck } from '../../core/updateRetry';
 import { APP_NAME } from '../../config';
 
 interface CellView {
@@ -197,6 +198,13 @@ const GLOW_STEPS = 8;
  */
 /** El aviso de versión nueva sale una vez cada vez que se abre la app (no cada vez que la escena se reconstruye). */
 let updateOfferedThisRun = false;
+/** Estado de la comprobación automática de versión (vive mientras la app esté abierta, aunque la escena se recree). */
+let updateCheckInFlight = false;
+let updateFailures = 0;
+let lastUpdateAttemptAt: number | null = null;
+let lastUpdateFailed = false;
+let updateRetryTimer: number | undefined;
+const UPDATE_CHECK_KEY = 'update_last_check';
 
 const cellTextureKeys = new Set<string>();
 let cellTexturePrefix = '';
@@ -1166,27 +1174,73 @@ export class GameScene extends Phaser.Scene {
    * Busca una versión nueva poco después de abrir el juego y, si la hay, se la ofrece al jugador. Sale **una vez cada
    * vez que se abre la app por completo**: si dice «Ahora no» sigue jugando, y al cerrarla del todo y abrirla otra vez
    * vuelve a preguntar mientras exista una versión más nueva. No molesta durante el tutorial ni con una tarjeta abierta.
+   * Si la consulta falla (red aún dormida en un móvil recién abierto) se reintenta a los 20 y 60 s, y de nuevo al volver
+   * a la app o recuperar la conexión; cada intento deja su resultado guardado (ver `checkUpdatesNow`).
    */
   private scheduleUpdateCheck(): void {
     if (!this.settings.hasSeenTutorial || !this.updates.supported) return;
-    this.time.delayedCall(3000, async () => {
-      if (updateOfferedThisRun) return;
-      const result = await this.updates.check();
-      if (!this.scene.isActive() || updateOfferedThisRun || !isUpdateAvailable(APP_VERSION, result.latest)) return;
-      // Con un aviso o una tarjeta abierta se espera un poco y se vuelve a intentar (unas veces) en vez de perder la oferta
-      let attempts = 0;
-      const offer = () => {
-        if (updateOfferedThisRun || !this.scene.isActive()) return;
-        if (this.overlayOpen() && attempts++ < 20) {
-          this.time.delayedCall(3000, offer);
-          return;
-        }
-        if (this.overlayOpen()) return;
-        updateOfferedThisRun = true;
-        this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
-      };
-      offer();
+    this.time.delayedCall(3000, () => void this.autoCheckUpdates());
+    const again = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (!shouldRecheck(Date.now(), lastUpdateAttemptAt, lastUpdateFailed)) return;
+      void this.autoCheckUpdates();
+    };
+    document.addEventListener('visibilitychange', again);
+    window.addEventListener('online', again);
+    this.events.once('shutdown', () => {
+      document.removeEventListener('visibilitychange', again);
+      window.removeEventListener('online', again);
+      if (updateRetryTimer !== undefined) window.clearTimeout(updateRetryTimer);
+      updateRetryTimer = undefined;
     });
+  }
+
+  private async autoCheckUpdates(): Promise<void> {
+    if (updateOfferedThisRun || updateCheckInFlight || !this.scene.isActive()) return;
+    updateCheckInFlight = true;
+    let result: Awaited<ReturnType<UpdateService['check']>>;
+    try {
+      result = await this.updates.check();
+    } finally {
+      updateCheckInFlight = false;
+    }
+    lastUpdateAttemptAt = Date.now();
+    const failed = !!result.error && !result.latest;
+    lastUpdateFailed = failed;
+    storage.set(UPDATE_CHECK_KEY, serializeLastCheck({ at: lastUpdateAttemptAt, error: failed ? result.error ?? 'sin respuesta' : null }));
+    if (!this.scene.isActive()) return;
+    if (failed) {
+      updateFailures++;
+      const delay = retryDelay(updateFailures);
+      if (delay !== null) {
+        if (updateRetryTimer !== undefined) window.clearTimeout(updateRetryTimer);
+        updateRetryTimer = window.setTimeout(() => void this.autoCheckUpdates(), delay);
+      }
+      return;
+    }
+    updateFailures = 0;
+    if (updateOfferedThisRun || !isUpdateAvailable(APP_VERSION, result.latest)) return;
+    // Con un aviso o una tarjeta abierta se espera un poco y se vuelve a intentar (unas veces) en vez de perder la oferta
+    let attempts = 0;
+    const offer = () => {
+      if (updateOfferedThisRun || !this.scene.isActive()) return;
+      if (this.overlayOpen() && attempts++ < 20) {
+        this.time.delayedCall(3000, offer);
+        return;
+      }
+      if (this.overlayOpen()) return;
+      updateOfferedThisRun = true;
+      this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
+    };
+    offer();
+  }
+
+  /** Resumen de la última comprobación automática, para decírselo al jugador al buscar a mano. */
+  private lastAutoCheckText(): string {
+    const last = parseLastCheck(storage.get(UPDATE_CHECK_KEY));
+    if (!last) return t('Aún no se ha comprobado sola.');
+    const time = new Date(last.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return last.error ? t('La última comprobación automática ({0}) falló: {1}.', time, last.error) : t('La última comprobación automática ({0}) salió bien.', time);
   }
 
   /** «Buscar actualizaciones» en Ajustes: siempre responde, con la oferta, con «estás al día» o con el motivo del fallo. */
@@ -1199,7 +1253,7 @@ export class GameScene extends Phaser.Scene {
     } else if (isUpdateAvailable(APP_VERSION, result.latest)) {
       this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
     } else {
-      this.showToast(t('Ya tienes la última versión ({0}).', APP_VERSION));
+      this.showToast(t('Ya tienes la última versión ({0}).', APP_VERSION) + '\n' + this.lastAutoCheckText());
     }
   }
 

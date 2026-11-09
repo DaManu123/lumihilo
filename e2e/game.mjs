@@ -601,6 +601,26 @@ export async function runGameScenarios(out) {
     check('si falla el archivo de la web, usa la API de GitHub', apiHits >= 1 && (await cardOpen(g)), `${apiHits} consultas a la API`);
     await g.close();
 
+    // Si el primer intento falla (red dormida al abrir), al recuperar la conexión vuelve a probar y avisa
+    let feedFails = true;
+    g = await openGame({
+      label: 'actualizacion-reintento', seed: SEEN_TUTORIAL, out, query: '?debug&update',
+      beforeLoad: async (page) => {
+        for (const pattern of ['https://damanu123.github.io/lumihilo/releases.json*', 'https://api.github.com/**']) {
+          await page.route(pattern, (route) => feedFails ? route.fulfill({ status: 503, body: 'no' }) : route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: feed('v99.0.0') }));
+        }
+      },
+    });
+    await settle(g);
+    check('si el primer intento falla no sale el aviso', !(await cardOpen(g)));
+    feedFails = false;
+    await g.page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await g.page.waitForFunction(() => window.__game.scene.scenes.find((sc) => sc.handleCellTap).children.getAll().some((o) => (o.depth ?? 0) >= 100 && o.type !== 'Text'), null, { timeout: 15000 }).catch(() => {});
+    check('al recuperar la conexión reintenta y muestra el aviso', await cardOpen(g));
+    const saved = await g.page.evaluate(() => localStorage.getItem('update_last_check'));
+    check('guarda el resultado de la última comprobación', !!saved && saved.includes('"error":null'), saved);
+    await g.close();
+
     let requests = 0;
     g = await openGame({
       label: 'actualizacion-web',
