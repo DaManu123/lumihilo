@@ -32,6 +32,8 @@ export interface UserSettings {
   language: LanguageSetting;
   /** Aspecto (paleta) equipado; solo se usa si está comprado. */
   skin: SkinId;
+  /** Última versión nueva por la que ya se le preguntó al jugador (el aviso sale una sola vez por versión). */
+  updatePromptedVersion: string;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   animationSpeed: 'normal',
   language: 'auto',
   skin: DEFAULT_SKIN,
+  updatePromptedVersion: '',
 };
 
 export interface StorageService {

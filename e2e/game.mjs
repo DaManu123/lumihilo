@@ -486,12 +486,12 @@ export async function runGameScenarios(out) {
     check('descuenta 150 Chispas', s.progress?.sparks === before - 150, `${before} → ${s.progress?.sparks}`);
     check('queda registrado como comprado', s.progress?.unlockedSkins?.includes('cyberpunk'));
     await g.shot('e17-cyberpunk');
-    await g.tap(...g.pos.skinRow(3), 800);
+    await g.tap(...g.pos.skinRow(4), 800);
     s = await g.state();
     check('comprar Solar también funciona', s.settings?.skin === 'solar' && s.progress.unlockedSkins.includes('solar'));
     await g.tap(...g.pos.skinRow(1), 800);
     s = await g.state();
-    check('volver a un aspecto comprado es gratis', s.settings?.skin === 'cyberpunk' && s.progress.sparks === before - 150 - 400);
+    check('volver a un aspecto comprado es gratis', s.settings?.skin === 'cyberpunk' && s.progress.sparks === before - 150 - 800);
     await g.tap(...g.pos.skinRow(0), 800);
     s = await g.state();
     check('el aspecto inicial se puede volver a equipar', s.settings?.skin === 'filamento');
@@ -514,7 +514,76 @@ export async function runGameScenarios(out) {
     await g.close();
   }
 
+  section('18. Aviso de versión nueva');
+  {
+    const feed = (tag) => JSON.stringify([{ tag_name: tag, html_url: `https://github.com/DaManu123/lumihilo/releases/tag/${tag}`, draft: false }]);
+    const mock = (body, status = 200) => async (page) => {
+      await page.route('https://api.github.com/**', (route) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body }));
+      await page.addInitScript(() => { window.__opened = []; window.open = (url) => { window.__opened.push(url); return null; }; });
+    };
+    const cardOpen = (g) => g.page.evaluate(() => window.__game.scene.scenes.find((sc) => sc.handleCellTap).children.getAll().some((o) => (o.depth ?? 0) >= 100));
+    // En el navegador de pruebas (WebGL por software) el juego corre más lento que el reloj: se espera a que la
+    // comprobación (un temporizador de 3 s del juego) haya terminado de verdad y a que llegue su respuesta.
+    const settle = async (g) => {
+      await g.page.waitForFunction(() => !window.__game.scene.scenes.find((sc) => sc.handleCellTap).time._active.some((e) => e.delay === 3000), null, { timeout: 60000 });
+      await g.page.waitForTimeout(1500);
+    };
+    const open = (body, status) => openGame({ label: 'actualizacion', seed: SEEN_TUTORIAL, out, query: '?debug&update', beforeLoad: mock(body, status) });
+
+    let g = await open(feed('v99.0.0'));
+    await settle(g);
+    check('con una versión más nueva se muestra el aviso', await cardOpen(g));
+    await g.shot('e18-aviso-actualizacion');
+    let s = await g.state();
+    check('queda anotado que ya se preguntó por esa versión', s.settings?.updatePromptedVersion === '99.0.0', `guardado ${s.settings?.updatePromptedVersion}`);
+    await g.tap(...g.pos.updateLater, 500);
+    check('"Ahora no" cierra el aviso y se puede seguir jugando', !(await cardOpen(g)));
+    await g.tap(...g.pos.hint, 450);
+    s = await g.state();
+    check('el juego sigue funcionando tras rechazar', s.progress.sparks < 30);
+    await g.page.reload();
+    await g.page.waitForSelector('canvas');
+    await settle(g);
+    check('no vuelve a preguntar por la misma versión', !(await cardOpen(g)));
+    await g.close();
+
+    g = await open(feed('v99.0.1'));
+    await g.page.evaluate(() => localStorage.setItem('user_settings', JSON.stringify({ hasSeenTutorial: true, updatePromptedVersion: '99.0.0' })));
+    await g.page.reload();
+    await g.page.waitForSelector('canvas');
+    await settle(g);
+    check('pregunta otra vez cuando sale una versión todavía más nueva', await cardOpen(g));
+    await g.tap(...g.pos.updateNow, 500);
+    const opened = await g.page.evaluate(() => window.__opened);
+    check('"Actualizar" abre la página de la versión', opened.length === 1 && opened[0].includes('v99.0.1'), JSON.stringify(opened));
+    await g.close();
+
+    g = await open(feed('v0.0.1'));
+    await settle(g);
+    check('con una versión igual o más vieja no avisa', !(await cardOpen(g)));
+    await g.close();
+
+    g = await open('{"message":"rate limit"}', 403);
+    await settle(g);
+    check('si GitHub no responde bien, no avisa ni rompe nada', !(await cardOpen(g)) && !!(await g.page.$('canvas')));
+    await g.close();
+
+    let requests = 0;
+    g = await openGame({
+      label: 'actualizacion-web',
+      seed: SEEN_TUTORIAL,
+      out,
+      query: '?debug',
+      beforeLoad: async (page) => {
+        await page.route('https://api.github.com/**', (route) => { requests++; route.abort(); });
+      },
+    });
+    await settle(g);
+    check('la versión web normal no consulta nada a GitHub', requests === 0, `${requests} consultas`);
+    await g.close();
+  }
+
   section('Errores de consola durante toda la batería');
-  const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext/i.test(e));
+  const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));
 }

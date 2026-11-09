@@ -79,7 +79,9 @@ import {
   computeHudLayout,
   computeBoardGeometry,
 } from '../layout';
-import { storage, feedback, UserSettings, RotationDirection } from '../../services';
+import { storage, feedback, UserSettings, RotationDirection, createUpdateService } from '../../services';
+import { APP_VERSION } from '../../config';
+import { UpdateInfo, shouldPromptUpdate } from '../../core/updates';
 import { APP_NAME } from '../../config';
 
 interface CellView {
@@ -278,6 +280,7 @@ export class GameScene extends Phaser.Scene {
     this.buildBoard();
     this.updateFlowVisuals();
     this.checkAndShowTutorial();
+    this.scheduleUpdateCheck();
 
     // Cronómetro interno (actualiza cada segundo)
     this.timerEvent = this.time.addEvent({
@@ -301,12 +304,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private backdropObjects: Phaser.GameObjects.GameObject[] = [];
-  private backdropTween?: Phaser.Tweens.Tween;
+  private backdropTweens: Phaser.Tweens.Tween[] = [];
 
   /** Fondo propio del aspecto (cuadrícula, lluvia de código u órbitas). El alto contraste lo atenúa y lo deja quieto. */
   private applyBackdrop(): void {
-    this.backdropTween?.stop();
-    this.backdropTween = undefined;
+    for (const tween of this.backdropTweens) tween.stop();
+    this.backdropTweens = [];
     for (const object of this.backdropObjects) object.destroy();
     this.backdropObjects = [];
     const hc = this.settings.highContrast === true;
@@ -317,7 +320,7 @@ export class GameScene extends Phaser.Scene {
     });
     if (!result) return;
     this.backdropObjects = result.objects;
-    this.backdropTween = result.tween;
+    this.backdropTweens = result.tweens;
   }
 
   /** Cantidad de casillas con energía (para detectar cuándo un giro conecta algo nuevo). */
@@ -1009,6 +1012,60 @@ export class GameScene extends Phaser.Scene {
       originX: 0.5,
     });
     overlay.add([g, text, this.hitZone(rect, onTap)]);
+  }
+
+  /**
+   * Busca una versión nueva poco después de abrir el juego y, si la hay, se lo pregunta al jugador una sola vez por
+   * versión. Si dice que no, se sigue jugando sin más. No molesta durante el tutorial ni con una tarjeta abierta.
+   */
+  private scheduleUpdateCheck(): void {
+    if (!this.settings.hasSeenTutorial) return;
+    const service = createUpdateService();
+    this.time.delayedCall(3000, async () => {
+      const latest = await service.check();
+      if (!this.scene.isActive() || !shouldPromptUpdate(APP_VERSION, latest, this.settings.updatePromptedVersion)) return;
+      if (this.isWon || this.children.getAll().some((o) => ((o as { depth?: number }).depth ?? 0) >= 100)) return; // se vuelve a intentar al abrir otra vez
+      this.settings.updatePromptedVersion = latest!.version;
+      storage.saveSettings(this.settings);
+      this.showUpdateModal(latest!, () => void service.open(latest!));
+    });
+  }
+
+  private showUpdateModal(info: UpdateInfo, onUpdate: () => void): void {
+    const cardH = 620;
+    const { overlay, w } = this.createCard(cardH, 300);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Hay una versión nueva'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    const body = this.uiText(0, -cardH / 2 + 150, t('Ya está disponible Lumihilo {0}. Tú tienes la {1}.', info.version, APP_VERSION), {
+      size: 28,
+      weight: '600',
+      color: THEME.text,
+      wrap: w - 88,
+      originX: 0.5,
+    });
+    body.setOrigin(0.5, 0).setAlign('center').setLineSpacing(8);
+    const note = this.uiText(0, -cardH / 2 + 300, t('Puedes seguir jugando: actualizar es opcional y no volveremos a preguntarte por esta versión.'), {
+      size: 24,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+      originX: 0.5,
+    });
+    note.setOrigin(0.5, 0).setAlign('center').setLineSpacing(6);
+    overlay.add([body, note]);
+
+    const btnW = (w - 88 - 18) / 2;
+    const btnY = cardH / 2 - 84;
+    this.addCardButton(overlay, { x: -(btnW + 18) / 2, y: btnY, w: btnW, h: 100 }, t('Ahora no'), () => overlay.destroy(), false);
+    this.addCardButton(
+      overlay,
+      { x: (btnW + 18) / 2, y: btnY, w: btnW, h: 100 },
+      t('Actualizar'),
+      () => {
+        overlay.destroy();
+        onUpdate();
+      },
+      true
+    );
   }
 
   private checkAndShowTutorial(): void {

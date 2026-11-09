@@ -67,6 +67,17 @@ Android solo instala un APK firmado, y la firma debe ser **siempre la misma** en
 - **`npm run cap:sync`** hay que ejecutarlo en cada copia de trabajo al cambiar los plugins; el flujo de publicación lo hace solo.
 - **Probar la versión de escritorio en local:** `npm run build`, luego `cd desktop && npm install && npm start`. Para generar los instaladores de Linux en local: `cd desktop && npm run dist:linux`.
 
+## Aviso de versión nueva (y el paso a Google Play)
+
+La app de Android y la de escritorio buscan, poco después de abrirse, una versión más nueva en las publicaciones de GitHub (`src/services/UpdateService.ts`). Si la hay, preguntan **una sola vez por versión** («Actualizar» abre la página de descargas, «Ahora no» sigue jugando; queda anotado en `updatePromptedVersion`). La web no consulta nada. Las betas son *prereleases*, por eso se lee la lista de publicaciones y no `/releases/latest`.
+
+**Al publicar en Google Play hay que:**
+1. Cambiar `UPDATE_SOURCE` a `'play'` en `src/config.ts`: la app deja de consultar GitHub y no pregunta nada.
+2. Opcional: añadir las *actualizaciones dentro de la app* de Google Play (Play Core / In-App Updates) en un servicio nuevo que implemente `UpdateService`.
+3. Revisar la política de privacidad (`docs/politica-de-privacidad.md`, `landing/privacidad.html`, `landing/en/privacy.html` y el modal de `landing/index.html`): el párrafo del aviso de versión ya dice que se sustituye por Play.
+
+Si se sigue repartiendo el APK por GitHub a la vez que Play, las builds de Play deben salir con `'play'` y las de GitHub con `'github'`.
+
 ## El archivo `.aab` para Google Play
 
 Cada versión publicada también genera un **Android App Bundle** (`Lumihilo-<versión>-android.aab`), el formato que exige Google Play para apps nuevas. No se adjunta a la versión pública de GitHub: se descarga desde la pestaña **Actions → ejecución de la versión → Artifacts → `aab-android`** (se conserva 30 días).

@@ -12,6 +12,7 @@ export * from './HapticService';
 export * from './AudioService';
 export * from './MusicService';
 export * from './FeedbackService';
+export * from './UpdateService';
 
 /** Sonido y vibración compartidos por todo el juego. */
 const engine = new AudioEngine();

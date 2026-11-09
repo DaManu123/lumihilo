@@ -3,8 +3,10 @@ package com.damanu.lumihilo;
 import android.app.NotificationManager;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
@@ -315,5 +317,26 @@ public class GameHapticsPlugin extends Plugin {
         }
         put(result, "text", text);
         call.resolve(result);
+    }
+
+    /**
+     * Abre en el navegador la página de descargas de una versión nueva. Solo acepta enlaces del repositorio del
+     * juego, para que el plugin no sirva de puerta a otras direcciones.
+     */
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        try {
+            String url = call.getString("url");
+            if (url == null || !url.startsWith("https://github.com/DaManu123/lumihilo/")) {
+                call.reject("Dirección no permitida");
+                return;
+            }
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Throwable t) {
+            call.reject("No se pudo abrir el navegador");
+        }
     }
 }
