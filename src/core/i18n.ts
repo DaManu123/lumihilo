@@ -79,6 +79,16 @@ export const EN: Record<string, string> = {
   'Ajustes': 'Settings',
   'Cerrar': 'Close',
 
+  // Puzzle Luces
+  'Puzzle': 'Puzzle',
+  'Circuitos': 'Circuits',
+  'Luces': 'Lights',
+  'Enciende todo': 'Light it all up',
+  'Cada toque cambia la casilla y sus vecinas': 'Each tap flips the tile and its neighbors',
+  'Todo está encendido.': 'Everything is already lit.',
+  'Todo encendido': 'All lit up',
+  'Toca una casilla: cambia su luz y la de sus vecinas.\nEnciende todo el tablero.': 'Tap a tile: it flips its light and its neighbors\'.\nLight up the whole board.',
+
   // Actualizaciones
   'Hay una versión nueva': 'New version available',
   'Ya está disponible Lumihilo {0}. Tú tienes la {1}.': 'Lumihilo {0} is now available. You have {1}.',

@@ -20,6 +20,7 @@ Conecta el circuito y enciende el hilo de luz. Un puzzle nuevo en cada partida.
 **Descripción completa:**
 Lumihilo es un puzzle de circuitos de luz. Gira las piezas para conectar toda la red y ver cómo el hilo se enciende de punta a punta.
 
+• Dos puzzles: Circuitos (gira las piezas y conecta todo) y Luces (enciende todo el tablero).
 • Un puzzle distinto en cada partida, siempre con solución.
 • La dificultad se ajusta a tu forma de jugar, no a tu edad: ni aburrido ni frustrante.
 • Partidas cortas: cabe en un descanso o en el camino.
@@ -43,6 +44,7 @@ Connect the circuit and light the thread. A brand-new puzzle every game.
 **Full description:**
 Lumihilo is a light-circuit puzzle. Rotate the pieces to connect the whole network and watch the thread light up from end to end.
 
+• Two puzzles: Circuits (rotate pieces and connect everything) and Lights (light up the whole board).
 • A different puzzle every game, always solvable.
 • Difficulty adapts to how you play, not to your age: never boring, never frustrating.
 • Short games: fits a break or a commute.

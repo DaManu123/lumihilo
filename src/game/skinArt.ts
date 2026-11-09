@@ -100,12 +100,14 @@ export function strokeLitLeg(g: G, style: SkinStyle, theme: GameTheme, leg: { dx
     // Onda que nace en el centro y llega al borde de la casilla en calma, para que empalme con la vecina
     const amp = w * 0.7;
     const steps = Math.max(12, Math.round(leg.reach / 4));
+    // Una semionda cada ~1,5 grosores de cable: los tramos cortos llevan menos ondas y no se hacen un nudo
+    const halfPeriods = Math.max(1, Math.round(leg.reach / (w * 1.55)));
     const wave = (width: number, color: number) => {
       g.lineStyle(width, color, 1);
       g.beginPath();
       for (let i = 0; i <= steps; i++) {
         const d = (i / steps) * leg.reach;
-        const off = amp * Math.sin((3 * Math.PI * d) / leg.reach);
+        const off = amp * Math.sin((halfPeriods * Math.PI * d) / leg.reach);
         const x = leg.dx * d - leg.dy * off;
         const y = leg.dy * d + leg.dx * off;
         if (i === 0) g.moveTo(x, y);

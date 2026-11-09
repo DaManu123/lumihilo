@@ -12,7 +12,7 @@ Las Chispas se ganan resolviendo niveles y se gastan en **pistas** (10 cada una)
 | Récord personal de tiempo | +5 |
 | Reto diario, la primera vez de cada día | **el doble** |
 
-Usar pistas quita los bonos de eficiencia y rapidez, y cada pista cuesta 10: por eso quien juega sin ayuda gana varias veces más que quien juega con pistas.
+El puzzle **Luces** paga igual que Circuitos (misma fórmula; sus récords de tiempo son aparte). Usar pistas quita los bonos de eficiencia y rapidez, y cada pista cuesta 10: por eso quien juega sin ayuda gana varias veces más que quien juega con pistas.
 
 ## Perfiles de jugador (por día)
 
