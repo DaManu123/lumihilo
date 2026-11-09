@@ -164,7 +164,7 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 - [ ] Ajustar frecuencia de intersticiales con datos reales
 - [ ] **Leaderboard Global:** integración de Google Play Games Services para competir en el Reto Diario sin servidores propios
 - [x] **Tienda de ventajas cosméticas:** desbloqueo de skins y temas visuales adicionales (Cyberpunk, Matrix, Solar) usando las Chispas acumuladas (hecho: Estadísticas → Aspectos)
-- [ ] Segundo módulo de puzzle (`PuzzleModule`)
+- [x] Segundo módulo de puzzle: **Luces** (`src/core/lights.ts`, `src/core/puzzles.ts`; se elige en Estadísticas → Puzzle)
 - [ ] Opción "quitar anuncios" con compra única (Google Play Billing)
 - [ ] Evaluar iOS (requiere Mac y cuenta de Apple Developer)
 - [ ] Localización (español/inglés al menos)
