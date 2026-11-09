@@ -4,6 +4,11 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.7] - 2026-11-09
+
+### Añadido
+- **Sonido propio de Luces.** La música pasa a ser una **caja de música** (pista «cristal», más lenta y sin batería): con todo apagado casi solo suena un «tic» al empezar cada compás, y cada lámpara encendida añade notas hasta cerrar con un destello; al ganar, cierra con un arpegio de campanitas. Suena sola en Luces sea cual sea el estilo elegido (Swing o Ambiental siguen valiendo en Circuitos). Efectos nuevos: tocar enciende o apaga las lámparas con un arpegio rápido (campanita al encenderse, clic seco al apagarse, más aguda cuanto más a la derecha) y tocar una piedra da un golpe sordo. Medido con la prueba de audio: volumen parecido al ambiental, sin distorsión ni siquiera con el volumen al 200 %.
+
 ## [0.2.0-beta.6] - 2026-11-09
 
 ### Cambiado

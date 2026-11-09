@@ -33,13 +33,19 @@ export function isMusicStyle(value: unknown): value is MusicStyle {
   return typeof value === 'string' && (MUSIC_STYLES as readonly string[]).includes(value);
 }
 
-export const STYLE_TEMPO: Record<MusicStyle, number> = { ambient: TEMPO_BPM, swing: 90 };
+/**
+ * Pistas que puede sonar: las dos que elige el jugador y la «cristal», la caja de música propia del puzzle Luces
+ * (suena sola en Luces, sea cual sea el estilo elegido).
+ */
+export type MusicTrack = MusicStyle | 'cristal';
 
-export function beatSeconds(style: MusicStyle): number {
+export const STYLE_TEMPO: Record<MusicTrack, number> = { ambient: TEMPO_BPM, swing: 90, cristal: 66 };
+
+export function beatSeconds(style: MusicTrack): number {
   return 60 / STYLE_TEMPO[style];
 }
 
-export function barSeconds(style: MusicStyle): number {
+export function barSeconds(style: MusicTrack): number {
   return beatSeconds(style) * BEATS_PER_BAR;
 }
 
@@ -124,8 +130,57 @@ export function chordAt(bar: number, seed: number): Chord {
  * Notas de un compás. `intensity` (0 a 1) es cuánto circuito está encendido: con 0 solo hay colchón,
  * bajo y alguna campanita suelta; con 1 la arpa suena casi en cada corchea.
  */
-export function barEvents(bar: number, intensity: number, seed: number, style: MusicStyle = 'ambient'): MusicEvent[] {
-  return style === 'swing' ? swingBarEvents(bar, intensity, seed) : ambientBarEvents(bar, intensity, seed);
+export function barEvents(bar: number, intensity: number, seed: number, style: MusicTrack = 'ambient'): MusicEvent[] {
+  if (style === 'swing') return swingBarEvents(bar, intensity, seed);
+  if (style === 'cristal') return crystalBarEvents(bar, intensity, seed);
+  return ambientBarEvents(bar, intensity, seed);
+}
+
+/** Recorrido de la caja de música por las notas del acorde, en corcheas (sube y baja, como una nana). */
+const BOX_PATTERN = [0, 1, 2, 3, 2, 1, 3, 2] as const;
+
+/**
+ * Caja de música de Luces: sin batería ni bajo marcado, solo un colchón muy suave, la fundamental y notas de
+ * campanita agudas y cortas. Cada lámpara encendida añade notas: con todo apagado casi solo suena el «tic» del
+ * primer tiempo; con todo encendido, la caja toca casi cada corchea y cierra el compás con un destello ascendente.
+ */
+export function crystalBarEvents(bar: number, intensity: number, seed: number): MusicEvent[] {
+  const level = clamp01(intensity);
+  const chord = chordAt(bar, seed);
+  const rng = mulberry32((seed + Math.imul(bar + 1, 4421)) >>> 0);
+  const events: MusicEvent[] = [];
+
+  // Colchón muy suave y la fundamental, solo en el primer tiempo
+  for (const degree of chord.tones) {
+    events.push({ voice: 'pad', beat: 0, degree, octave: -1, length: 4.4, velocity: 0.3 + 0.08 * level });
+  }
+  events.push({ voice: 'bass', beat: 0, degree: chord.root, octave: -2, length: 3, velocity: 0.38 });
+
+  // «Tic» de la caja: la fundamental aguda al empezar cada compás
+  events.push({ voice: 'bell', beat: 0, degree: chord.root, octave: 1, length: 1.2, velocity: 0.34 });
+
+  // Melodía de la caja: más notas cuanto más encendido
+  const chance = clamp01(0.12 + 0.78 * level);
+  for (let step = 1; step < 8; step++) {
+    if (rng() > chance) continue;
+    events.push({
+      voice: 'bell',
+      beat: step * 0.5,
+      degree: chord.tones[BOX_PATTERN[step] % chord.tones.length],
+      octave: 1,
+      length: 0.9,
+      velocity: 0.22 + 0.16 * rng(),
+    });
+  }
+
+  // Destello final cuando casi todo está encendido
+  if (level > 0.75) {
+    [0, 2, 3].forEach((degree, i) =>
+      events.push({ voice: 'bell', beat: 3.25 + i * 0.25, degree: degree as Degree, octave: 2, length: 0.8, velocity: 0.2 })
+    );
+  }
+
+  return events.sort((a, b) => a.beat - b.beat);
 }
 
 function ambientBarEvents(bar: number, intensity: number, seed: number): MusicEvent[] {

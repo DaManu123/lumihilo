@@ -7,6 +7,11 @@ export interface NoteOptions {
   bright?: boolean;
   /** Retraso en segundos antes de que suene. */
   delaySec?: number;
+  /**
+   * Carácter del sonido: `chime` (por defecto, cristal), `tick` (clic seco y agudo, como apagar una lámpara) o
+   * `thud` (golpe sordo y grave, como tocar una piedra).
+   */
+  kind?: 'chime' | 'tick' | 'thud';
 }
 
 /**
@@ -136,20 +141,25 @@ export class WebAudioService implements AudioService {
     const bus = this.engine.sfxBus;
     if (!ctx || !bus || this.voices >= MAX_VOICES) return;
 
-    const { volume = 0.5, bright = false, delaySec = 0 } = options;
-    const freq = noteFrequency(index);
+    const { volume = 0.5, bright = false, delaySec = 0, kind = 'chime' } = options;
+    const freq = kind === 'thud' ? noteFrequency(index) / 2 : noteFrequency(index);
     const start = ctx.currentTime + delaySec + 0.004;
-    const length = bright ? 0.95 : 0.55;
+    const length = kind === 'thud' ? 0.24 : kind === 'tick' ? 0.13 : bright ? 0.95 : 0.55;
 
     // Voz: seno de cuerpo + triángulo una octava arriba, que le da un timbre de cristal
     const body = ctx.createOscillator();
-    body.type = 'sine';
+    body.type = kind === 'thud' ? 'triangle' : 'sine';
     body.frequency.value = freq;
     const shine = ctx.createOscillator();
     shine.type = 'triangle';
     shine.frequency.value = freq * 2;
     const shineGain = ctx.createGain();
-    shineGain.gain.value = bright ? 0.32 : 0.16;
+    shineGain.gain.value = kind === 'chime' ? (bright ? 0.32 : 0.16) : kind === 'tick' ? 0.5 : 0;
+    // Un golpe sordo cae de tono al instante: así suena a «toc» y no a nota
+    if (kind === 'thud') {
+      body.frequency.setValueAtTime(freq * 1.5, start);
+      body.frequency.exponentialRampToValueAtTime(freq, start + 0.06);
+    }
 
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.0001, start);

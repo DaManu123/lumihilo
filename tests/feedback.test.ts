@@ -26,6 +26,8 @@ class FakeMusic implements MusicPlayer {
   style: MusicStyle | null = null;
   volume: number | null = null;
   setStyle(style: MusicStyle) { this.style = style; }
+  puzzle: 'circuits' | 'lights' | null = null;
+  setPuzzle(puzzle: 'circuits' | 'lights') { this.puzzle = puzzle; }
   setVolume(percent: number) { this.volume = percent; }
 }
 
@@ -69,6 +71,47 @@ describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () =
     expect(chime.index).toBeGreaterThan(turn.index);
     expect(chime.options?.bright).toBe(true);
     expect(haptics.calls).toEqual(['light', 'medium']);
+  });
+
+  it('en Luces cada lámpara suena a su manera: campanita si se enciende, clic seco si se apaga', () => {
+    feedback.lamps([{ row: 1, col: 1, on: true }, { row: 0, col: 1, on: false }, { row: 1, col: 2, on: true }], { row: 1, col: 1 });
+    const [pop, onCenter, off, onRight] = audio.notes;
+    expect(pop.options?.kind).toBe('tick');
+    expect(onCenter.options?.bright).toBe(true);
+    expect(onCenter.index).toBeGreaterThan(noteForCell(1, 1));
+    expect(off.options?.kind).toBe('tick');
+    expect(onRight.options?.bright).toBe(true);
+    // Las notas se escalonan para que suenen como un arpegio y no como un bloque
+    expect(onCenter.options!.delaySec!).toBeLessThan(off.options!.delaySec!);
+    expect(off.options!.delaySec!).toBeLessThan(onRight.options!.delaySec!);
+    expect(haptics.calls).toEqual(['medium']); // dos encendidas y una apagada: más encendidas que apagadas
+  });
+
+  it('en Luces, si se apagan más de las que se encienden, la vibración es ligera', () => {
+    feedback.lamps([{ row: 0, col: 0, on: false }, { row: 0, col: 1, on: false }, { row: 1, col: 0, on: true }], { row: 0, col: 0 });
+    expect(haptics.calls).toEqual(['light']);
+  });
+
+  it('tocar una piedra suena a golpe sordo y vibra ligero', () => {
+    feedback.stone();
+    expect(audio.notes).toHaveLength(1);
+    expect(audio.notes[0].options?.kind).toBe('thud');
+    expect(haptics.calls).toEqual(['light']);
+  });
+
+  it('el puzzle activo se pasa a la música', () => {
+    feedback.setPuzzle('lights');
+    expect(music.puzzle).toBe('lights');
+    feedback.setPuzzle('circuits');
+    expect(music.puzzle).toBe('circuits');
+  });
+
+  it('con el sonido apagado, Luces no suena pero sí vibra', () => {
+    feedback.configure({ sound: false });
+    feedback.lamps([{ row: 0, col: 0, on: true }], { row: 0, col: 0 });
+    feedback.stone();
+    expect(audio.notes).toHaveLength(0);
+    expect(haptics.calls).toEqual(['medium', 'light']);
   });
 
   it('deshacer suena más suave que girar y no vibra', () => {

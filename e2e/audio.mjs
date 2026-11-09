@@ -93,4 +93,27 @@ export async function runAudioCheck() {
     check('y se sigue oyendo claramente (volumen medio por encima de −40 dBFS)', mix.rms > -40, `${mix.rms.toFixed(1)} dBFS`);
     await g.close();
   }
+
+  section('Luces: la caja de música y sus efectos');
+  {
+    const seed = { hasSeenTutorial: true, hasSeenLightsTip: true, puzzle: 'lights' };
+    let g = await openGame({ label: 'audio-luces-musica', seed: { user_settings: { ...seed, soundEnabled: false } } });
+    await g.tap(360, 1100, 100);
+    await g.page.waitForTimeout(3500);
+    const box = await sample(g, 'Música de Luces (caja de música) al 100 %, 14 s', 14000);
+    check('Luces: la caja de música se oye (volumen medio entre −52 y −24 dBFS)', box.rms > -52 && box.rms < -24, `${box.rms.toFixed(1)} dBFS`);
+    check('Luces: sin distorsión (pico por debajo de −3 dBFS)', box.peak < -3, `${box.peak.toFixed(1)} dBFS`);
+    check('Luces: no suena mucho más fuerte que el estilo ambiental (diferencia menor de 8 dB)', Math.abs(box.rms - levels.ambient.rms) < 8, `${(box.rms - levels.ambient.rms).toFixed(1)} dB`);
+    await g.close();
+
+    g = await openGame({ label: 'audio-luces-mezcla', seed: { user_settings: { ...seed, musicVolume: 200 } } });
+    await g.tap(360, 1100, 100);
+    await g.page.waitForTimeout(3500);
+    const mix = await sample(g, 'Música al 200 % + toques rápidos en Luces, 8 s', 8000, async () => {
+      await g.tap(100 + Math.random() * 520, 650 + Math.random() * 500, 0);
+    }, 40);
+    check('Luces: la mezcla más fuerte posible no distorsiona (pico por debajo de −1 dBFS)', mix.peak < -1, `${mix.peak.toFixed(1)} dBFS`);
+    check('Luces: y se sigue oyendo claramente (volumen medio por encima de −40 dBFS)', mix.rms > -40, `${mix.rms.toFixed(1)} dBFS`);
+    await g.close();
+  }
 }
