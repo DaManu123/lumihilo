@@ -2,6 +2,7 @@ import {
   CHORDS,
   MusicEvent,
   MusicStyle,
+  MusicTrack,
   barEvents,
   barSeconds,
   beatSeconds,
@@ -22,6 +23,8 @@ export interface MusicPlayer {
   resolve(): void;
   /** Estilo de la música; si ya suena, cambia en el siguiente compás. */
   setStyle(style: MusicStyle): void;
+  /** Puzzle que se juega: en Luces suena la caja de música propia («cristal») en vez del estilo elegido. */
+  setPuzzle(puzzle: 'circuits' | 'lights'): void;
   /** Volumen en porcentaje: 100 es el estándar del juego (0 = silencio, 200 = el doble). */
   setVolume(percent: number): void;
 }
@@ -32,6 +35,7 @@ export class NoopMusicPlayer implements MusicPlayer {
   setIntensity(): void {}
   resolve(): void {}
   setStyle(): void {}
+  setPuzzle(): void {}
   setVolume(): void {}
 }
 
@@ -56,6 +60,7 @@ export class WebMusicPlayer implements MusicPlayer {
   private intensity = 0;
   private quietBars = 0;
   private style: MusicStyle = 'swing';
+  private puzzle: 'circuits' | 'lights' = 'circuits';
   private volume = 1;
   /** Vaivén suave de afinación, como el de una cinta antigua: da calidez al teclado y a la melodía. */
   private wobble: { lfo: OscillatorNode; depth: GainNode } | null = null;
@@ -122,6 +127,18 @@ export class WebMusicPlayer implements MusicPlayer {
     this.bar = 0;
   }
 
+  setPuzzle(puzzle: 'circuits' | 'lights'): void {
+    if (puzzle === this.puzzle) return;
+    this.puzzle = puzzle;
+    // La caja de música de Luces y el estilo elegido son pistas distintas: la nueva empieza su frase
+    this.bar = 0;
+  }
+
+  /** Pista que suena ahora: la caja de música en Luces, y el estilo elegido en Circuitos. */
+  private get track(): MusicTrack {
+    return this.puzzle === 'lights' ? 'cristal' : this.style;
+  }
+
   setVolume(percent: number): void {
     this.volume = musicGainScale(percent);
     const ctx = this.engine.context();
@@ -139,7 +156,11 @@ export class WebMusicPlayer implements MusicPlayer {
     this.target = 0.1;
     this.quietBars = 2;
     const t = ctx.currentTime + 0.05;
-    if (this.style === 'swing') {
+    if (this.track === 'cristal') {
+      // Arpegio ascendente de campanitas: la caja de música cierra el nivel
+      ([0, 2, 3, 1] as Degree[]).forEach((degree, i) => this.bell(degreeFrequency(degree, 1), t + i * 0.16, 3, 0.5, true));
+      for (const degree of CHORDS.C.tones) this.pad(degree, 0, t, 5 * beatSeconds('cristal'), 0.4, 0.3);
+    } else if (this.track === 'swing') {
       for (const degree of [2, 3, 4, 1] as Degree[]) this.keys(degreeFrequency(degree, 0), t, 3.2, 0.55);
       this.swingBass(degreeFrequency(0, -1), t, 2.4, 0.7);
       this.kick(t, 0.5);
@@ -156,7 +177,7 @@ export class WebMusicPlayer implements MusicPlayer {
     if (this.nextBarTime < ctx.currentTime) this.nextBarTime = ctx.currentTime + 0.1;
     while (this.nextBarTime < ctx.currentTime + LOOKAHEAD_SEC) {
       this.scheduleBar(this.bar, this.nextBarTime);
-      this.nextBarTime += barSeconds(this.style);
+      this.nextBarTime += barSeconds(this.track);
       this.bar++;
     }
   }
@@ -167,8 +188,8 @@ export class WebMusicPlayer implements MusicPlayer {
     const level = this.quietBars > 0 ? Math.min(this.intensity, 0.12) : this.intensity;
     if (this.quietBars > 0) this.quietBars--;
 
-    const beat = beatSeconds(this.style);
-    for (const event of barEvents(bar, level, this.seed, this.style)) {
+    const beat = beatSeconds(this.track);
+    for (const event of barEvents(bar, level, this.seed, this.track)) {
       this.play(event, start + event.beat * beat, beat);
     }
   }
@@ -181,7 +202,7 @@ export class WebMusicPlayer implements MusicPlayer {
         this.pad(event.degree, event.octave, when, length, event.velocity, 1);
         break;
       case 'bass':
-        if (this.style === 'swing') this.swingBass(freq, when, length, event.velocity);
+        if (this.track === 'swing') this.swingBass(freq, when, length, event.velocity);
         else this.bass(freq, when, length, event.velocity);
         break;
       case 'keys':

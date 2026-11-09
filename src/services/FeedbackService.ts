@@ -111,6 +111,35 @@ export class FeedbackService {
     this.vibrate(() => this.haptics.mediumTap());
   }
 
+  /** Puzzle que se juega: en Luces la música cambia a su caja de música. */
+  setPuzzle(puzzle: 'circuits' | 'lights'): void {
+    this.music.setPuzzle(puzzle);
+  }
+
+  /**
+   * Toque en Luces: «pop» de la lámpara tocada y, escalonadas, las que cambian a su alrededor. Las que se encienden suenan
+   * a campanita (más aguda cuanto más a la derecha); las que se apagan, a un clic seco.
+   */
+  lamps(changes: ReadonlyArray<{ row: number; col: number; on: boolean }>, tapped: { row: number; col: number }): void {
+    this.sound(() => {
+      this.audio.note(noteForCell(tapped.row, tapped.col), { volume: 0.42, kind: 'tick' });
+      changes.forEach((change, i) => {
+        const index = noteForCell(change.row, change.col);
+        const delaySec = 0.04 + i * 0.05;
+        if (change.on) this.audio.note(connectNote(index), { volume: 0.5, bright: true, delaySec });
+        else this.audio.note(index, { volume: 0.3, kind: 'tick', delaySec });
+      });
+    });
+    const turnedOn = changes.filter((c) => c.on).length;
+    this.vibrate(() => (turnedOn > changes.length - turnedOn ? this.haptics.mediumTap() : this.haptics.lightTap()));
+  }
+
+  /** Tocar una piedra de Luces: golpe sordo y vibración ligera. */
+  stone(): void {
+    this.sound(() => this.audio.note(2, { volume: 0.55, kind: 'thud' }));
+    this.vibrate(() => this.haptics.lightTap());
+  }
+
   /** Giro de una casilla: su nota y un toque ligero. */
   rotate(row: number, col: number): void {
     this.sound(() => this.audio.note(noteForCell(row, col), { volume: 0.5 }));

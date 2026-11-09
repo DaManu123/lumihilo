@@ -292,6 +292,7 @@ export class GameScene extends Phaser.Scene {
       hapticsLevel: this.settings.hapticsLevel,
       hapticsMode: this.settings.hapticsMode,
     });
+    feedback.setPuzzle(isPuzzleType(this.settings.puzzle) ? this.settings.puzzle : 'circuits');
     // Los navegadores solo permiten audio tras un gesto: se habilita con el primer toque
     this.input.once('pointerdown', () => feedback.unlock());
 
@@ -1941,6 +1942,7 @@ export class GameScene extends Phaser.Scene {
     this.puzzle = puzzle;
     this.settings.puzzle = puzzle;
     storage.saveSettings(this.settings);
+    feedback.setPuzzle(puzzle);
     this.isDaily = false;
     this.buildUi();
     if (start) this.startLevel(this.puzzleLevel());
@@ -2385,8 +2387,8 @@ export class GameScene extends Phaser.Scene {
   private handleLightsTap(view: CellView): void {
     if (this.isWon) return;
     if (this.lightBlocked[view.row]?.[view.col]) {
-      // Una piedra no hace nada: un golpe seco y un temblor leve, sin gastar toque
-      feedback.denied();
+      // Una piedra no hace nada: un golpe sordo y un temblor leve, sin gastar toque
+      feedback.stone();
       if (!this.reducedMotion()) {
         this.tweens.add({ targets: view.container, x: view.container.x + 8, duration: this.dur(50), yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
       }
@@ -2402,12 +2404,16 @@ export class GameScene extends Phaser.Scene {
 
   /** Cambia las luces de una casilla y sus vecinas con su sonido y destello. `forward` = jugada (no deshacer). */
   private applyLightsToggle(row: number, col: number, forward: boolean): void {
-    const before = litCount(this.lightGrid, this.lightBlocked);
+    const previous = this.lightGrid.map((line) => [...line]);
     toggleLights(this.lightGrid, row, col, this.lightBlocked);
     this.lastLightsTap = { row, col };
     if (forward) {
-      feedback.rotate(row, col);
-      if (litCount(this.lightGrid, this.lightBlocked) > before) feedback.connected(row, col);
+      // Cada lámpara que cambió suena a su manera: campanita si se enciende, clic si se apaga
+      const changes: Array<{ row: number; col: number; on: boolean }> = [];
+      for (const [r, c] of [[row, col], [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]]) {
+        if (this.lightGrid[r]?.[c] !== undefined && this.lightGrid[r][c] !== previous[r][c]) changes.push({ row: r, col: c, on: this.lightGrid[r][c] });
+      }
+      feedback.lamps(changes, { row, col });
     } else {
       feedback.undo(row, col);
     }

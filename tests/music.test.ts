@@ -6,6 +6,9 @@ import {
   PROGRESSIONS,
   barEvents,
   chordAt,
+  crystalBarEvents,
+  beatSeconds,
+  barSeconds,
   degreeFrequency,
   progressionFor,
 } from '../src/core/music';
@@ -134,5 +137,57 @@ describe('Música generativa (src/core/music.ts)', () => {
   it('degreeFrequency sube una octava exacta por cada +1 de octava', () => {
     expect(degreeFrequency(0, 1)).toBeCloseTo(noteFrequency(0) * 2, 6);
     expect(degreeFrequency(3, -1)).toBeCloseTo(noteFrequency(3) / 2, 6);
+  });
+});
+
+describe('Caja de música de Luces (pista «cristal»)', () => {
+  const box = (bar: number, level: number, seed = 7) => barEvents(bar, level, seed, 'cristal');
+
+  it('es otra pista: su tempo es más lento y se despacha desde barEvents', () => {
+    expect(beatSeconds('cristal')).toBeGreaterThan(beatSeconds('ambient'));
+    expect(barSeconds('cristal')).toBeCloseTo((60 / 66) * 4, 6);
+    expect(box(3, 0.5)).toEqual(crystalBarEvents(3, 0.5, 7));
+  });
+
+  it('es determinista y sin batería', () => {
+    for (const bar of [0, 1, 9]) expect(box(bar, 0.6)).toEqual(box(bar, 0.6));
+    for (const bar of BARS) {
+      for (const e of box(bar, 1)) expect(['pad', 'bass', 'bell']).toContain(e.voice);
+    }
+  });
+
+  it('con todo apagado casi solo suena el tic del primer tiempo; con todo encendido toca muchas más notas', () => {
+    const quiet = BARS.reduce((n, b) => n + countVoice(box(b, 0), 'bell'), 0);
+    const full = BARS.reduce((n, b) => n + countVoice(box(b, 1), 'bell'), 0);
+    expect(quiet / BARS.length).toBeLessThan(2.5);
+    expect(full / BARS.length).toBeGreaterThan(quiet / BARS.length + 3);
+  });
+
+  it('crece de forma monótona con la intensidad (en promedio)', () => {
+    let last = -1;
+    for (const level of [0, 0.25, 0.5, 0.75, 1]) {
+      const n = BARS.reduce((total, b) => total + box(b, level).length, 0);
+      expect(n).toBeGreaterThanOrEqual(last);
+      last = n;
+    }
+  });
+
+  it('todas las notas son de la pentatónica, caen dentro del compás y tienen volumen válido', () => {
+    for (const bar of BARS) {
+      for (const e of box(bar, 0.9)) {
+        expect(e.degree).toBeGreaterThanOrEqual(0);
+        expect(e.degree).toBeLessThan(PENTATONIC_SEMITONES.length);
+        expect(e.beat).toBeGreaterThanOrEqual(0);
+        expect(e.beat).toBeLessThan(BEATS_PER_BAR);
+        expect(e.velocity).toBeGreaterThan(0);
+        expect(e.velocity).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('el destello final solo aparece cuando casi todo está encendido', () => {
+    const sparkle = (level: number) => BARS.some((b) => box(b, level).some((e) => e.octave === 2));
+    expect(sparkle(0.5)).toBe(false);
+    expect(sparkle(0.9)).toBe(true);
   });
 });
