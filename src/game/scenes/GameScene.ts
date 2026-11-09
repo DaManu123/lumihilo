@@ -24,6 +24,7 @@ import {
   currentStreak,
   dailyParams,
   dailySeed,
+  dailyLightsSeed,
   dailyTier,
   dateKey,
   formatSparks,
@@ -573,7 +574,8 @@ export class GameScene extends Phaser.Scene {
 
   private refreshModeBar(): void {
     if (!this.modeSeg) return;
-    const dailyDone = this.progress.lastDailyCompleted === dateKey(new Date());
+    const lastDaily = this.puzzle === 'lights' ? this.progress.lastLightsDailyCompleted : this.progress.lastDailyCompleted;
+    const dailyDone = lastDaily === dateKey(new Date());
 
     this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: t('Modo') });
     this.setSegment(
@@ -1834,7 +1836,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.timerEvent) this.timerEvent.paused = false;
 
-    if (this.puzzle === 'lights' && !this.isDaily) {
+    if (this.puzzle === 'lights') {
       this.loadLightsLevel(levelIndex);
       return;
     }
@@ -1860,8 +1862,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Carga un nivel de Luces: el tablero de luces y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
   private loadLightsLevel(levelIndex: number): void {
-    const params = lightsParamsForTier(this.profile.currentTier);
-    const level: LightsLevel = generateLights(params, levelSeed((this.progress.seedBase ^ 0x9e3779b9) >>> 0, levelIndex));
+    // El reto diario no depende del jugador: misma dificultad y semilla para todos ese día
+    const params = lightsParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier);
+    const level: LightsLevel = generateLights(
+      params,
+      this.isDaily ? dailyLightsSeed(this.dailyKey) : levelSeed((this.progress.seedBase ^ 0x9e3779b9) >>> 0, levelIndex)
+    );
     const size = params.size;
     this.currentParams = { width: size, height: size, extraLoops: 0, branchBias: 0 };
     this.lightGrid = cloneGrid(level.initial);
@@ -1923,8 +1929,7 @@ export class GameScene extends Phaser.Scene {
       this.isDaily = false;
       this.startLevel(this.puzzleLevel());
     } else {
-      // El reto diario es de Circuitos: desde Luces cambia de puzzle
-      if (this.puzzle === 'lights') this.setPuzzle('circuits', false);
+      // Cada puzzle tiene su reto diario (el de Luces, con piedras, es igual para todos ese día)
       this.isDaily = true;
       this.dailyKey = dateKey(new Date());
       this.startLevel(1);
@@ -2018,7 +2023,7 @@ export class GameScene extends Phaser.Scene {
     this.geometry = computeBoardGeometry(width, height, rows, cols, this.hud.boardTop);
     const { cellSize, startX, startY } = this.geometry;
     this.lightsGlow = undefined;
-    if (this.puzzle === 'lights' && !this.isDaily) this.addLightsDecor();
+    if (this.puzzle === 'lights') this.addLightsDecor();
 
     for (let r = 0; r < rows; r++) {
       const rowViews: CellView[] = [];
@@ -2054,7 +2059,7 @@ export class GameScene extends Phaser.Scene {
    * así que gira con el contenedor. La imagen se pinta una sola vez (ver `cellTextureKeys`).
    */
   private drawCell(view: CellView, powered: boolean): void {
-    if (this.puzzle === 'lights' && !this.isDaily) {
+    if (this.puzzle === 'lights') {
       this.drawLightsCell(view, powered);
       return;
     }
@@ -2296,7 +2301,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateFlowVisuals(): void {
-    if (this.puzzle === 'lights' && !this.isDaily) {
+    if (this.puzzle === 'lights') {
       let lit = 0;
       for (let r = 0; r < this.board.rows; r++) {
         for (let c = 0; c < this.board.cols; c++) {
@@ -2332,7 +2337,7 @@ export class GameScene extends Phaser.Scene {
    * @param invert true cuando se usa el clic derecho: gira en el sentido contrario al seleccionado.
    */
   private handleCellTap(view: CellView, invert = false): void {
-    if (this.puzzle === 'lights' && !this.isDaily) {
+    if (this.puzzle === 'lights') {
       this.handleLightsTap(view);
       return;
     }
@@ -2438,7 +2443,7 @@ export class GameScene extends Phaser.Scene {
   private handleUndo(): void {
     if (this.isWon || this.moveHistory.length === 0) return;
 
-    if (this.puzzle === 'lights' && !this.isDaily) {
+    if (this.puzzle === 'lights') {
       const last = this.moveHistory.pop()!;
       this.updateUndoButtonState();
       this.applyLightsToggle(last.row, last.col, false);
@@ -2480,7 +2485,7 @@ export class GameScene extends Phaser.Scene {
    */
   private useHint(): void {
     if (this.isWon) return;
-    if (this.puzzle === 'lights' && !this.isDaily) {
+    if (this.puzzle === 'lights') {
       this.useLightsHint();
       return;
     }
@@ -2578,7 +2583,7 @@ export class GameScene extends Phaser.Scene {
   private playWinPulse(): number {
     if (this.reducedMotion()) return 0;
 
-    const lightsMode = this.puzzle === 'lights' && !this.isDaily;
+    const lightsMode = this.puzzle === 'lights';
     const { rows, cols } = this.board;
     // En Luces la onda sale de la última casilla tocada y todo el tablero acaba encendido
     const source = lightsMode ? (this.lastLightsTap ?? { row: rows >> 1, col: cols >> 1 }) : this.board.source;
@@ -2622,7 +2627,7 @@ export class GameScene extends Phaser.Scene {
 
   private evaluateVictory(): void {
     if (this.isWon) return;
-    const solved = this.puzzle === 'lights' && !this.isDaily ? isAllLit(this.lightGrid) : checkVictory(this.board);
+    const solved = this.puzzle === 'lights' ? isAllLit(this.lightGrid) : checkVictory(this.board);
     if (!solved) return;
 
     this.isWon = true;
@@ -2632,7 +2637,7 @@ export class GameScene extends Phaser.Scene {
 
     const today = dateKey(new Date());
     const minTaps = this.currentLevelData.minTaps;
-    const lightsMode = this.puzzle === 'lights' && !this.isDaily;
+    const lightsMode = this.puzzle === 'lights';
     const playedTier = this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier;
     const recordKey = lightsMode ? lightsRecordKey(playedTier) : String(playedTier);
 
@@ -2650,7 +2655,8 @@ export class GameScene extends Phaser.Scene {
 
     // Recompensa de Chispas: el reto diario paga doble la primera vez de cada día y nada al repetirlo
     const countsAsTodaysDaily = this.isDaily && this.dailyKey === today;
-    const firstDailyToday = countsAsTodaysDaily && this.progress.lastDailyCompleted !== today;
+    const lastDaily = lightsMode ? this.progress.lastLightsDailyCompleted : this.progress.lastDailyCompleted;
+    const firstDailyToday = countsAsTodaysDaily && lastDaily !== today;
     const multiplier = this.isDaily ? (firstDailyToday ? 2 : 0) : 1;
     const isNewRecord =
       this.hintsUsed === 0 && isNewTimeRecord(this.progress, playedTier, this.elapsedTime, recordKey);
@@ -2673,6 +2679,7 @@ export class GameScene extends Phaser.Scene {
       sparksEarned: reward.total,
       hintsUsed: this.hintsUsed,
       isDaily: countsAsTodaysDaily,
+      lightsDaily: lightsMode,
       today,
       recordKey,
     });
@@ -2767,7 +2774,7 @@ export class GameScene extends Phaser.Scene {
       keyboard?.off('keydown-SPACE', goNext);
     });
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, this.puzzle === 'lights' && !info.isDaily ? t('Todo encendido') : t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, this.puzzle === 'lights' ? t('Todo encendido') : t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
     overlay.add(
       this.uiText(0, -cardH / 2 + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
         size: 28,

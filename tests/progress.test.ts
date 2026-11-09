@@ -9,6 +9,7 @@ import {
   registerActivity,
   currentStreak,
   dailySeed,
+  dailyLightsSeed,
   dailyTier,
   dailyParams,
   levelSeed,
@@ -184,6 +185,27 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
       expect(p2.stats.dailyCompleted).toBe(1);
       const p3 = applyLevelOutcome(p2, { ...daily, today: '2026-11-07' });
       expect(p3.stats.dailyCompleted).toBe(2);
+    });
+
+    it('cada puzzle tiene su reto diario: los dos cuentan el mismo día y cada uno solo una vez', () => {
+      const circuits = { ...outcome, isDaily: true };
+      const lights = { ...outcome, isDaily: true, lightsDaily: true };
+      let p = applyLevelOutcome(createDefaultProgress(1), circuits);
+      expect(p.lastDailyCompleted).toBe('2026-11-06');
+      expect(p.lastLightsDailyCompleted).toBeNull();
+      p = applyLevelOutcome(p, lights); // el de Luces aún no estaba hecho
+      expect(p.stats.dailyCompleted).toBe(2);
+      expect(p.lastLightsDailyCompleted).toBe('2026-11-06');
+      p = applyLevelOutcome(applyLevelOutcome(p, lights), circuits); // repetirlos no suma
+      expect(p.stats.dailyCompleted).toBe(2);
+      expect(sanitizeProgress({ lastLightsDailyCompleted: '2026-11-06' }, 1).lastLightsDailyCompleted).toBe('2026-11-06');
+      expect(sanitizeProgress({}, 1).lastLightsDailyCompleted).toBeNull();
+    });
+
+    it('la semilla del reto de Luces es estable, depende del día y no coincide con la de Circuitos', () => {
+      expect(dailyLightsSeed('2026-11-06')).toBe(dailyLightsSeed('2026-11-06'));
+      expect(dailyLightsSeed('2026-11-06')).not.toBe(dailyLightsSeed('2026-11-07'));
+      expect(dailyLightsSeed('2026-11-06')).not.toBe(dailySeed('2026-11-06'));
     });
 
     it('gastar chispas descuenta el saldo y rechaza si no alcanza', () => {

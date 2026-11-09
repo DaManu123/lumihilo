@@ -689,11 +689,27 @@ export async function runGameScenarios(out) {
     check('sin Chispas la pista no toca nada', JSON.stringify(after.grid) === JSON.stringify(st.grid));
     check('y no cobra', (await g.state()).progress.sparks === 5);
 
-    // El reto diario es de Circuitos: desde Luces cambia de puzzle
+    // Cada puzzle tiene su reto diario: en Luces el botón abre el reto de Luces (sin cambiar de puzzle)
     await g.tap(...g.pos.daily, 800);
     s = await g.state();
-    check('el reto diario cambia a Circuitos', s.settings?.puzzle === 'circuits');
-    await g.shot('e19-diario-desde-luces');
+    check('el reto diario de Luces no cambia de puzzle', s.settings?.puzzle === 'lights');
+    const daily = await g.page.evaluate(`(() => { const sc = ${scene}; return { daily: sc.isDaily, puzzle: sc.puzzle, stones: sc.lightBlocked.flat().filter(Boolean).length, size: sc.lightGrid.length }; })()`);
+    check('es un reto diario de Luces con piedras', daily.daily && daily.puzzle === 'lights' && daily.stones > 0, JSON.stringify(daily));
+    await g.shot('e19-diario-luces');
+    await g.close();
+    g = await openGame({ label: 'luces-diario', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, ...RICH }, out, query: '?debug' });
+    await g.tap(...g.pos.daily, 800);
+    // Resolverlo con pistas completa el reto de Luces (y solo el de Luces)
+    for (let i = 0; i < 40; i++) {
+      const cur = await lightsState(g);
+      if (cur.grid.flat().every(Boolean)) break;
+      await g.tap(...g.pos.hint, 700);
+    }
+    await g.page.waitForTimeout(3000);
+    s = await g.state();
+    check('completar el reto de Luces lo registra aparte', s.progress.lastLightsDailyCompleted === today() && s.progress.lastDailyCompleted === null, `${s.progress.lastLightsDailyCompleted} / ${s.progress.lastDailyCompleted}`);
+    check('el reto de Luces no avanza el nivel de Luces', s.progress.lightsLevel === 1, `nivel ${s.progress.lightsLevel}`);
+    await g.shot('e19-diario-luces-victoria');
     await g.close();
 
     // Abrir la app directamente en Luces por primera vez también muestra el tutorial
