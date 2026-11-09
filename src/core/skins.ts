@@ -4,7 +4,7 @@ import { PlayerProgress, spendSparks } from './progress';
  * Aspectos (paletas) que se compran con Chispas. Es solo estética: no cambian ninguna regla ni dificultad.
  * Los colores de cada aspecto viven en `src/game/theme.ts`; aquí está el catálogo, los precios y las compras.
  */
-export type SkinId = 'filamento' | 'cyberpunk' | 'matrix' | 'oceano' | 'solar';
+export type SkinId = 'filamento' | 'cyberpunk' | 'matrix' | 'oceano' | 'solar' | 'aurora';
 
 export interface SkinInfo {
   id: SkinId;
@@ -22,6 +22,7 @@ export const SKINS: readonly SkinInfo[] = [
   { id: 'matrix', name: 'Matrix', price: 350 },
   { id: 'oceano', name: 'Océano', price: 550 },
   { id: 'solar', name: 'Solar', price: 800 },
+  { id: 'aurora', name: 'Aurora', price: 1000 },
 ];
 
 export function isSkinId(value: unknown): value is SkinId {

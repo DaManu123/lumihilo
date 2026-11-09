@@ -149,8 +149,8 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     // Estadísticas (tarjeta de 1012 px): selector de puzzle y "Ajustes", "Aspectos" y "Cerrar"
     puzzleCircuits: [360 - 140, H / 2 + 290], puzzleLights: [360 + 140, H / 2 + 290],
     statsSettings: [360 - 191.3, H / 2 + 1012 / 2 - 84], statsSkins: [360, H / 2 + 1012 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 1012 / 2 - 84],
-    // Aspectos (tarjeta de 1190 px, filas de 150 px)
-    skinRow: (i) => [360, H / 2 - 360 + 150 * i], skinsDone: [360, H / 2 + 511],
+    // Aspectos (tarjeta de 1220 px, filas de 130 px)
+    skinRow: (i) => [360, H / 2 - 385 + 130 * i], skinsDone: [360, H / 2 + 526],
     // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
     settingsUpdates: [360, H / 2 + 429],
     // Mini tutorial de Luces (tarjeta de 1090 px) y panel de luces (siempre en [360, 502])

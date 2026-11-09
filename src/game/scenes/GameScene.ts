@@ -1406,7 +1406,7 @@ export class GameScene extends Phaser.Scene {
    * (y se equipa) si alcanzan las Chispas. Es solo estética.
    */
   private showSkinsModal(message = ''): void {
-    const rowH = 150;
+    const rowH = 130;
     const cardH = 160 + SKINS.length * rowH + 150 + 130;
     const { overlay, w } = this.createCard(cardH, 200);
     overlay.add(this.uiText(0, -cardH / 2 + 70, t('Aspectos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));

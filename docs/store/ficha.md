@@ -26,7 +26,7 @@ Lumihilo es un puzzle de circuitos de luz. Gira las piezas para conectar toda la
 • Partidas cortas: cabe en un descanso o en el camino.
 • Reto diario: el mismo puzzle para todos, cada día.
 • Pistas con Chispas, que ganas jugando.
-• Cuatro aspectos extra que se desbloquean con las Chispas: Cyberpunk, Matrix, Océano y Solar.
+• Cinco aspectos extra que se desbloquean con las Chispas: Cyberpunk, Matrix, Océano, Solar y Aurora.
 • Tema oscuro y claro, alto contraste y animaciones ajustables.
 • Música, efectos y vibración que puedes apagar o regular.
 • En español e inglés.
@@ -50,7 +50,7 @@ Lumihilo is a light-circuit puzzle. Rotate the pieces to connect the whole netwo
 • Short games: fits a break or a commute.
 • Daily challenge: the same puzzle for everyone, every day.
 • Hints paid with Sparks, which you earn by playing.
-• Four extra skins unlocked with Sparks: Cyberpunk, Matrix, Ocean and Solar.
+• Five extra skins unlocked with Sparks: Cyberpunk, Matrix, Ocean, Solar and Aurora.
 • Dark and light themes, high contrast and adjustable animations.
 • Music, sound effects and vibration you can turn off or adjust.
 • In Spanish and English.

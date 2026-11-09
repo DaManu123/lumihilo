@@ -19,9 +19,17 @@ function tilePoints(size: number): Pt[] {
   ];
 }
 
+/** Casilla de cristal: dos esquinas opuestas cortadas en diagonal. */
+function shardPoints(size: number): Pt[] {
+  const h = size / 2;
+  const c = size * 0.3;
+  return [{ x: -h + c, y: -h }, { x: h, y: -h }, { x: h, y: h - c }, { x: h - c, y: h }, { x: -h, y: h }, { x: -h, y: -h + c }];
+}
+
 export function fillTile(g: G, style: SkinStyle, size: number, radius: number): void {
   const h = size / 2;
-  if (style.tile === 'chamfer') g.fillPoints(tilePoints(size), true);
+  if (style.tile === 'shard') g.fillPoints(shardPoints(size), true);
+  else if (style.tile === 'chamfer') g.fillPoints(tilePoints(size), true);
   else if (style.tile === 'circle') g.fillCircle(0, 0, h);
   else g.fillRoundedRect(-h, -h, size, size, style.tile === 'square' ? 3 : style.tile === 'pill' ? size * 0.36 : radius);
 }
@@ -29,7 +37,8 @@ export function fillTile(g: G, style: SkinStyle, size: number, radius: number): 
 export function strokeTile(g: G, style: SkinStyle, size: number, radius: number, inset = 0): void {
   const s = size - inset * 2;
   const h = s / 2;
-  if (style.tile === 'chamfer') g.strokePoints(tilePoints(s), true);
+  if (style.tile === 'shard') g.strokePoints(shardPoints(s), true);
+  else if (style.tile === 'chamfer') g.strokePoints(tilePoints(s), true);
   else if (style.tile === 'circle') g.strokeCircle(0, 0, h);
   else g.strokeRoundedRect(-h, -h, s, s, style.tile === 'square' ? 3 : style.tile === 'pill' ? s * 0.36 : radius * (s / size));
 }
@@ -44,6 +53,17 @@ export function fillNode(g: G, style: SkinStyle, r: number, color: number, alpha
     case 'square':
       g.fillRect(-r, -r, r * 2, r * 2);
       break;
+    case 'star': {
+      // Destello de cuatro puntas
+      const R = r * 1.55;
+      const i = r * 0.46;
+      const k = i * 0.7071;
+      g.fillPoints([
+        { x: 0, y: -R }, { x: k, y: -k }, { x: R, y: 0 }, { x: k, y: k },
+        { x: 0, y: R }, { x: -k, y: k }, { x: -R, y: 0 }, { x: -k, y: -k },
+      ], true);
+      break;
+    }
     case 'bubble': {
       // Burbuja: disco con un anillo claro y un reflejo arriba a la izquierda
       g.fillCircle(0, 0, r);
@@ -117,6 +137,15 @@ export function strokeLitLeg(g: G, style: SkinStyle, theme: GameTheme, leg: { dx
     };
     wave(w * 0.62, theme.primary);
     wave(w * (0.22 + 0.1 * glow), theme.energyCore);
+  } else if (style.wire === 'ribbon') {
+    // Cortina de aurora: velo ancho y translúcido, cuerpo, y dos hebras finas de color desplazadas
+    const off = w * 0.3;
+    const px = -leg.dy * off;
+    const py = leg.dx * off;
+    line(0, 0, w * 1.7, theme.primary, 0.28);
+    line(0, 0, w * 0.85, theme.primary);
+    line(px, py, w * 0.16, theme.accent);
+    line(-px, -py, w * (0.16 + 0.1 * glow), theme.energyCore);
   } else if (style.wire === 'plasma') {
     // Cuerpo ancho con un núcleo casi blanco muy grueso: se ve al rojo blanco
     line(0, 0, w * 1.15, theme.primary);
@@ -322,12 +351,56 @@ function wavesBackdrop(scene: Phaser.Scene, theme: GameTheme, w: number, h: numb
   return { objects, tweens };
 }
 
+/** Cortinas de aurora que ondulan sobre un cielo con estrellas (Aurora). */
+function auroraBackdrop(scene: Phaser.Scene, theme: GameTheme, w: number, h: number, alpha: number, animate: boolean): BackdropResult {
+  const pad = 40;
+  const curtainKey = `backdrop|aurora|${theme.name}|${w}x${h}`;
+  const starsKey = `backdrop|stars|${theme.name}|${w}x${h}`;
+  makeTexture(scene, curtainKey, w + pad * 2, h, (g) => {
+    const curtains = [
+      { color: theme.primary, y0: h * 0.1, len: h * 0.5, phase: 0, freq: 2.2, amp: 30 },
+      { color: theme.accent, y0: h * 0.2, len: h * 0.46, phase: 2.1, freq: 3.1, amp: 24 },
+      { color: theme.primary, y0: h * 0.34, len: h * 0.34, phase: 4.2, freq: 1.7, amp: 36 },
+    ];
+    for (const c of curtains) {
+      for (let x = 0; x < w + pad * 2; x += 5) {
+        const top = c.y0 + c.amp * Math.sin((x / w) * Math.PI * c.freq + c.phase);
+        // Cada columna: borde superior marcado que se desvanece hacia abajo
+        const steps = 12;
+        const strength = 0.55 + 0.45 * Math.sin((x / w) * Math.PI * 5.3 + c.phase * 2);
+        for (let i = 0; i < steps; i++) {
+          g.fillStyle(c.color, 0.19 * strength * (1 - i / steps) + 0.006);
+          g.fillRect(x, top + (i * c.len) / steps, 5, c.len / steps + 1);
+        }
+      }
+    }
+  });
+  makeTexture(scene, starsKey, w, h, (g) => {
+    let seed = 777;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle(theme.energyCore, 0.25 + rnd() * 0.55);
+      const s = rnd() < 0.15 ? 3 : 2;
+      g.fillRect(rnd() * w, rnd() * h * 0.8, s, s);
+    }
+  });
+  const stars = scene.add.image(0, 0, starsKey).setOrigin(0).setDepth(-101).setAlpha(alpha);
+  const curtain = scene.add.image(-pad, 0, curtainKey).setOrigin(0).setDepth(-100).setAlpha(alpha);
+  const tweens: Phaser.Tweens.Tween[] = [];
+  if (animate) {
+    tweens.push(scene.tweens.add({ targets: curtain, x: -pad + 30, alpha: alpha * 0.7, duration: 9000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
+    tweens.push(scene.tweens.add({ targets: stars, alpha: alpha * 0.6, duration: 3500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
+  }
+  return { objects: [stars, curtain], tweens };
+}
+
 export function buildBackdrop(scene: Phaser.Scene, style: SkinStyle, theme: GameTheme, w: number, h: number, opts: { alpha: number; animate: boolean }): BackdropResult | null {
   switch (style.backdrop) {
     case 'grid': return gridBackdrop(scene, theme, w, h, opts.alpha, opts.animate);
     case 'rain': return rainBackdrop(scene, theme, w, h, opts.alpha, opts.animate);
     case 'orbit': return orbitBackdrop(scene, theme, w, h, opts.alpha, opts.animate);
     case 'waves': return wavesBackdrop(scene, theme, w, h, opts.alpha, opts.animate);
+    case 'aurora': return auroraBackdrop(scene, theme, w, h, opts.alpha, opts.animate);
     default: return null;
   }
 }
