@@ -712,6 +712,24 @@ export async function runGameScenarios(out) {
       await g.close();
     }
 
+    // Piedras: desde el nivel de habilidad 3 hay casillas bloqueadas que ni cambian ni cuentan
+    g = await openGame({ label: 'luces-piedras', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, profile_adaptive: { currentTier: 6 } }, out, query: '?debug' });
+    await g.page.waitForTimeout(1200);
+    const stones = await g.page.evaluate(() => {
+      const sc = window.__game.scene.scenes.find((x) => x.handleCellTap);
+      const cells = [];
+      sc.lightBlocked.forEach((row, r) => row.forEach((b, c) => { if (b) cells.push([r, c]); }));
+      return { cells, size: sc.lightBlocked.length, taps: sc.tapCount };
+    });
+    check('con habilidad 6 el nivel de Luces tiene piedras', stones.cells.length === 2, `piedras ${stones.cells.length}`);
+    st = await lightsState(g);
+    const [sr, sc2] = stones.cells[0];
+    await g.tap(st.views[sr][sc2].x, st.views[sr][sc2].y, 500);
+    const afterStone = await g.page.evaluate(() => window.__game.scene.scenes.find((x) => x.handleCellTap).tapCount);
+    check('tocar una piedra no cuenta como toque', afterStone === stones.taps, `${stones.taps} → ${afterStone}`);
+    await g.shot('e19-luces-piedras');
+    await g.close();
+
     // Un puzzle guardado que no existe no rompe el juego
     g = await openGame({ label: 'luces-invalido', seed: { user_settings: { hasSeenTutorial: true, puzzle: 'ajedrez' } }, out });
     check('un puzzle inválido guardado cae en Circuitos', !!(await g.page.$('canvas')));

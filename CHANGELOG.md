@@ -4,6 +4,11 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.4] - 2026-11-09
+
+### Añadido
+- **Piedras en Luces:** desde el nivel de habilidad 3 aparecen casillas bloqueadas (1 al principio, hasta 4). No se encienden, no se pueden tocar, no cambian cuando tocas a su vecina y no cuentan para ganar; hay que rodearlas. Siguen siendo niveles con solución (se generan desde el tablero resuelto) y el solver y las pistas las tienen en cuenta. Un aviso breve las explica la primera vez. El panel cuenta solo las casillas jugables («N de M luces encendidas»).
+
 ## [0.2.0-beta.2] - 2026-11-09
 
 ### Añadido
