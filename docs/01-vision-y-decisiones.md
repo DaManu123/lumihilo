@@ -30,7 +30,7 @@ Un puzzle casual donde **cada partida = un nivel nuevo generado por algoritmo**.
 | Mecánica del puzzle | Ver tabla de abajo | **Rotar piezas para conectar circuito** para el MVP |
 | Temática visual | Varios temas (circuitos, agua, etc.) | **Circuitos de luz neón (provisional)** hasta el prototipo de la Fase 1 |
 | Nombre y marca | En verificación | **"Lumihilo"** (elegido el 2026-11-08; `APP_NAME`; ver `09-nombre.md`). Descartados: *Lumen Loop*, *Synapse Flow* (ya existen en Play Store), *Filament*/*Filamento* (ya existe un puzzle de cable con ese nombre) y *Zen Circuit* (riesgo de confusión). |
-| Audiencia declarada | A) 13+ / público general · B) incluye menores de 13 | **13+ (provisional)**, confirmar antes de llenar la declaración en Play Console |
+| Audiencia declarada | A) 13+ / público general · B) incluye menores de 13 | **Decidido (2026-11-09): A, 13 años en adelante.** Más adelante se podrán añadir anuncios (siempre con la política actualizada antes de publicar esa versión). |
 | Dominio web | github.io / dominio propio | Dominio propio si se quiere AdSense (revisar requisitos vigentes) |
 | Licencia del repo | Propietaria / MIT / otra | Por ahora propietaria (`LICENSE`, repo privado); reevaluar antes de hacerlo público |
 | Telemetría | Solo local / Firebase Analytics | Solo local al inicio |
