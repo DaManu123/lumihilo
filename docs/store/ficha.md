@@ -6,7 +6,7 @@ Recursos listos para subir a Play Console (Presencia en Play Store → Ficha de 
 |---|---|---|
 | Icono | `icon-512.png` | 512×512 |
 | Gráfico de funciones | `grafico-de-funciones-1024x500.png` | 1024×500 |
-| Capturas de teléfono | `capturas/01…07-*.png` | 1080×2160 (relación 2:1) |
+| Capturas de teléfono | `capturas/01…09-*.png` | 1080×2160 (relación 2:1) |
 
 Las capturas se generan del juego real con `npm run build && node e2e/store.mjs` (necesita Chromium de Playwright, ver `docs/08`). El gráfico se compone con `grafico/feature.html`; si cambia el diseño del juego, hay que regenerar ambos.
 
