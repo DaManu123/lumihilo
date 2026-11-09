@@ -63,7 +63,8 @@ import {
   motionDisabled,
 } from '../../core/accessibility';
 import { LANGUAGES, LanguageSetting, isLanguageSetting, resolveLanguage, setLanguage, t } from '../../core/i18n';
-import { THEME, setActiveTheme, getTheme } from '../theme';
+import { THEME, setActiveTheme, getTheme, skinStyle } from '../theme';
+import { buildBackdrop, fillNode, fillTile, strokeLitLeg, strokeTile } from '../skinArt';
 import { SKINS, SkinId, buySkin, isSkinUnlocked, skinInfo, usableSkin } from '../../core/skins';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -296,6 +297,27 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(THEME.background);
     document.documentElement.style.backgroundColor = toCss(THEME.background);
     document.body.style.backgroundColor = toCss(THEME.background);
+    this.applyBackdrop();
+  }
+
+  private backdropObjects: Phaser.GameObjects.GameObject[] = [];
+  private backdropTween?: Phaser.Tweens.Tween;
+
+  /** Fondo propio del aspecto (cuadrícula, lluvia de código u órbitas). El alto contraste lo atenúa y lo deja quieto. */
+  private applyBackdrop(): void {
+    this.backdropTween?.stop();
+    this.backdropTween = undefined;
+    for (const object of this.backdropObjects) object.destroy();
+    this.backdropObjects = [];
+    const hc = this.settings.highContrast === true;
+    const { width, height } = this.cameras.main;
+    const result = buildBackdrop(this, skinStyle(THEME.skin), THEME, width, height, {
+      alpha: hc ? 0.3 : THEME.name === 'light' ? 0.55 : 1,
+      animate: !hc && !this.reducedMotion(),
+    });
+    if (!result) return;
+    this.backdropObjects = result.objects;
+    this.backdropTween = result.tween;
   }
 
   /** Cantidad de casillas con energía (para detectar cuándo un giro conecta algo nuevo). */
@@ -1112,10 +1134,33 @@ export class GameScene extends Phaser.Scene {
       g.fillRoundedRect(left, y - 52, 190, 104, 22);
       g.lineStyle(2, equipped ? THEME.primary : THEME.cardBorder, 1);
       g.strokeRoundedRect(left, y - 52, 190, 104, 22);
-      [preview.primary, preview.accent, preview.clockwise].forEach((color, i) => {
-        g.fillStyle(color, 1);
-        g.fillCircle(left + 50 + i * 45, y, 17);
-      });
+      // Dos casillas en miniatura con su forma, un cable encendido y sus nodos
+      const look = skinStyle(skin.id);
+      const tile = 62;
+      const wireW = 9 * look.wireScale;
+      g.save();
+      g.translateCanvas(left + 50, y);
+      g.fillStyle(mixColors(preview.surface, preview.accent, 0.2), 1);
+      fillTile(g, look, tile, 12);
+      g.lineStyle(2, preview.accent, 1);
+      strokeTile(g, look, tile, 12);
+      g.restore();
+      g.save();
+      g.translateCanvas(left + 140, y);
+      g.fillStyle(mixColors(preview.surface, preview.primary, 0.2), 1);
+      fillTile(g, look, tile, 12);
+      g.lineStyle(2, mixColors(preview.divider, preview.primary, 0.55), 1);
+      strokeTile(g, look, tile, 12);
+      g.restore();
+      g.save();
+      g.translateCanvas(left + 50, y);
+      strokeLitLeg(g, look, preview, { dx: 1, dy: 0, reach: 90 }, wireW, 0.6);
+      fillNode(g, look, wireW * 1.3, preview.accent);
+      fillNode(g, look, wireW * 0.6, preview.energyCore);
+      g.translateCanvas(90, 0);
+      fillNode(g, look, wireW * 0.9, preview.primary);
+      fillNode(g, look, wireW * 0.4, preview.energyCore);
+      g.restore();
       if (equipped) {
         g.lineStyle(4, THEME.primary, 1);
         g.strokeRoundedRect(-w / 2 + 14, y - rowH / 2 + 8, w - 28, rowH - 16, 26);
@@ -1662,19 +1707,20 @@ export class GameScene extends Phaser.Scene {
     const radius = cellVisual * 0.17;
     const { powered, isSource, legs } = look;
     const glow = look.glowStep / GLOW_STEPS;
+    const style = skinStyle(THEME.skin);
 
     // Casilla de vidrio: se tiñe de calor cuando está energizada
     const tint = powered ? 0.1 + 0.16 * glow : 0;
     g.fillStyle(mixColors(THEME.surface, isSource ? THEME.accent : THEME.primary, tint), 1);
-    g.fillRoundedRect(-half, -half, cellVisual, cellVisual, radius);
+    fillTile(g, style, cellVisual, radius);
     const edge = isSource ? THEME.accent : powered ? mixColors(THEME.divider, THEME.primary, 0.55) : THEME.borderOff;
     g.lineStyle(isSource ? 3 : 2, edge, 1);
-    g.strokeRoundedRect(-half, -half, cellVisual, cellVisual, radius);
+    strokeTile(g, style, cellVisual, radius);
 
     // Anillo de la pista
     if (look.hintRing) {
       g.lineStyle(5, THEME.hintRing, 1);
-      g.strokeRoundedRect(-half + 3, -half + 3, cellVisual - 6, cellVisual - 6, radius * 0.9);
+      strokeTile(g, style, cellVisual, radius, 3);
     }
 
     // Marcas de "encendida": cuatro puntos en las esquinas (iguales girando la pieza, no dependen del color)
@@ -1685,7 +1731,7 @@ export class GameScene extends Phaser.Scene {
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) g.fillCircle(sx * (half - inset), sy * (half - inset), dot);
     }
 
-    const w = Math.max(8, cellVisual * 0.12);
+    const w = Math.max(8, cellVisual * 0.12) * style.wireScale;
     const stroke = (leg: { dx: number; dy: number; reach: number }) => {
       g.beginPath();
       g.moveTo(0, 0);
@@ -1702,37 +1748,25 @@ export class GameScene extends Phaser.Scene {
     // 2) Filamento encendido: halo degradado (tres capas), cuerpo y núcleo blanco-caliente
     for (const [scale, alpha] of [[3.1, 0.06], [2.2, 0.1], [1.55, 0.16]] as const) {
       for (const leg of lit) {
-        g.lineStyle(w * scale, THEME.primary, alpha + 0.12 * glow);
+        g.lineStyle(w * scale * (0.6 + 0.4 * style.halo), THEME.primary, Math.min(1, (alpha + 0.12 * glow) * style.halo));
         stroke(leg);
       }
     }
-    for (const leg of lit) {
-      g.lineStyle(w, THEME.primary, 1);
-      stroke(leg);
-    }
-    for (const leg of lit) {
-      g.lineStyle(w * (0.36 + 0.2 * glow), THEME.energyCore, 1);
-      stroke(leg);
-    }
+    for (const leg of lit) strokeLitLeg(g, style, THEME, leg, w, glow);
 
     // Nodo central
     if (isSource) {
-      g.fillStyle(THEME.accent, 0.2 + 0.2 * glow);
+      g.fillStyle(THEME.accent, (0.2 + 0.2 * glow) * Math.min(1.4, style.halo));
       g.fillCircle(0, 0, w * 2.7);
-      g.fillStyle(THEME.accent, 1);
-      g.fillCircle(0, 0, w * 1.5);
-      g.fillStyle(THEME.energyCore, 1);
-      g.fillCircle(0, 0, w * 0.75);
+      fillNode(g, style, w * 1.5, THEME.accent);
+      fillNode(g, style, w * 0.75, THEME.energyCore);
     } else if (powered) {
-      g.fillStyle(THEME.primary, 0.2 + 0.3 * glow);
+      g.fillStyle(THEME.primary, (0.2 + 0.3 * glow) * Math.min(1.4, style.halo));
       g.fillCircle(0, 0, w * 1.7);
-      g.fillStyle(THEME.primary, 1);
-      g.fillCircle(0, 0, w * 0.95);
-      g.fillStyle(THEME.energyCore, 1);
-      g.fillCircle(0, 0, w * 0.42);
+      fillNode(g, style, w * 0.95, THEME.primary);
+      fillNode(g, style, w * 0.42, THEME.energyCore);
     } else {
-      g.fillStyle(THEME.wireOffHub, 1);
-      g.fillCircle(0, 0, w * 0.75);
+      fillNode(g, style, w * 0.75, THEME.wireOffHub);
     }
   }
 

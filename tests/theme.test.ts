@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { THEME_DARK, THEME_LIGHT, THEME_DARK_HC, THEME_LIGHT_HC, GameTheme, getTheme } from '../src/game/theme';
+import { THEME_DARK, THEME_LIGHT, THEME_DARK_HC, THEME_LIGHT_HC, GameTheme, getTheme, skinStyle } from '../src/game/theme';
 import { contrastRatio, mixColors, toCss, luminance } from '../src/game/color';
 import { SKINS } from '../src/core/skins';
 
@@ -185,6 +185,27 @@ describe('Aspectos (paletas compradas con Chispas)', () => {
     for (const skin of SKINS.filter((s) => s.price > 0)) {
       expect(getTheme('dark', false, skin.id).primary).not.toBe(THEME_DARK.primary);
       expect(getTheme('light', false, skin.id).primary).not.toBe(THEME_LIGHT.primary);
+    }
+  });
+});
+
+describe('Identidad de forma de los aspectos', () => {
+  it('cada aspecto comprado tiene casilla, nodo, cable y fondo propios', () => {
+    const bought = SKINS.filter((s) => s.price > 0).map((s) => skinStyle(s.id));
+    for (const field of ['tile', 'node', 'wire', 'backdrop'] as const) {
+      expect(new Set(bought.map((s) => s[field])).size, field).toBe(bought.length);
+      for (const style of bought) expect(style[field]).not.toBe(skinStyle('filamento')[field]);
+    }
+  });
+
+  it('el aspecto inicial no lleva fondo extra y los multiplicadores son razonables', () => {
+    expect(skinStyle('filamento').backdrop).toBe('none');
+    for (const skin of SKINS) {
+      const s = skinStyle(skin.id);
+      expect(s.wireScale).toBeGreaterThan(0.5);
+      expect(s.wireScale).toBeLessThan(1.5);
+      expect(s.halo).toBeGreaterThan(0.5);
+      expect(s.halo).toBeLessThan(2);
     }
   });
 });

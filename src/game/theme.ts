@@ -214,3 +214,33 @@ export function setActiveTheme(mode: 'dark' | 'light', highContrast = false, ski
   THEME = getTheme(mode, highContrast, skin);
   return THEME;
 }
+
+/**
+ * Identidad de forma de cada aspecto (más allá del color): cómo se dibujan las casillas, los nodos y el cable
+ * encendido, y qué fondo animado lleva. Los aspectos se pintan en texturas, así que cuestan lo mismo que el inicial.
+ */
+export interface SkinStyle {
+  /** Forma de la casilla: redondeada, con esquinas cortadas, cuadrada o circular. */
+  tile: 'round' | 'chamfer' | 'square' | 'circle';
+  /** Forma de los nodos del centro. */
+  node: 'circle' | 'diamond' | 'square' | 'sun';
+  /** Cable encendido: macizo, de doble pista (circuito), de bits (datos) o de plasma (núcleo ancho al rojo blanco). */
+  wire: 'solid' | 'double' | 'bits' | 'plasma';
+  /** Multiplicador del grosor del cable. */
+  wireScale: number;
+  /** Multiplicador del halo de luz alrededor del cable encendido. */
+  halo: number;
+  /** Fondo: nada, cuadrícula en perspectiva, lluvia de código u órbitas con rayos. */
+  backdrop: 'none' | 'grid' | 'rain' | 'orbit';
+}
+
+export const SKIN_STYLES: Record<SkinId, SkinStyle> = {
+  filamento: { tile: 'round', node: 'circle', wire: 'solid', wireScale: 1, halo: 1, backdrop: 'none' },
+  cyberpunk: { tile: 'chamfer', node: 'diamond', wire: 'double', wireScale: 1.1, halo: 1.25, backdrop: 'grid' },
+  matrix: { tile: 'square', node: 'square', wire: 'bits', wireScale: 0.85, halo: 0.8, backdrop: 'rain' },
+  solar: { tile: 'circle', node: 'sun', wire: 'plasma', wireScale: 1.05, halo: 1.5, backdrop: 'orbit' },
+};
+
+export function skinStyle(skin: SkinId): SkinStyle {
+  return SKIN_STYLES[skin] ?? SKIN_STYLES.filamento;
+}
