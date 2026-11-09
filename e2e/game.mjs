@@ -489,9 +489,13 @@ export async function runGameScenarios(out) {
     await g.tap(...g.pos.skinRow(4), 800);
     s = await g.state();
     check('comprar Solar también funciona', s.settings?.skin === 'solar' && s.progress.unlockedSkins.includes('solar'));
+    await g.tap(...g.pos.skinRow(5), 800);
+    s = await g.state();
+    check('comprar Aurora (la sexta fila) también funciona', s.settings?.skin === 'aurora' && s.progress.unlockedSkins.includes('aurora'));
+    await g.shot('e17-aurora');
     await g.tap(...g.pos.skinRow(1), 800);
     s = await g.state();
-    check('volver a un aspecto comprado es gratis', s.settings?.skin === 'cyberpunk' && s.progress.sparks === before - 150 - 800);
+    check('volver a un aspecto comprado es gratis', s.settings?.skin === 'cyberpunk' && s.progress.sparks === before - 150 - 800 - 1000);
     await g.tap(...g.pos.skinRow(0), 800);
     s = await g.state();
     check('el aspecto inicial se puede volver a equipar', s.settings?.skin === 'filamento');
@@ -698,7 +702,7 @@ export async function runGameScenarios(out) {
     await g.close();
 
     // Con aspecto, en claro y con alto contraste, Luces se dibuja sin errores
-    for (const [label, settings] of [['cyberpunk', { skin: 'cyberpunk' }], ['oceano-claro', { skin: 'oceano', theme: 'light' }], ['matrix-hc', { skin: 'matrix', highContrast: true, litMarks: true }], ['solar', { skin: 'solar' }], ['filamento-claro', { theme: 'light' }]]) {
+    for (const [label, settings] of [['cyberpunk', { skin: 'cyberpunk' }], ['oceano-claro', { skin: 'oceano', theme: 'light' }], ['matrix-hc', { skin: 'matrix', highContrast: true, litMarks: true }], ['solar', { skin: 'solar' }], ['aurora', { skin: 'aurora' }], ['aurora-claro-hc', { skin: 'aurora', theme: 'light', highContrast: true }], ['filamento-claro', { theme: 'light' }]]) {
       const skin = settings.skin;
       g = await openGame({ label: 'luces-' + label, seed: { user_settings: { ...SEEN, puzzle: 'lights', ...settings }, player_progress: { ...RICH.player_progress, unlockedSkins: skin ? [skin] : [] } }, out, query: '?debug' });
       st = await lightsState(g);

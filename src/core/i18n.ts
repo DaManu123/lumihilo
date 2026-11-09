@@ -114,6 +114,7 @@ export const EN: Record<string, string> = {
   'Matrix': 'Matrix',
   'Océano': 'Ocean',
   'Solar': 'Solar',
+  'Aurora': 'Aurora',
 
   // Ajustes
   'Efectos': 'Effects',

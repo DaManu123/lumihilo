@@ -11,6 +11,13 @@ mkdirSync(out, { recursive: true });
 const { preview } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href);
 const server = await preview({ root, logLevel: 'error', preview: { port: 4173, strictPort: true, host: '127.0.0.1' } });
 
+const lightsProgress = (level, theme = 'dark', skin = 'filamento') => {
+  const p = progress(1, theme, skin);
+  p.player_progress.lightsLevel = level;
+  p.user_settings = { ...p.user_settings, puzzle: 'lights', hasSeenLightsTip: true };
+  return p;
+};
+
 const progress = (level, theme = 'dark', skin = 'filamento') => ({
   player_progress: { ...RICH.player_progress, currentLevel: level, sparks: 240, unlockedSkins: skin === 'filamento' ? [] : [skin] },
   user_settings: { ...SEEN_TUTORIAL.user_settings, theme, skin },
@@ -78,6 +85,16 @@ try {
   await g.tap(...g.pos.stats, 600);
   await g.tap(...g.pos.statsSkins, 700);
   await g.shot('07-aspectos'); await g.close();
+
+  g = await open(lightsProgress(45), 'luces');
+  for (let i = 0; i < 2; i++) await g.tap(...g.pos.hint, 500);
+  await g.page.waitForTimeout(900);
+  await g.shot('08-luces'); await g.close();
+
+  g = await open(lightsProgress(30, 'dark', 'oceano'), 'luces-oceano');
+  for (let i = 0; i < 3; i++) await g.tap(...g.pos.hint, 500);
+  await g.page.waitForTimeout(900);
+  await g.shot('09-luces-oceano'); await g.close();
 } finally {
   await close();
   await server.close();

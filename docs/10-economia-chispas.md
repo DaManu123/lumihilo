@@ -32,10 +32,11 @@ Se compran en orden, partiendo de las 30 Chispas iniciales (días acumulados):
 | Matrix | 350 | 9,0 días | 3,1 días | 1,1 días |
 | Océano | 550 | 19,6 días | 6,7 días | 2,3 días |
 | Solar | 800 | 35,0 días | 11,9 días | 4,2 días |
+| Aurora | 1000 | 54,2 días | 18,4 días | 6,4 días |
 
 Objetivos que cumple la tabla (y que comprueban las pruebas):
 - El primer aspecto se consigue **el mismo día** con juego habitual y en **tres días como máximo** con juego ocasional.
-- Con juego habitual, la colección completa se consigue en **unas dos semanas**; un jugador dedicado, en **menos de una**; uno ocasional, en **menos de seis semanas**.
+- Con juego habitual, la colección completa se consigue en **unas tres semanas**; un jugador dedicado, en **menos de una**; uno ocasional, en **menos de ocho semanas**. Aurora es la meta a largo plazo.
 - Cada aspecto cuesta más que el anterior, así que siempre hay una meta siguiente.
 
 ## Cómo ajustarlo

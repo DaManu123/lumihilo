@@ -4,6 +4,11 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- Sexto aspecto, **Aurora** (1000 Chispas): casillas de cristal con dos esquinas cortadas, nodos en destello de cuatro puntas, cable de cortina de aurora (velo translúcido con hebras verde y violeta) y fondo de cortinas que ondulan sobre un cielo estrellado. La tienda ajusta el alto de las filas para que quepan las seis.
+
+## [0.2.0-beta.1] - 2026-11-09
+
 ### Cambiado
 - **Aviso de versión nueva:** ahora sale **cada vez que se abre la app por completo** mientras exista una versión más nueva (antes, una sola vez por versión). La lista de versiones se lee de un archivo de la web (`releases.json`, sin límite de consultas) con la API de GitHub de respaldo, y hay un botón nuevo, **Ajustes → Buscar actualizaciones**, que siempre contesta (oferta, «estás al día» o el motivo del fallo).
 - **Luces con diseño propio:** ya no parece Circuitos. Cada casilla es un portalámparas con una bombilla de vidrio (apagada, hueca; encendida, con halo) cuya forma sale del aspecto, sobre una placa con remaches y una luz ambiente que crece al encender; el panel cuenta «N de M luces encendidas» con una barra.

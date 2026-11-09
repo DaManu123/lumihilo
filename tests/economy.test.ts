@@ -61,13 +61,13 @@ describe('Ritmo de Chispas (tienda de aspectos)', () => {
     expect(daysToOwn(PROFILES[0])[0]).toBeLessThanOrEqual(3);
   });
 
-  it('con juego habitual se consigue todo en unas dos semanas, y un jugador dedicado, en menos de una', () => {
-    expect(daysToOwn(PROFILES[1]).at(-1)!).toBeLessThanOrEqual(14);
+  it('con juego habitual se consigue todo en unas tres semanas, y un jugador dedicado, en menos de una', () => {
+    expect(daysToOwn(PROFILES[1]).at(-1)!).toBeLessThanOrEqual(21);
     expect(daysToOwn(PROFILES[2]).at(-1)!).toBeLessThanOrEqual(7);
   });
 
-  it('el jugador ocasional completa la colección en un tiempo razonable (≤ 6 semanas)', () => {
-    expect(daysToOwn(PROFILES[0]).at(-1)!).toBeLessThanOrEqual(42);
+  it('el jugador ocasional completa la colección en un tiempo razonable (≤ 8 semanas)', () => {
+    expect(daysToOwn(PROFILES[0]).at(-1)!).toBeLessThanOrEqual(56);
   });
 
   it('imprime la tabla para la documentación', () => {
