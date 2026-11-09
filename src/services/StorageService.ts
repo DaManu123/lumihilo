@@ -7,6 +7,7 @@ import type { MusicStyle } from '../core/music';
 import type { AnimationSpeed } from '../core/accessibility';
 import type { LanguageSetting } from '../core/i18n';
 import { DEFAULT_SKIN, SkinId } from '../core/skins';
+import type { PuzzleType } from '../core/puzzles';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -34,6 +35,10 @@ export interface UserSettings {
   skin: SkinId;
   /** Última versión nueva por la que ya se le preguntó al jugador (el aviso sale una sola vez por versión). */
   updatePromptedVersion: string;
+  /** Puzzle al que se juega: Circuitos o Luces. */
+  puzzle: PuzzleType;
+  /** Ya se le explicó cómo se juega Luces. */
+  hasSeenLightsTip: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -53,6 +58,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   language: 'auto',
   skin: DEFAULT_SKIN,
   updatePromptedVersion: '',
+  puzzle: 'circuits',
+  hasSeenLightsTip: false,
 };
 
 export interface StorageService {

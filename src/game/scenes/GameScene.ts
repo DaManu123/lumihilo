@@ -65,6 +65,18 @@ import {
 import { LANGUAGES, LanguageSetting, isLanguageSetting, resolveLanguage, setLanguage, t } from '../../core/i18n';
 import { THEME, setActiveTheme, getTheme, skinStyle } from '../theme';
 import { buildBackdrop, fillNode, fillTile, strokeLitLeg, strokeTile } from '../skinArt';
+import {
+  LightsGrid,
+  LightsLevel,
+  cloneGrid,
+  generateLights,
+  isAllLit,
+  lightsHint,
+  lightsParamsForTier,
+  litCount,
+  toggleLights,
+} from '../../core/lights';
+import { PUZZLES, PUZZLE_LABELS, PuzzleType, isPuzzleType, lightsRecordKey } from '../../core/puzzles';
 import { SKINS, SkinId, buySkin, isSkinUnlocked, skinInfo, usableSkin } from '../../core/skins';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -178,6 +190,8 @@ interface CellLook {
   /** Marcas en las esquinas de las casillas encendidas. */
   marks: boolean;
   legs: CellLeg[];
+  /** Casilla del puzzle Luces (`powered` es «encendida», sin cables). */
+  lights?: boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -201,6 +215,10 @@ export class GameScene extends Phaser.Scene {
 
   // Reto diario
   private isDaily = false;
+  /** Puzzle en juego (Circuitos o Luces) y, en Luces, el estado de las luces y su última casilla tocada. */
+  private puzzle: PuzzleType = 'circuits';
+  private lightGrid: LightsGrid = [];
+  private lastLightsTap: { row: number; col: number } | null = null;
   private dailyKey = '';
 
   // Contenedores de UI
@@ -226,6 +244,7 @@ export class GameScene extends Phaser.Scene {
   private dirIcon!: Phaser.GameObjects.Graphics;
   private dirTitle!: Phaser.GameObjects.Text;
   private dirRect!: Rect;
+  private dirSub!: Phaser.GameObjects.Text;
   private toast?: Phaser.GameObjects.Text;
 
   constructor() {
@@ -245,7 +264,8 @@ export class GameScene extends Phaser.Scene {
     this.settings.skin = usableSkin(this.progress, this.settings.skin);
     setActiveTheme(this.settings.theme, this.settings.highContrast === true, this.settings.skin);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
-    this.currentLevelIndex = this.progress.currentLevel;
+    this.puzzle = isPuzzleType(this.settings.puzzle) ? this.settings.puzzle : 'circuits';
+    this.currentLevelIndex = this.puzzleLevel();
     // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
     if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
     if (!isHapticMode(this.settings.hapticsMode)) this.settings.hapticsMode = 'all';
@@ -606,12 +626,13 @@ export class GameScene extends Phaser.Scene {
     this.dirPanel = this.add.graphics();
     this.dirIcon = this.add.graphics();
     this.dirTitle = this.uiText(40, -20, '', { size: 32, display: true, originX: 0.5 });
-    const sub = this.uiText(40, 26, t('Toca para cambiar el sentido'), {
+    this.dirSub = this.uiText(40, 26, t('Toca para cambiar el sentido'), {
       size: FONT.small,
       weight: '500',
       color: THEME.mutedText,
       originX: 0.5,
     });
+    const sub = this.dirSub;
     const zone = this.add.zone(0, 0, rect.w, rect.h).setInteractive({ useHandCursor: true });
     zone.on('pointerdown', () => this.toggleRotationDirection());
 
@@ -620,6 +641,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderDirectionButton(): void {
+    if (this.puzzle === 'lights') {
+      // En Luces no se gira nada: el panel recuerda cómo se juega
+      const { w, h } = this.dirRect;
+      this.dirPanel.clear();
+      this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.1), 1);
+      this.dirPanel.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
+      this.dirPanel.lineStyle(4, THEME.primary, 1);
+      this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
+      this.dirTitle.setText(t('Enciende todo')).setColor(THEME.primaryCss);
+      this.dirSub.setText(t('Cada toque cambia la casilla y sus vecinas'));
+      this.dirIcon.clear();
+      drawIcon(this.dirIcon, 'bulb', -w / 2 + 84, 0, 56, THEME.primary, THEME.surface);
+      return;
+    }
+    this.dirSub.setText(t('Toca para cambiar el sentido'));
     const clockwise = this.rotationDirection === 'cw';
     const color = clockwise ? THEME.clockwise : THEME.counterClockwise;
     const colorCss = clockwise ? THEME.clockwiseCss : THEME.counterClockwiseCss;
@@ -639,6 +675,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private toggleRotationDirection(): void {
+    if (this.puzzle === 'lights') return;
     this.rotationDirection = this.rotationDirection === 'cw' ? 'ccw' : 'cw';
     this.settings.rotationDirection = this.rotationDirection;
     storage.saveSettings(this.settings);
@@ -1129,7 +1166,7 @@ export class GameScene extends Phaser.Scene {
     ];
 
     const rowH = 58;
-    const cardH = 150 + rows.length * rowH + 190;
+    const cardH = 150 + rows.length * rowH + 190 + 150;
     const { overlay, w } = this.createCard(cardH, 200);
     overlay.add(this.uiText(0, -cardH / 2 + 70, t('Estadísticas'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
@@ -1138,6 +1175,20 @@ export class GameScene extends Phaser.Scene {
       this.addRow(overlay, w, y, label, value, { icon, last: i === rows.length - 1 });
       y += rowH;
     });
+
+    // Puzzle al que se juega
+    this.addChoiceRow(
+      overlay,
+      w,
+      y + 30,
+      t('Puzzle'),
+      PUZZLES.map((puzzle) => ({ value: puzzle, label: t(PUZZLE_LABELS[puzzle]) })),
+      this.puzzle,
+      (value) => {
+        overlay.destroy();
+        this.setPuzzle(value as PuzzleType);
+      }
+    );
 
     // Tres botones: Ajustes y Aspectos (secundarios) y Cerrar (principal)
     const gap = 14;
@@ -1573,6 +1624,11 @@ export class GameScene extends Phaser.Scene {
 
     if (this.timerEvent) this.timerEvent.paused = false;
 
+    if (this.puzzle === 'lights' && !this.isDaily) {
+      this.loadLightsLevel(levelIndex);
+      return;
+    }
+
     if (this.isDaily) {
       // Mismo puzzle para todos los jugadores del día: no depende de su nivel ni de su perfil
       this.currentParams = dailyParams(this.dailyKey);
@@ -1587,12 +1643,42 @@ export class GameScene extends Phaser.Scene {
     this.board = this.currentLevelData.board;
   }
 
+  /** Nivel por el que va el jugador en el puzzle activo. */
+  private puzzleLevel(): number {
+    return this.puzzle === 'lights' ? this.progress.lightsLevel : this.progress.currentLevel;
+  }
+
+  /** Carga un nivel de Luces: el tablero de luces y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
+  private loadLightsLevel(levelIndex: number): void {
+    const params = lightsParamsForTier(this.profile.currentTier);
+    const level: LightsLevel = generateLights(params, levelSeed((this.progress.seedBase ^ 0x9e3779b9) >>> 0, levelIndex));
+    const size = params.size;
+    this.currentParams = { width: size, height: size, extraLoops: 0, branchBias: 0 };
+    this.lightGrid = cloneGrid(level.initial);
+    this.lastLightsTap = null;
+    const grid = Array.from({ length: size }, (_, row) =>
+      Array.from({ length: size }, (_, col) => ({ row, col, baseMask: 0, rotation: 0, isSource: false }))
+    );
+    this.board = { rows: size, cols: size, grid, source: { row: 0, col: 0 } };
+    this.currentLevelData = {
+      seed: level.seed,
+      params: this.currentParams,
+      board: this.board,
+      solutionRotations: [],
+      initialRotations: [],
+      minTaps: level.minTaps,
+      difficulty: 0,
+      branches: 0,
+      cycles: 0,
+    };
+  }
+
   private startLevel(levelIndex: number): void {
     this.loadLevel(levelIndex);
 
     // Guardar en qué nivel va el jugador para retomarlo al reabrir la app
-    if (!this.isDaily && this.progress.currentLevel !== levelIndex) {
-      this.progress = { ...this.progress, currentLevel: levelIndex };
+    if (!this.isDaily && this.puzzleLevel() !== levelIndex) {
+      this.progress = this.puzzle === 'lights' ? { ...this.progress, lightsLevel: levelIndex } : { ...this.progress, currentLevel: levelIndex };
       storage.saveProgress(this.progress);
     }
 
@@ -1623,11 +1709,28 @@ export class GameScene extends Phaser.Scene {
   private toggleDaily(): void {
     if (this.isDaily) {
       this.isDaily = false;
-      this.startLevel(this.progress.currentLevel);
+      this.startLevel(this.puzzleLevel());
     } else {
+      // El reto diario es de Circuitos: desde Luces cambia de puzzle
+      if (this.puzzle === 'lights') this.setPuzzle('circuits', false);
       this.isDaily = true;
       this.dailyKey = dateKey(new Date());
       this.startLevel(1);
+    }
+  }
+
+  /** Cambia de puzzle: lo guarda, rehace la interfaz (el panel del giro cambia) y, si se pide, arranca su nivel actual. */
+  private setPuzzle(puzzle: PuzzleType, start = true): void {
+    this.puzzle = puzzle;
+    this.settings.puzzle = puzzle;
+    storage.saveSettings(this.settings);
+    this.isDaily = false;
+    this.buildUi();
+    if (start) this.startLevel(this.puzzleLevel());
+    if (puzzle === 'lights' && start && !this.settings.hasSeenLightsTip) {
+      this.settings.hasSeenLightsTip = true;
+      storage.saveSettings(this.settings);
+      this.showToast(t('Toca una casilla: cambia su luz y la de sus vecinas.\nEnciende todo el tablero.'));
     }
   }
 
@@ -1693,6 +1796,10 @@ export class GameScene extends Phaser.Scene {
    * así que gira con el contenedor. La imagen se pinta una sola vez (ver `cellTextureKeys`).
    */
   private drawCell(view: CellView, powered: boolean): void {
+    if (this.puzzle === 'lights' && !this.isDaily) {
+      this.drawLightsCell(view, powered);
+      return;
+    }
     const { cellVisual, gap } = this.geometry;
     const half = cellVisual / 2;
     const bridge = half + gap / 2; // llega hasta la mitad del hueco para que los cables vecinos se toquen
@@ -1737,6 +1844,20 @@ export class GameScene extends Phaser.Scene {
     view.textureKey = key;
   }
 
+  /** Casilla de Luces: la textura depende de si está encendida, del brillo y de la pista (se pinta una sola vez). */
+  private drawLightsCell(view: CellView, lit: boolean): void {
+    const { cellVisual, cellSize } = this.geometry;
+    const glowStep = lit ? Math.round(Math.min(1, Math.max(0, view.glow)) * GLOW_STEPS) : 0;
+    const marks = this.settings.litMarks && lit;
+    const look: CellLook = { powered: lit, isSource: false, hintRing: view.hintRing, glowStep, marks, legs: [], lights: true };
+    const prefix = `L|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${cellSize}|${cellVisual}`;
+    const key = `lcell|${prefix}|${lit ? 1 : 0}${view.hintRing ? 1 : 0}${marks ? 1 : 0}|${glowStep}`;
+    if (key === view.textureKey) return;
+    this.ensureCellTexture(key, prefix, look);
+    view.img.setTexture(key);
+    view.textureKey = key;
+  }
+
   /** Pinta (una sola vez) la textura de un aspecto de casilla. */
   private ensureCellTexture(key: string, prefix: string, look: CellLook): void {
     if (prefix !== cellTexturePrefix) {
@@ -1758,7 +1879,70 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Dibuja el aspecto de una casilla centrado en (0, 0). */
+  /** Casilla de Luces: vidrio con una cruz corta (ella y sus vecinas) y una lámpara en el centro. */
+  private paintLightsCell(g: Phaser.GameObjects.Graphics, look: CellLook): void {
+    const { cellVisual } = this.geometry;
+    const half = cellVisual / 2;
+    const radius = cellVisual * 0.17;
+    const style = skinStyle(THEME.skin);
+    const lit = look.powered;
+    const glow = look.glowStep / GLOW_STEPS;
+
+    g.fillStyle(mixColors(THEME.surface, THEME.primary, lit ? 0.12 + 0.2 * glow : 0), 1);
+    fillTile(g, style, cellVisual, radius);
+    g.lineStyle(2, lit ? mixColors(THEME.divider, THEME.primary, 0.55) : THEME.borderOff, 1);
+    strokeTile(g, style, cellVisual, radius);
+    if (look.hintRing) {
+      g.lineStyle(5, THEME.hintRing, 1);
+      strokeTile(g, style, cellVisual, radius, 3);
+    }
+    if (look.marks) {
+      const inset = cellVisual * 0.12;
+      const dot = Math.max(4, cellVisual * 0.045);
+      g.fillStyle(THEME.primary, 1);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) g.fillCircle(sx * (half - inset), sy * (half - inset), dot);
+    }
+
+    const w = Math.max(8, cellVisual * 0.12) * style.wireScale;
+    const reach = half * 0.62;
+    const legs = [
+      { dx: 0, dy: -1, reach },
+      { dx: 1, dy: 0, reach },
+      { dx: 0, dy: 1, reach },
+      { dx: -1, dy: 0, reach },
+    ];
+    if (lit) {
+      for (const [scale, alpha] of [[3.1, 0.06], [2.2, 0.1], [1.55, 0.16]] as const) {
+        for (const leg of legs) {
+          g.lineStyle(w * scale * (0.6 + 0.4 * style.halo), THEME.primary, Math.min(1, (alpha + 0.12 * glow) * style.halo));
+          g.beginPath();
+          g.moveTo(0, 0);
+          g.lineTo(leg.dx * leg.reach, leg.dy * leg.reach);
+          g.strokePath();
+        }
+      }
+      for (const leg of legs) strokeLitLeg(g, style, THEME, leg, w, glow);
+      g.fillStyle(THEME.primary, Math.min(1, (0.22 + 0.3 * glow) * Math.min(1.4, style.halo)));
+      g.fillCircle(0, 0, w * 2.1);
+      fillNode(g, style, w * 1.35, THEME.primary);
+      fillNode(g, style, w * 0.6, THEME.energyCore);
+    } else {
+      for (const leg of legs) {
+        g.lineStyle(w * 0.7, THEME.wireOff, 1);
+        g.beginPath();
+        g.moveTo(0, 0);
+        g.lineTo(leg.dx * leg.reach, leg.dy * leg.reach);
+        g.strokePath();
+      }
+      fillNode(g, style, w * 0.8, THEME.wireOffHub);
+    }
+  }
+
   private paintCell(g: Phaser.GameObjects.Graphics, look: CellLook): void {
+    if (look.lights) {
+      this.paintLightsCell(g, look);
+      return;
+    }
     const { cellVisual } = this.geometry;
     const half = cellVisual / 2;
     const radius = cellVisual * 0.17;
@@ -1828,6 +2012,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateFlowVisuals(): void {
+    if (this.puzzle === 'lights' && !this.isDaily) {
+      let lit = 0;
+      for (let r = 0; r < this.board.rows; r++) {
+        for (let c = 0; c < this.board.cols; c++) {
+          const on = this.lightGrid[r][c];
+          this.drawCell(this.cellViews[r][c], on);
+          if (on) lit++;
+        }
+      }
+      const total = this.board.rows * this.board.cols;
+      feedback.setIntensity(total > 0 ? lit / total : 0);
+      return;
+    }
     const powered = computePowerFlow(this.board);
     let lit = 0;
     for (let r = 0; r < this.board.rows; r++) {
@@ -1845,6 +2042,10 @@ export class GameScene extends Phaser.Scene {
    * @param invert true cuando se usa el clic derecho: gira en el sentido contrario al seleccionado.
    */
   private handleCellTap(view: CellView, invert = false): void {
+    if (this.puzzle === 'lights' && !this.isDaily) {
+      this.handleLightsTap(view);
+      return;
+    }
     if (this.isWon || view.isRotating) return;
 
     // El botón de dirección define el sentido; el clic derecho (PC) lo invierte
@@ -1885,8 +2086,66 @@ export class GameScene extends Phaser.Scene {
     this.updateFlowVisuals();
   }
 
+  /** Toque en Luces: cambia la casilla y sus vecinas; las que se encienden destellan. */
+  private handleLightsTap(view: CellView): void {
+    if (this.isWon) return;
+    this.tapCount++;
+    this.moveHistory.push({ row: view.row, col: view.col, step: 0 });
+    this.updateHud();
+    this.updateUndoButtonState();
+    this.applyLightsToggle(view.row, view.col, true);
+    this.evaluateVictory();
+  }
+
+  /** Cambia las luces de una casilla y sus vecinas con su sonido y destello. `forward` = jugada (no deshacer). */
+  private applyLightsToggle(row: number, col: number, forward: boolean): void {
+    const before = litCount(this.lightGrid);
+    toggleLights(this.lightGrid, row, col);
+    this.lastLightsTap = { row, col };
+    if (forward) {
+      feedback.rotate(row, col);
+      if (litCount(this.lightGrid) > before) feedback.connected(row, col);
+    } else {
+      feedback.undo(row, col);
+    }
+    const affected: Array<[number, number]> = [[row, col], [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]];
+    for (const [r, c] of affected) {
+      const view = this.cellViews[r]?.[c];
+      if (!view) continue;
+      if (this.lightGrid[r][c] && !this.reducedMotion()) {
+        this.tweens.addCounter({
+          from: 1,
+          to: 0,
+          duration: this.dur(300),
+          ease: 'Sine.easeOut',
+          onUpdate: (tween) => {
+            view.glow = tween.getValue() ?? 0;
+            if (this.cellViews[r]?.[c] === view) this.drawCell(view, this.lightGrid[r][c]);
+          },
+          onComplete: () => {
+            view.glow = 0;
+            if (this.cellViews[r]?.[c] === view) this.drawCell(view, this.lightGrid[r][c]);
+          },
+        });
+      }
+    }
+    const tapped = this.cellViews[row]?.[col];
+    if (tapped && !this.reducedMotion()) {
+      tapped.container.setScale(0.9);
+      this.tweens.add({ targets: tapped.container, scale: 1, duration: this.dur(160), ease: 'Back.easeOut' });
+    }
+    this.updateFlowVisuals();
+  }
+
   private handleUndo(): void {
     if (this.isWon || this.moveHistory.length === 0) return;
+
+    if (this.puzzle === 'lights' && !this.isDaily) {
+      const last = this.moveHistory.pop()!;
+      this.updateUndoButtonState();
+      this.applyLightsToggle(last.row, last.col, false);
+      return;
+    }
 
     const lastMove = this.moveHistory[this.moveHistory.length - 1];
     const view = this.cellViews[lastMove.row][lastMove.col];
@@ -1923,6 +2182,10 @@ export class GameScene extends Phaser.Scene {
    */
   private useHint(): void {
     if (this.isWon) return;
+    if (this.puzzle === 'lights' && !this.isDaily) {
+      this.useLightsHint();
+      return;
+    }
 
     const target = findHintCell(this.board);
     if (!target) {
@@ -1977,14 +2240,55 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Pista en Luces: por 10 Chispas toca por ti la casilla que más acerca a la solución más corta. */
+  private useLightsHint(): void {
+    const target = lightsHint(this.lightGrid);
+    if (!target) {
+      this.showToast(t('Todo está encendido.'));
+      return;
+    }
+    const afterPurchase = spendSparks(this.progress, HINT_COST);
+    if (!afterPurchase) {
+      feedback.denied();
+      this.showToast(t('Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.', HINT_COST));
+      return;
+    }
+    this.progress = afterPurchase;
+    storage.saveProgress(this.progress);
+    this.hintsUsed++;
+    feedback.hint();
+    // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
+    this.moveHistory = [];
+    this.updateUndoButtonState();
+    this.updateHud();
+    this.updateHintButtonState();
+
+    const [row, col] = target;
+    const view = this.cellViews[row][col];
+    view.hintRing = true;
+    this.applyLightsToggle(row, col, true);
+    this.evaluateVictory();
+    // El anillo se mantiene un instante para que se vea qué casilla se tocó
+    this.time.delayedCall(1000, () => {
+      if (this.cellViews[row]?.[col] !== view) return;
+      view.hintRing = false;
+      this.drawCell(view, this.lightGrid[row]?.[col] ?? false);
+    });
+  }
+
   /** Pulso de luz que recorre el tablero desde la fuente. Devuelve su duración total en ms. */
   private playWinPulse(): number {
     if (this.reducedMotion()) return 0;
 
-    const { rows, cols, source } = this.board;
-    const powered = computePowerFlow(this.board);
+    const lightsMode = this.puzzle === 'lights' && !this.isDaily;
+    const { rows, cols } = this.board;
+    // En Luces la onda sale de la última casilla tocada y todo el tablero acaba encendido
+    const source = lightsMode ? (this.lastLightsTap ?? { row: rows >> 1, col: cols >> 1 }) : this.board.source;
+    const powered = lightsMode ? this.board.grid.map((row) => row.map(() => true)) : computePowerFlow(this.board);
     let maxDelay = 0;
-    const maxStep = rows - 1 - source.row + (cols - 1 - source.col);
+    const maxStep = lightsMode
+      ? Math.max(source.row, rows - 1 - source.row) + Math.max(source.col, cols - 1 - source.col)
+      : rows - 1 - source.row + (cols - 1 - source.col);
     // Una nota por cada paso de la onda de luz: la melodía asciende con ella
     for (let step = 0; step <= maxStep; step++) {
       this.time.delayedCall(step * PULSE_STEP_MS, () => feedback.winStep(step));
@@ -2020,7 +2324,8 @@ export class GameScene extends Phaser.Scene {
 
   private evaluateVictory(): void {
     if (this.isWon) return;
-    if (!checkVictory(this.board)) return;
+    const solved = this.puzzle === 'lights' && !this.isDaily ? isAllLit(this.lightGrid) : checkVictory(this.board);
+    if (!solved) return;
 
     this.isWon = true;
     this.updateUndoButtonState();
@@ -2029,7 +2334,9 @@ export class GameScene extends Phaser.Scene {
 
     const today = dateKey(new Date());
     const minTaps = this.currentLevelData.minTaps;
+    const lightsMode = this.puzzle === 'lights' && !this.isDaily;
     const playedTier = this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier;
+    const recordKey = lightsMode ? lightsRecordKey(playedTier) : String(playedTier);
 
     // Evaluar desempeño; el reto diario NO altera el perfil adaptativo (es igual para todos)
     const { updatedProfile, evaluation } = evaluateAndAdapt(this.profile, {
@@ -2048,7 +2355,7 @@ export class GameScene extends Phaser.Scene {
     const firstDailyToday = countsAsTodaysDaily && this.progress.lastDailyCompleted !== today;
     const multiplier = this.isDaily ? (firstDailyToday ? 2 : 0) : 1;
     const isNewRecord =
-      this.hintsUsed === 0 && isNewTimeRecord(this.progress, playedTier, this.elapsedTime);
+      this.hintsUsed === 0 && isNewTimeRecord(this.progress, playedTier, this.elapsedTime, recordKey);
 
     const reward = computeSparksReward({
       tier: playedTier,
@@ -2069,10 +2376,13 @@ export class GameScene extends Phaser.Scene {
       hintsUsed: this.hintsUsed,
       isDaily: countsAsTodaysDaily,
       today,
+      recordKey,
     });
     if (!this.isDaily) {
       // Al ganar, el jugador retoma en el siguiente nivel si cierra la app
-      this.progress = { ...this.progress, currentLevel: this.currentLevelIndex + 1 };
+      this.progress = lightsMode
+        ? { ...this.progress, lightsLevel: this.currentLevelIndex + 1 }
+        : { ...this.progress, currentLevel: this.currentLevelIndex + 1 };
     }
     storage.saveProgress(this.progress);
     this.updateHud();
@@ -2143,7 +2453,7 @@ export class GameScene extends Phaser.Scene {
       overlay.destroy();
       if (info.isDaily) {
         this.isDaily = false;
-        this.startLevel(this.progress.currentLevel);
+        this.startLevel(this.puzzleLevel());
       } else {
         this.startLevel(this.currentLevelIndex + 1);
       }
@@ -2159,7 +2469,7 @@ export class GameScene extends Phaser.Scene {
       keyboard?.off('keydown-SPACE', goNext);
     });
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, this.puzzle === 'lights' && !info.isDaily ? t('Todo encendido') : t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
     overlay.add(
       this.uiText(0, -cardH / 2 + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
         size: 28,

@@ -146,8 +146,9 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     reset: [136, 378], undo: [360, 378], hint: [584, 378],
     dir: [360, 502], stats: [650, 56],
     tutorialOk: [360, H / 2 + 700 / 2 - 84],
-    // Estadísticas (tarjeta de 862 px): "Ajustes", "Aspectos" y "Cerrar"
-    statsSettings: [360 - 191.3, H / 2 + 862 / 2 - 84], statsSkins: [360, H / 2 + 862 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 862 / 2 - 84],
+    // Estadísticas (tarjeta de 1012 px): selector de puzzle y "Ajustes", "Aspectos" y "Cerrar"
+    puzzleCircuits: [360 - 140, H / 2 + 290], puzzleLights: [360 + 140, H / 2 + 290],
+    statsSettings: [360 - 191.3, H / 2 + 1012 / 2 - 84], statsSkins: [360, H / 2 + 1012 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 1012 / 2 - 84],
     // Aspectos (tarjeta de 1190 px, filas de 150 px)
     skinRow: (i) => [360, H / 2 - 360 + 150 * i], skinsDone: [360, H / 2 + 511],
     // Aviso de versión nueva (tarjeta de 620 px)

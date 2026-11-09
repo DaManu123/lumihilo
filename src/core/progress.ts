@@ -29,6 +29,8 @@ export interface PlayerProgress {
   /** Semilla base aleatoria (se genera una vez por jugador) para que no repita los mismos niveles. */
   seedBase: number;
   currentLevel: number;
+  /** Nivel por el que va en el puzzle Luces (el de Circuitos es `currentLevel`). */
+  lightsLevel: number;
   sparks: number;
   stats: PlayerStats;
   streak: StreakState;
@@ -42,6 +44,7 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
   return {
     seedBase: seedBase >>> 0,
     currentLevel: 1,
+    lightsLevel: 1,
     sparks: STARTING_SPARKS,
     stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, bestTimeByTier: {} },
     streak: { current: 0, best: 0, lastActiveDate: null },
@@ -84,6 +87,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
   return {
     seedBase: toInt(r.seedBase, base.seedBase) >>> 0,
     currentLevel: toInt(r.currentLevel, 1, 1),
+    lightsLevel: toInt(r.lightsLevel, 1, 1),
     sparks: toInt(r.sparks, STARTING_SPARKS),
     stats: {
       levelsSolved: toInt(stats.levelsSolved, 0),
@@ -228,8 +232,8 @@ export function computeSparksReward(input: RewardInput): SparksReward {
 }
 
 /** ¿Este tiempo mejora el mejor tiempo del jugador en ese tier? (el primer nivel del tier no cuenta como récord). */
-export function isNewTimeRecord(progress: PlayerProgress, tier: number, elapsedSeconds: number): boolean {
-  const best = progress.stats.bestTimeByTier[String(tier)];
+export function isNewTimeRecord(progress: PlayerProgress, tier: number, elapsedSeconds: number, recordKey = String(tier)): boolean {
+  const best = progress.stats.bestTimeByTier[recordKey];
   return best !== undefined && elapsedSeconds < best;
 }
 
@@ -241,11 +245,13 @@ export interface LevelOutcome {
   hintsUsed: number;
   isDaily: boolean;
   today: string;
+  /** Clave del récord de tiempo; por defecto, el nivel de habilidad (el puzzle Luces usa la suya). */
+  recordKey?: string;
 }
 
 /** Aplica el resultado de un nivel resuelto al progreso (estadísticas, Chispas, racha y reto diario). */
 export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcome): PlayerProgress {
-  const key = String(outcome.tier);
+  const key = outcome.recordKey ?? String(outcome.tier);
   const best = progress.stats.bestTimeByTier[key];
   const bestTimeByTier = { ...progress.stats.bestTimeByTier };
   // Los récords y las resoluciones "perfectas" solo cuentan si se resolvió sin pistas

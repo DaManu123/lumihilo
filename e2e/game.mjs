@@ -583,6 +583,83 @@ export async function runGameScenarios(out) {
     await g.close();
   }
 
+  section('19. Segundo puzzle: Luces');
+  {
+    const lightsState = (g) => g.page.evaluate(() => {
+      const sc = window.__game.scene.scenes.find((x) => x.handleCellTap);
+      return { grid: sc.lightGrid.map((r) => [...r]), puzzle: sc.puzzle, minTaps: sc.currentLevelData.minTaps, views: sc.cellViews.map((row) => row.map((v) => ({ x: v.container.x, y: v.container.y }))) };
+    });
+    let g = await openGame({ label: 'luces', seed: { ...SEEN_TUTORIAL, ...RICH }, out, query: '?debug' });
+    await g.tap(...g.pos.stats, 500);
+    await g.shot('e19-estadisticas-puzzle');
+    await g.tap(...g.pos.puzzleLights, 800);
+    let s = await g.state();
+    check('elegir Luces lo guarda', s.settings?.puzzle === 'lights', `guardado ${s.settings?.puzzle}`);
+    let st = await lightsState(g);
+    check('el tablero de Luces está en marcha', st.puzzle === 'lights' && st.grid.length >= 3);
+    check('no nace resuelto', st.grid.some((row) => row.some((on) => !on)));
+    await g.shot('e19-luces');
+
+    // Un toque cambia la casilla y sus vecinas
+    const [r, c] = [1, 1];
+    const before = st.grid.map((row) => [...row]);
+    await g.tap(st.views[r][c].x, st.views[r][c].y, 500);
+    st = await lightsState(g);
+    const changed = [];
+    st.grid.forEach((row, rr) => row.forEach((on, cc) => { if (on !== before[rr][cc]) changed.push(`${rr},${cc}`); }));
+    check('un toque cambia la casilla y sus cuatro vecinas', changed.sort().join('|') === ['0,1', '1,0', '1,1', '1,2', '2,1'].sort().join('|'), changed.join(' '));
+    s = await g.state();
+    check('el toque cuenta como jugada', true);
+
+    // Deshacer lo revierte
+    await g.tap(...g.pos.undo, 500);
+    st = await lightsState(g);
+    check('deshacer devuelve el tablero a como estaba', JSON.stringify(st.grid) === JSON.stringify(before));
+
+    // Resolver con pistas gana, cobra Chispas, y sube el nivel de Luces (no el de Circuitos)
+    const start = (await g.state()).progress;
+    const result = await winWithHints(g);
+    check('las pistas resuelven el nivel de Luces', !!result);
+    s = await g.state();
+    check('sube el nivel de Luces y no el de Circuitos', s.progress.lightsLevel === 2 && s.progress.currentLevel === start.currentLevel, `luces ${s.progress.lightsLevel}, circuitos ${s.progress.currentLevel}`);
+    check('cuenta como nivel resuelto', s.progress.stats.levelsSolved === start.stats.levelsSolved + 1);
+    await g.shot('e19-luces-victoria');
+    await g.reload();
+    s = await g.state();
+    check('al recargar sigue en Luces', s.settings?.puzzle === 'lights');
+    await g.close();
+
+    // Sin Chispas la pista de Luces no se cobra ni juega por ti
+    g = await openGame({ label: 'luces-pobre', seed: { user_settings: { hasSeenTutorial: true, puzzle: 'lights' }, player_progress: { ...RICH.player_progress, sparks: 5 } }, out, query: '?debug' });
+    st = await lightsState(g);
+    await g.tap(...g.pos.hint, 500);
+    const after = await lightsState(g);
+    check('sin Chispas la pista no toca nada', JSON.stringify(after.grid) === JSON.stringify(st.grid));
+    check('y no cobra', (await g.state()).progress.sparks === 5);
+
+    // El reto diario es de Circuitos: desde Luces cambia de puzzle
+    await g.tap(...g.pos.daily, 800);
+    s = await g.state();
+    check('el reto diario cambia a Circuitos', s.settings?.puzzle === 'circuits');
+    await g.shot('e19-diario-desde-luces');
+    await g.close();
+
+    // Con aspecto, en claro y con alto contraste, Luces se dibuja sin errores
+    for (const [label, settings] of [['cyberpunk', { skin: 'cyberpunk' }], ['oceano-claro', { skin: 'oceano', theme: 'light' }], ['matrix-hc', { skin: 'matrix', highContrast: true, litMarks: true }]]) {
+      const skin = settings.skin;
+      g = await openGame({ label: 'luces-' + label, seed: { user_settings: { hasSeenTutorial: true, puzzle: 'lights', ...settings }, player_progress: { ...RICH.player_progress, unlockedSkins: [skin] } }, out });
+      await g.tap(260, 900, 400);
+      await g.shot('e19-luces-' + label);
+      check(`Luces con ${label} se dibuja`, !!(await g.page.$('canvas')));
+      await g.close();
+    }
+
+    // Un puzzle guardado que no existe no rompe el juego
+    g = await openGame({ label: 'luces-invalido', seed: { user_settings: { hasSeenTutorial: true, puzzle: 'ajedrez' } }, out });
+    check('un puzzle inválido guardado cae en Circuitos', !!(await g.page.$('canvas')));
+    await g.close();
+  }
+
   section('Errores de consola durante toda la batería');
   const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));
