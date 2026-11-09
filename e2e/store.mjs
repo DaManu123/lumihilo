@@ -11,9 +11,9 @@ mkdirSync(out, { recursive: true });
 const { preview } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href);
 const server = await preview({ root, logLevel: 'error', preview: { port: 4173, strictPort: true, host: '127.0.0.1' } });
 
-const progress = (level, theme = 'dark') => ({
-  player_progress: { ...RICH.player_progress, currentLevel: level, sparks: 240 },
-  user_settings: { ...SEEN_TUTORIAL.user_settings, theme },
+const progress = (level, theme = 'dark', skin = 'filamento') => ({
+  player_progress: { ...RICH.player_progress, currentLevel: level, sparks: 240, unlockedSkins: skin === 'filamento' ? [] : [skin] },
+  user_settings: { ...SEEN_TUTORIAL.user_settings, theme, skin },
 });
 
 try {
@@ -64,6 +64,20 @@ try {
   for (let i = 0; i < 7; i++) await g.tap(...g.pos.hint, 450);
   await g.page.waitForTimeout(800);
   await g.shot('04-tema-claro'); await g.close();
+  g = await open(progress(14, 'dark', 'oceano'), 'oceano');
+  for (let i = 0; i < 6; i++) await g.tap(...g.pos.hint, 450);
+  await g.page.waitForTimeout(900);
+  await g.shot('05-oceano'); await g.close();
+
+  g = await open(progress(14, 'dark', 'cyberpunk'), 'cyberpunk');
+  for (let i = 0; i < 6; i++) await g.tap(...g.pos.hint, 450);
+  await g.page.waitForTimeout(900);
+  await g.shot('06-cyberpunk'); await g.close();
+
+  g = await open(progress(14, 'dark', 'oceano'), 'tienda');
+  await g.tap(...g.pos.stats, 600);
+  await g.tap(...g.pos.statsSkins, 700);
+  await g.shot('07-aspectos'); await g.close();
 } finally {
   await close();
   await server.close();
