@@ -167,7 +167,7 @@ Puedes convertir cada fase en un *Milestone* de GitHub y cada checkbox en un *Is
 - [x] Segundo módulo de puzzle: **Luces** (`src/core/lights.ts`, `src/core/puzzles.ts`; se elige en Estadísticas → Puzzle)
 - [ ] Opción "quitar anuncios" con compra única (Google Play Billing)
 - [ ] ~~Evaluar iOS~~ (descartado por ahora: no hay Mac ni dispositivo para probarlo; se retoma si cambia)
-- [ ] Localización (español/inglés al menos)
+- [x] Localización (español/inglés: `src/core/i18n.ts`, ficha y privacidad en los dos idiomas)
 
 ---
 
