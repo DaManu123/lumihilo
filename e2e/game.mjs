@@ -517,11 +517,16 @@ export async function runGameScenarios(out) {
   section('18. Aviso de versión nueva');
   {
     const feed = (tag) => JSON.stringify([{ tag_name: tag, html_url: `https://github.com/DaManu123/lumihilo/releases/tag/${tag}`, draft: false }]);
+    // Las dos fuentes de la lista de versiones: el archivo de la web y la API de GitHub
     const mock = (body, status = 200) => async (page) => {
-      await page.route('https://api.github.com/**', (route) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body }));
+      for (const pattern of ['https://damanu123.github.io/lumihilo/releases.json*', 'https://api.github.com/**']) {
+        await page.route(pattern, (route) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body }));
+      }
       await page.addInitScript(() => { window.__opened = []; window.open = (url) => { window.__opened.push(url); return null; }; });
     };
-    const cardOpen = (g) => g.page.evaluate(() => window.__game.scene.scenes.find((sc) => sc.handleCellTap).children.getAll().some((o) => (o.depth ?? 0) >= 100));
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const cardOpen = (g) => g.page.evaluate(`${scene}.children.getAll().some((o) => (o.depth ?? 0) >= 100 && o.type !== 'Text')`);
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
     // En el navegador de pruebas (WebGL por software) el juego corre más lento que el reloj: se espera a que la
     // comprobación (un temporizador de 3 s del juego) haya terminado de verdad y a que llegue su respuesta.
     const settle = async (g) => {
@@ -534,38 +539,62 @@ export async function runGameScenarios(out) {
     await settle(g);
     check('con una versión más nueva se muestra el aviso', await cardOpen(g));
     await g.shot('e18-aviso-actualizacion');
-    let s = await g.state();
-    check('queda anotado que ya se preguntó por esa versión', s.settings?.updatePromptedVersion === '99.0.0', `guardado ${s.settings?.updatePromptedVersion}`);
     await g.tap(...g.pos.updateLater, 500);
     check('"Ahora no" cierra el aviso y se puede seguir jugando', !(await cardOpen(g)));
     await g.tap(...g.pos.hint, 450);
-    s = await g.state();
+    let s = await g.state();
     check('el juego sigue funcionando tras rechazar', s.progress.sparks < 30);
     await g.page.reload();
     await g.page.waitForSelector('canvas');
     await settle(g);
-    check('no vuelve a preguntar por la misma versión', !(await cardOpen(g)));
-    await g.close();
-
-    g = await open(feed('v99.0.1'));
-    await g.page.evaluate(() => localStorage.setItem('user_settings', JSON.stringify({ hasSeenTutorial: true, updatePromptedVersion: '99.0.0' })));
-    await g.page.reload();
-    await g.page.waitForSelector('canvas');
-    await settle(g);
-    check('pregunta otra vez cuando sale una versión todavía más nueva', await cardOpen(g));
+    check('al cerrar la app del todo y abrirla otra vez vuelve a preguntar', await cardOpen(g));
     await g.tap(...g.pos.updateNow, 500);
     const opened = await g.page.evaluate(() => window.__opened);
-    check('"Actualizar" abre la página de la versión', opened.length === 1 && opened[0].includes('v99.0.1'), JSON.stringify(opened));
+    check('"Actualizar" abre la página de la versión', opened.length === 1 && opened[0].includes('v99.0.0'), JSON.stringify(opened));
     await g.close();
 
     g = await open(feed('v0.0.1'));
     await settle(g);
     check('con una versión igual o más vieja no avisa', !(await cardOpen(g)));
+    // Buscar a mano: dice que estás al día
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSettings, 600);
+    await g.tap(...g.pos.settingsUpdates, 900);
+    check('«Buscar actualizaciones» dice que ya tienes la última versión', (await texts(g)).includes('Ya tienes la última versión'), await texts(g));
+    await g.shot('e18-al-dia');
+    await g.close();
+
+    g = await open(feed('v99.0.0'));
+    await settle(g);
+    await g.tap(...g.pos.updateLater, 500);
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSettings, 600);
+    await g.tap(...g.pos.settingsUpdates, 900);
+    check('«Buscar actualizaciones» vuelve a ofrecer la versión nueva', await cardOpen(g));
     await g.close();
 
     g = await open('{"message":"rate limit"}', 403);
     await settle(g);
-    check('si GitHub no responde bien, no avisa ni rompe nada', !(await cardOpen(g)) && !!(await g.page.$('canvas')));
+    check('si las dos fuentes fallan, no avisa ni rompe nada', !(await cardOpen(g)) && !!(await g.page.$('canvas')));
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.statsSettings, 600);
+    await g.tap(...g.pos.settingsUpdates, 900);
+    const failure = await texts(g);
+    check('«Buscar actualizaciones» explica por qué falló', failure.includes('No se pudo consultar') && failure.includes('HTTP 403'), failure);
+    await g.shot('e18-fallo');
+    await g.close();
+
+    // Si falla la primera fuente (la web), usa la segunda (la API)
+    let apiHits = 0;
+    g = await openGame({
+      label: 'actualizacion-respaldo', seed: SEEN_TUTORIAL, out, query: '?debug&update',
+      beforeLoad: async (page) => {
+        await page.route('https://damanu123.github.io/lumihilo/releases.json*', (route) => route.fulfill({ status: 404, body: 'no' }));
+        await page.route('https://api.github.com/**', (route) => { apiHits++; route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: feed('v99.0.0') }); });
+      },
+    });
+    await settle(g);
+    check('si falla el archivo de la web, usa la API de GitHub', apiHits >= 1 && (await cardOpen(g)), `${apiHits} consultas a la API`);
     await g.close();
 
     let requests = 0;
@@ -575,26 +604,47 @@ export async function runGameScenarios(out) {
       out,
       query: '?debug',
       beforeLoad: async (page) => {
-        await page.route('https://api.github.com/**', (route) => { requests++; route.abort(); });
+        for (const pattern of ['https://damanu123.github.io/lumihilo/releases.json*', 'https://api.github.com/**']) await page.route(pattern, (route) => { requests++; route.abort(); });
       },
     });
     await settle(g);
-    check('la versión web normal no consulta nada a GitHub', requests === 0, `${requests} consultas`);
+    check('la versión web normal no consulta nada', requests === 0, `${requests} consultas`);
     await g.close();
   }
 
   section('19. Segundo puzzle: Luces');
   {
-    const lightsState = (g) => g.page.evaluate(() => {
-      const sc = window.__game.scene.scenes.find((x) => x.handleCellTap);
-      return { grid: sc.lightGrid.map((r) => [...r]), puzzle: sc.puzzle, minTaps: sc.currentLevelData.minTaps, views: sc.cellViews.map((row) => row.map((v) => ({ x: v.container.x, y: v.container.y }))) };
-    });
-    let g = await openGame({ label: 'luces', seed: { ...SEEN_TUTORIAL, ...RICH }, out, query: '?debug' });
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
+    const lightsState = (g) => g.page.evaluate(`(() => { const sc = ${scene}; return { grid: sc.lightGrid.map((r) => [...r]), puzzle: sc.puzzle, minTaps: sc.currentLevelData.minTaps, views: sc.cellViews.map((row) => row.map((v) => ({ x: v.container.x, y: v.container.y }))) }; })()`);
+    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true };
+    let g = await openGame({ label: 'luces', seed: { user_settings: { hasSeenTutorial: true }, ...RICH }, out, query: '?debug' });
     await g.tap(...g.pos.stats, 500);
     await g.shot('e19-estadisticas-puzzle');
-    await g.tap(...g.pos.puzzleLights, 800);
+    await g.tap(...g.pos.puzzleLights, 900);
     let s = await g.state();
     check('elegir Luces lo guarda', s.settings?.puzzle === 'lights', `guardado ${s.settings?.puzzle}`);
+
+    // Mini tutorial: sale la primera vez, se cierra con «Entendido» y no vuelve solo
+    check('la primera vez en Luces sale el mini tutorial', (await texts(g)).includes('Cómo se juega Luces'));
+    await g.page.waitForTimeout(1500);
+    await g.shot('e19-tutorial-luces');
+    await g.page.waitForTimeout(1500);
+    await g.shot('e19-tutorial-luces-2');
+    await g.tap(...g.pos.lightsTutorialOk, 500);
+    s = await g.state();
+    check('«Entendido» cierra el tutorial y lo anota', !(await texts(g)).includes('Cómo se juega Luces') && s.settings?.hasSeenLightsTip === true);
+    check('el panel cuenta las luces encendidas', /\d+ de \d+ luces encendidas/.test(await texts(g)), await texts(g));
+    await g.tap(...g.pos.lightsPanel, 500);
+    check('tocar el panel de luces vuelve a mostrar el tutorial', (await texts(g)).includes('Cómo se juega Luces'));
+    await g.tap(...g.pos.lightsTutorialOk, 500);
+    // Cambiar a Circuitos y volver a Luces no repite el tutorial
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.puzzleCircuits, 900);
+    await g.tap(...g.pos.stats, 500);
+    await g.tap(...g.pos.puzzleLights, 900);
+    check('volver a Luces no repite el tutorial', !(await texts(g)).includes('Cómo se juega Luces'));
+
     let st = await lightsState(g);
     check('el tablero de Luces está en marcha', st.puzzle === 'lights' && st.grid.length >= 3);
     check('no nace resuelto', st.grid.some((row) => row.some((on) => !on)));
@@ -608,8 +658,6 @@ export async function runGameScenarios(out) {
     const changed = [];
     st.grid.forEach((row, rr) => row.forEach((on, cc) => { if (on !== before[rr][cc]) changed.push(`${rr},${cc}`); }));
     check('un toque cambia la casilla y sus cuatro vecinas', changed.sort().join('|') === ['0,1', '1,0', '1,1', '1,2', '2,1'].sort().join('|'), changed.join(' '));
-    s = await g.state();
-    check('el toque cuenta como jugada', true);
 
     // Deshacer lo revierte
     await g.tap(...g.pos.undo, 500);
@@ -630,7 +678,7 @@ export async function runGameScenarios(out) {
     await g.close();
 
     // Sin Chispas la pista de Luces no se cobra ni juega por ti
-    g = await openGame({ label: 'luces-pobre', seed: { user_settings: { hasSeenTutorial: true, puzzle: 'lights' }, player_progress: { ...RICH.player_progress, sparks: 5 } }, out, query: '?debug' });
+    g = await openGame({ label: 'luces-pobre', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, player_progress: { ...RICH.player_progress, sparks: 5 } }, out, query: '?debug' });
     st = await lightsState(g);
     await g.tap(...g.pos.hint, 500);
     const after = await lightsState(g);
@@ -644,11 +692,17 @@ export async function runGameScenarios(out) {
     await g.shot('e19-diario-desde-luces');
     await g.close();
 
+    // Abrir la app directamente en Luces por primera vez también muestra el tutorial
+    g = await openGame({ label: 'luces-directo', seed: { user_settings: { hasSeenTutorial: true, puzzle: 'lights' } }, out, query: '?debug' });
+    check('si la app abre en Luces y no se vio el tutorial, sale', (await texts(g)).includes('Cómo se juega Luces'));
+    await g.close();
+
     // Con aspecto, en claro y con alto contraste, Luces se dibuja sin errores
-    for (const [label, settings] of [['cyberpunk', { skin: 'cyberpunk' }], ['oceano-claro', { skin: 'oceano', theme: 'light' }], ['matrix-hc', { skin: 'matrix', highContrast: true, litMarks: true }]]) {
+    for (const [label, settings] of [['cyberpunk', { skin: 'cyberpunk' }], ['oceano-claro', { skin: 'oceano', theme: 'light' }], ['matrix-hc', { skin: 'matrix', highContrast: true, litMarks: true }], ['solar', { skin: 'solar' }], ['filamento-claro', { theme: 'light' }]]) {
       const skin = settings.skin;
-      g = await openGame({ label: 'luces-' + label, seed: { user_settings: { hasSeenTutorial: true, puzzle: 'lights', ...settings }, player_progress: { ...RICH.player_progress, unlockedSkins: [skin] } }, out });
-      await g.tap(260, 900, 400);
+      g = await openGame({ label: 'luces-' + label, seed: { user_settings: { ...SEEN, puzzle: 'lights', ...settings }, player_progress: { ...RICH.player_progress, unlockedSkins: skin ? [skin] : [] } }, out, query: '?debug' });
+      st = await lightsState(g);
+      await g.tap(st.views[0][0].x, st.views[0][0].y, 400);
       await g.shot('e19-luces-' + label);
       check(`Luces con ${label} se dibuja`, !!(await g.page.$('canvas')));
       await g.close();
@@ -661,6 +715,6 @@ export async function runGameScenarios(out) {
   }
 
   section('Errores de consola durante toda la batería');
-  const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403/i.test(e));
+  const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403|status of 404/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));
 }

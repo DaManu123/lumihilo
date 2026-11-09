@@ -33,8 +33,6 @@ export interface UserSettings {
   language: LanguageSetting;
   /** Aspecto (paleta) equipado; solo se usa si está comprado. */
   skin: SkinId;
-  /** Última versión nueva por la que ya se le preguntó al jugador (el aviso sale una sola vez por versión). */
-  updatePromptedVersion: string;
   /** Puzzle al que se juega: Circuitos o Luces. */
   puzzle: PuzzleType;
   /** Ya se le explicó cómo se juega Luces. */
@@ -57,7 +55,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   animationSpeed: 'normal',
   language: 'auto',
   skin: DEFAULT_SKIN,
-  updatePromptedVersion: '',
   puzzle: 'circuits',
   hasSeenLightsTip: false,
 };

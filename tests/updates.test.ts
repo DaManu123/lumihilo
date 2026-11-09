@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compareVersions, parseVersion, pickLatest, shouldPromptUpdate } from '../src/core/updates';
+import { compareVersions, isUpdateAvailable, parseVersion, pickLatest } from '../src/core/updates';
 
 describe('Versiones', () => {
   it('lee versiones con y sin prelanzamiento', () => {
@@ -50,24 +50,16 @@ describe('Última publicación', () => {
   });
 });
 
-describe('¿Avisar de la actualización?', () => {
+describe('¿Hay una actualización?', () => {
   const latest = { version: '0.1.0-beta.10', url: 'https://github.com/DaManu123/lumihilo/releases/tag/v0.1.0-beta.10' };
 
-  it('avisa si hay una versión más nueva que no se ha preguntado', () => {
-    expect(shouldPromptUpdate('0.1.0-beta.9', latest, '')).toBe(true);
+  it('hay actualización si lo publicado es más nuevo que lo instalado', () => {
+    expect(isUpdateAvailable('0.1.0-beta.9', latest)).toBe(true);
   });
 
-  it('no vuelve a avisar por la misma versión', () => {
-    expect(shouldPromptUpdate('0.1.0-beta.9', latest, '0.1.0-beta.10')).toBe(false);
-  });
-
-  it('avisa otra vez cuando sale una versión todavía más nueva', () => {
-    expect(shouldPromptUpdate('0.1.0-beta.9', { ...latest, version: '0.1.0-beta.11' }, '0.1.0-beta.10')).toBe(true);
-  });
-
-  it('no avisa si ya tienes esa versión o una más nueva, ni si no se pudo consultar', () => {
-    expect(shouldPromptUpdate('0.1.0-beta.10', latest, '')).toBe(false);
-    expect(shouldPromptUpdate('0.2.0', latest, '')).toBe(false);
-    expect(shouldPromptUpdate('0.1.0-beta.9', null, '')).toBe(false);
+  it('no la hay si ya tienes esa versión o una más nueva, ni si no se pudo consultar', () => {
+    expect(isUpdateAvailable('0.1.0-beta.10', latest)).toBe(false);
+    expect(isUpdateAvailable('0.2.0', latest)).toBe(false);
+    expect(isUpdateAvailable('0.1.0-beta.9', null)).toBe(false);
   });
 });

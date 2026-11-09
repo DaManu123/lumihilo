@@ -1,7 +1,9 @@
 name: Publicar la web
 
 # Publica en GitHub Pages la página de presentación (docs/landing) y el juego jugable en /play/.
-# Se ejecuta al fusionar en main o a mano desde la pestaña Actions.
+# También publica `releases.json`, la lista de versiones que lee el aviso de actualización de la app (así no depende
+# del límite de consultas de la API de GitHub). Se vuelve a generar al terminar cada publicación de versión.
+# Se ejecuta al fusionar en main, al terminar el flujo «Release» o a mano desde la pestaña Actions.
 on:
   push:
     branches: [main]
@@ -13,6 +15,9 @@ on:
       - 'vite.config.ts'
       - 'docs/landing/**'
       - '.github/workflows/pages.yml'
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -28,8 +33,12 @@ jobs:
   build:
     name: Preparar el sitio
     runs-on: ubuntu-latest
+    # Tras un «Release» fallido no hay nada nuevo que publicar
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -45,6 +54,15 @@ jobs:
           cp -r docs/landing/. _site/
           cp -r dist/. _site/play/
           touch _site/.nojekyll
+
+      - name: Lista de versiones para el aviso de actualización
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases?per_page=30" \
+            --jq '[.[] | select(.draft == false) | {tag_name, html_url, draft}]' > _site/releases.json
+          test "$(jq 'length' _site/releases.json)" -gt 0
+          cat _site/releases.json | head -c 400
           test -f _site/index.html && test -f _site/privacidad.html && test -f _site/play/index.html
 
       - uses: actions/upload-pages-artifact@v3

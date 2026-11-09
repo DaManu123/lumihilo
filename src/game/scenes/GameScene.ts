@@ -93,7 +93,7 @@ import {
 } from '../layout';
 import { storage, feedback, UserSettings, RotationDirection, createUpdateService } from '../../services';
 import { APP_VERSION } from '../../config';
-import { UpdateInfo, shouldPromptUpdate } from '../../core/updates';
+import { UpdateInfo, isUpdateAvailable } from '../../core/updates';
 import { APP_NAME } from '../../config';
 
 interface CellView {
@@ -169,6 +169,9 @@ const GLOW_STEPS = 8;
  * gama baja. Cada aspecto distinto de casilla se pinta una vez en una textura y después solo se dibuja
  * esa imagen, que cuesta casi nada. Es el mismo dibujo, sin cambios visibles.
  */
+/** El aviso de versión nueva sale una vez cada vez que se abre la app (no cada vez que la escena se reconstruye). */
+let updateOfferedThisRun = false;
+
 const cellTextureKeys = new Set<string>();
 let cellTexturePrefix = '';
 
@@ -301,6 +304,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFlowVisuals();
     this.checkAndShowTutorial();
     this.scheduleUpdateCheck();
+    this.maybeShowLightsTutorial();
 
     // Cronómetro interno (actualiza cada segundo)
     this.timerEvent = this.time.addEvent({
@@ -642,19 +646,31 @@ export class GameScene extends Phaser.Scene {
 
   private renderDirectionButton(): void {
     if (this.puzzle === 'lights') {
-      // En Luces no se gira nada: el panel recuerda cómo se juega
+      // En Luces no se gira nada: el panel cuenta cuántas luces hay encendidas (y al tocarlo explica cómo se juega)
       const { w, h } = this.dirRect;
+      const total = this.board.rows * this.board.cols;
+      const lit = litCount(this.lightGrid);
+      const fraction = total > 0 ? lit / total : 0;
       this.dirPanel.clear();
-      this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.1), 1);
+      this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.06 + 0.1 * fraction), 1);
       this.dirPanel.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
       this.dirPanel.lineStyle(4, THEME.primary, 1);
       this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
-      this.dirTitle.setText(t('Enciende todo')).setColor(THEME.primaryCss);
-      this.dirSub.setText(t('Cada toque cambia la casilla y sus vecinas'));
+      this.dirTitle.setText(t('{0} de {1} luces encendidas', lit, total)).setColor(THEME.primaryCss).setPosition(40, -16);
+      this.dirSub.setText('');
       this.dirIcon.clear();
-      drawIcon(this.dirIcon, 'bulb', -w / 2 + 84, 0, 56, THEME.primary, THEME.surface);
+      drawIcon(this.dirIcon, 'bulb', -w / 2 + 84, 0, 56, fraction > 0 ? THEME.primary : THEME.wireOff, THEME.surface);
+      const barW = 400;
+      const barX = 40 - barW / 2;
+      this.dirIcon.fillStyle(THEME.divider, 1);
+      this.dirIcon.fillRoundedRect(barX, 18, barW, 16, 8);
+      if (fraction > 0) {
+        this.dirIcon.fillStyle(THEME.primary, 1);
+        this.dirIcon.fillRoundedRect(barX, 18, Math.max(16, barW * fraction), 16, 8);
+      }
       return;
     }
+    this.dirTitle.setPosition(40, -20);
     this.dirSub.setText(t('Toca para cambiar el sentido'));
     const clockwise = this.rotationDirection === 'cw';
     const color = clockwise ? THEME.clockwise : THEME.counterClockwise;
@@ -675,7 +691,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private toggleRotationDirection(): void {
-    if (this.puzzle === 'lights') return;
+    if (this.puzzle === 'lights') {
+      this.showLightsTutorial();
+      return;
+    }
     this.rotationDirection = this.rotationDirection === 'cw' ? 'ccw' : 'cw';
     this.settings.rotationDirection = this.rotationDirection;
     storage.saveSettings(this.settings);
@@ -1051,21 +1070,52 @@ export class GameScene extends Phaser.Scene {
     overlay.add([g, text, this.hitZone(rect, onTap)]);
   }
 
+  private updates = createUpdateService();
+
+  /** ¿Hay alguna tarjeta o aviso abierto encima del juego? */
+  private overlayOpen(): boolean {
+    return this.isWon || this.children.getAll().some((o) => ((o as { depth?: number }).depth ?? 0) >= 100);
+  }
+
   /**
-   * Busca una versión nueva poco después de abrir el juego y, si la hay, se lo pregunta al jugador una sola vez por
-   * versión. Si dice que no, se sigue jugando sin más. No molesta durante el tutorial ni con una tarjeta abierta.
+   * Busca una versión nueva poco después de abrir el juego y, si la hay, se la ofrece al jugador. Sale **una vez cada
+   * vez que se abre la app por completo**: si dice «Ahora no» sigue jugando, y al cerrarla del todo y abrirla otra vez
+   * vuelve a preguntar mientras exista una versión más nueva. No molesta durante el tutorial ni con una tarjeta abierta.
    */
   private scheduleUpdateCheck(): void {
-    if (!this.settings.hasSeenTutorial) return;
-    const service = createUpdateService();
+    if (!this.settings.hasSeenTutorial || !this.updates.supported) return;
     this.time.delayedCall(3000, async () => {
-      const latest = await service.check();
-      if (!this.scene.isActive() || !shouldPromptUpdate(APP_VERSION, latest, this.settings.updatePromptedVersion)) return;
-      if (this.isWon || this.children.getAll().some((o) => ((o as { depth?: number }).depth ?? 0) >= 100)) return; // se vuelve a intentar al abrir otra vez
-      this.settings.updatePromptedVersion = latest!.version;
-      storage.saveSettings(this.settings);
-      this.showUpdateModal(latest!, () => void service.open(latest!));
+      if (updateOfferedThisRun) return;
+      const result = await this.updates.check();
+      if (!this.scene.isActive() || updateOfferedThisRun || !isUpdateAvailable(APP_VERSION, result.latest)) return;
+      // Con un aviso o una tarjeta abierta se espera un poco y se vuelve a intentar (unas veces) en vez de perder la oferta
+      let attempts = 0;
+      const offer = () => {
+        if (updateOfferedThisRun || !this.scene.isActive()) return;
+        if (this.overlayOpen() && attempts++ < 20) {
+          this.time.delayedCall(3000, offer);
+          return;
+        }
+        if (this.overlayOpen()) return;
+        updateOfferedThisRun = true;
+        this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
+      };
+      offer();
     });
+  }
+
+  /** «Buscar actualizaciones» en Ajustes: siempre responde, con la oferta, con «estás al día» o con el motivo del fallo. */
+  private async checkUpdatesNow(): Promise<void> {
+    this.showToast(t('Buscando actualizaciones…'));
+    const result = await this.updates.check();
+    if (!this.scene.isActive()) return;
+    if (result.error && !result.latest) {
+      this.showToast(t('No se pudo consultar las versiones ({0}).\nRevisa tu conexión.', result.error));
+    } else if (isUpdateAvailable(APP_VERSION, result.latest)) {
+      this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
+    } else {
+      this.showToast(t('Ya tienes la última versión ({0}).', APP_VERSION));
+    }
   }
 
   private showUpdateModal(info: UpdateInfo, onUpdate: () => void): void {
@@ -1080,7 +1130,7 @@ export class GameScene extends Phaser.Scene {
       originX: 0.5,
     });
     body.setOrigin(0.5, 0).setAlign('center').setLineSpacing(8);
-    const note = this.uiText(0, -cardH / 2 + 300, t('Puedes seguir jugando: actualizar es opcional y no volveremos a preguntarte por esta versión.'), {
+    const note = this.uiText(0, -cardH / 2 + 300, t('Puedes seguir jugando: actualizar es opcional. Volveremos a avisarte la próxima vez que abras la app.'), {
       size: 24,
       weight: '500',
       color: THEME.mutedText,
@@ -1100,6 +1150,139 @@ export class GameScene extends Phaser.Scene {
       () => {
         overlay.destroy();
         onUpdate();
+      },
+      true
+    );
+  }
+
+  /** Primera vez que se juega Luces: muestra el mini tutorial (una sola vez; se vuelve a ver tocando el panel de luces). */
+  private maybeShowLightsTutorial(): void {
+    if (this.puzzle !== 'lights' || this.isDaily) return;
+    if (!this.settings.hasSeenTutorial || this.settings.hasSeenLightsTip) return;
+    if (this.overlayOpen()) return;
+    this.showLightsTutorial();
+  }
+
+  /** Textura de una lámpara del tutorial (encendida o apagada) con el aspecto actual. */
+  private lampTutorialKey(size: number, lit: boolean): string {
+    const key = `ltut|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${size}|${lit ? 1 : 0}`;
+    if (!this.textures.exists(key)) {
+      const texture = this.textures.addDynamicTexture(key, size + 2, size + 2);
+      if (texture) {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        this.paintLightsCell(g, { powered: lit, isSource: false, hintRing: false, glowStep: lit ? 3 : 0, marks: false, legs: [], lights: true }, size);
+        texture.draw(g, (size + 2) / 2, (size + 2) / 2);
+        g.destroy();
+      }
+    }
+    return key;
+  }
+
+  /**
+   * Mini tutorial de Luces para cualquier edad: un tablero de ejemplo que se repite solo (un dedo toca el centro y las
+   * cinco lámparas cambian), tres frases cortas y un botón. No depende de leer mucho: la animación lo explica.
+   */
+  private showLightsTutorial(): void {
+    const cardH = 1090;
+    const { overlay, w } = this.createCard(cardH, 250);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Luces'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    // Tablero de ejemplo 3×3: la cruz del centro está apagada y las esquinas, encendidas
+    const size = 116;
+    const step = size + 14;
+    const top = -cardH / 2 + 150 + size / 2;
+    const initial = [
+      [true, false, true],
+      [false, false, false],
+      [true, false, true],
+    ];
+    const plate = this.add.graphics();
+    plate.fillStyle(mixColors(THEME.background, THEME.surface, 0.45), 1);
+    plate.fillRoundedRect(-step * 1.5 - 4, top - size / 2 - 18, step * 3 + 8, step * 3 + 22, 30);
+    plate.lineStyle(3, THEME.cardBorder, 1);
+    plate.strokeRoundedRect(-step * 1.5 - 4, top - size / 2 - 18, step * 3 + 8, step * 3 + 22, 30);
+    overlay.add(plate);
+    const lamps: Phaser.GameObjects.Image[][] = [];
+    for (let r = 0; r < 3; r++) {
+      const row: Phaser.GameObjects.Image[] = [];
+      for (let c = 0; c < 3; c++) {
+        const lamp = this.add.image((c - 1) * step, top + r * step, this.lampTutorialKey(size, initial[r][c]));
+        overlay.add(lamp);
+        row.push(lamp);
+      }
+      lamps.push(row);
+    }
+
+    // El dedo (un anillo que pulsa) sobre la casilla del centro
+    const finger = this.add.graphics();
+    finger.lineStyle(7, THEME.accent, 1);
+    finger.strokeCircle(0, 0, 42);
+    finger.fillStyle(THEME.accent, 0.35);
+    finger.fillCircle(0, 0, 30);
+    finger.setPosition(0, top + step).setAlpha(0);
+    overlay.add(finger);
+
+    const crossCells: Array<[number, number]> = [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]];
+    const alive = () => overlay.active;
+    const resetDemo = () => {
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) lamps[r][c].setTexture(this.lampTutorialKey(size, initial[r][c])).setScale(1);
+      finger.setAlpha(0).setScale(1);
+    };
+    const cycle = () => {
+      if (!alive()) return;
+      resetDemo();
+      this.time.delayedCall(800, () => {
+        if (!alive()) return;
+        finger.setAlpha(1);
+        if (!this.reducedMotion()) this.tweens.add({ targets: finger, scale: 0.8, duration: 260, yoyo: true, ease: 'Sine.easeInOut' });
+      });
+      this.time.delayedCall(1400, () => {
+        if (!alive()) return;
+        feedback.rotate(1, 1);
+        for (const [r, c] of crossCells) {
+          lamps[r][c].setTexture(this.lampTutorialKey(size, true));
+          if (!this.reducedMotion()) {
+            lamps[r][c].setScale(0.86);
+            this.tweens.add({ targets: lamps[r][c], scale: 1, duration: 260, ease: 'Back.easeOut' });
+          }
+        }
+        finger.setAlpha(0);
+      });
+    };
+    cycle();
+    const timer = this.time.addEvent({ delay: 4200, loop: true, callback: cycle });
+    overlay.once('destroy', () => timer.remove(false));
+
+    // Tres frases cortas
+    const lines = [t('Toca una casilla.'), t('Cambia su luz y la de las 4 casillas de al lado.'), t('Enciende todas las luces para ganar.')];
+    let y = top + step * 2 + size / 2 + 56;
+    for (const line of lines) {
+      const dot = this.add.graphics();
+      dot.fillStyle(THEME.primary, 1);
+      dot.fillCircle(-w / 2 + 56, y + 17, 7);
+      const text = this.uiText(-w / 2 + 84, y, line, { size: 29, weight: '500', wrap: w - 140 });
+      text.setOrigin(0, 0);
+      overlay.add([dot, text]);
+      y += text.height + 26;
+    }
+    const tip = this.uiText(0, y + 10, t('¿Atascado? La pista te dice qué casilla tocar.'), {
+      size: FONT.small,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+      originX: 0.5,
+    });
+    tip.setOrigin(0.5, 0).setAlign('center');
+    overlay.add(tip);
+
+    this.addCardButton(
+      overlay,
+      { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
+      t('Entendido'),
+      () => {
+        this.settings.hasSeenLightsTip = true;
+        storage.saveSettings(this.settings);
+        overlay.destroy();
       },
       true
     );
@@ -1344,7 +1527,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Ajustes: efectos, música (estilo y volumen), vibración (intensidad y prueba). Se guardan al instante. */
   private showSettingsModal(): void {
-    const cardH = 1150;
+    const cardH = 1150 + (this.updates.supported ? 104 : 0);
     const { overlay, w } = this.createCard(cardH, 200);
     overlay.add(this.uiText(0, -cardH / 2 + 70, t('Ajustes'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
@@ -1443,6 +1626,18 @@ export class GameScene extends Phaser.Scene {
       false
     );
     this.addCardButton(overlay, { x: (half + 18) / 2, y, w: half, h: 88 }, t('¿No vibra?'), () => this.showHapticsModal(), false);
+    if (this.updates.supported) {
+      this.addCardButton(
+        overlay,
+        { x: 0, y: y + 104, w: w - 88, h: 88 },
+        t('Buscar actualizaciones'),
+        () => {
+          overlay.destroy();
+          void this.checkUpdatesNow();
+        },
+        false
+      );
+    }
 
     this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Listo'), () => overlay.destroy(), true);
   }
@@ -1727,11 +1922,7 @@ export class GameScene extends Phaser.Scene {
     this.isDaily = false;
     this.buildUi();
     if (start) this.startLevel(this.puzzleLevel());
-    if (puzzle === 'lights' && start && !this.settings.hasSeenLightsTip) {
-      this.settings.hasSeenLightsTip = true;
-      storage.saveSettings(this.settings);
-      this.showToast(t('Toca una casilla: cambia su luz y la de sus vecinas.\nEnciende todo el tablero.'));
-    }
+    if (start) this.maybeShowLightsTutorial();
   }
 
   private toggleTheme(): void {
@@ -1753,6 +1944,54 @@ export class GameScene extends Phaser.Scene {
   // Tablero
   // ---------------------------------------------------------------------------
 
+  private lightsGlow?: Phaser.GameObjects.Image;
+
+  /** Placa del panel de lámparas (con remaches) y una luz ambiente que crece cuanto más se enciende. */
+  private addLightsDecor(): void {
+    const { cellSize, startX, startY } = this.geometry;
+    const { rows, cols } = this.board;
+    const pad = 14;
+    const w = Math.round(cols * cellSize + pad * 2);
+    const h = Math.round(rows * cellSize + pad * 2);
+    const cx = startX + ((cols - 1) * cellSize) / 2;
+    const cy = startY + ((rows - 1) * cellSize) / 2;
+    const tag = `${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}`;
+
+    const glowKey = `lglow|${tag}`;
+    if (!this.textures.exists(glowKey)) {
+      const texture = this.textures.addDynamicTexture(glowKey, 256, 256);
+      if (texture) {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        for (let i = 0; i < 18; i++) {
+          g.fillStyle(THEME.primary, 0.028);
+          g.fillCircle(128, 128, 128 - i * 6.5);
+        }
+        texture.draw(g, 0, 0);
+        g.destroy();
+      }
+    }
+    this.lightsGlow = this.add.image(cx, cy, glowKey).setScale((Math.max(w, h) * 2.1) / 256).setAlpha(0.1);
+
+    const plateKey = `lplate|${tag}|${w}x${h}`;
+    if (!this.textures.exists(plateKey)) {
+      const texture = this.textures.addDynamicTexture(plateKey, w, h);
+      if (texture) {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        g.fillStyle(mixColors(THEME.background, THEME.surface, 0.45), 1);
+        g.fillRoundedRect(1, 1, w - 2, h - 2, 36);
+        g.lineStyle(3, THEME.cardBorder, 1);
+        g.strokeRoundedRect(2, 2, w - 4, h - 4, 36);
+        // Remaches en las esquinas
+        g.fillStyle(THEME.cardBorder, 1);
+        for (const [rx, ry] of [[16, 16], [w - 16, 16], [16, h - 16], [w - 16, h - 16]]) g.fillCircle(rx, ry, 5);
+        texture.draw(g, 0, 0);
+        g.destroy();
+      }
+    }
+    const plate = this.add.image(cx, cy, plateKey);
+    this.boardContainer.add([this.lightsGlow, plate]);
+  }
+
   private buildBoard(): void {
     const { width, height } = this.cameras.main;
     this.boardContainer.removeAll(true);
@@ -1761,6 +2000,8 @@ export class GameScene extends Phaser.Scene {
     const { rows, cols } = this.board;
     this.geometry = computeBoardGeometry(width, height, rows, cols, this.hud.boardTop);
     const { cellSize, startX, startY } = this.geometry;
+    this.lightsGlow = undefined;
+    if (this.puzzle === 'lights' && !this.isDaily) this.addLightsDecor();
 
     for (let r = 0; r < rows; r++) {
       const rowViews: CellView[] = [];
@@ -1879,22 +2120,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Dibuja el aspecto de una casilla centrado en (0, 0). */
-  /** Casilla de Luces: vidrio con una cruz corta (ella y sus vecinas) y una lámpara en el centro. */
-  private paintLightsCell(g: Phaser.GameObjects.Graphics, look: CellLook): void {
-    const { cellVisual } = this.geometry;
+  /**
+   * Casilla de Luces: un portalámparas hundido con una bombilla de vidrio. Apagada se ve hueca y sin filamento;
+   * encendida brilla con un halo que se funde con el tablero. La forma de la bombilla y del portalámparas sale del
+   * aspecto (círculo, rombo, píxel, burbuja o sol). Se pinta una sola vez en una textura, igual que las demás casillas.
+   */
+  private paintLightsCell(g: Phaser.GameObjects.Graphics, look: CellLook, cellVisual = this.geometry.cellVisual): void {
     const half = cellVisual / 2;
-    const radius = cellVisual * 0.17;
     const style = skinStyle(THEME.skin);
     const lit = look.powered;
     const glow = look.glowStep / GLOW_STEPS;
+    const socket = cellVisual * 0.94;
+    const radius = socket * 0.17;
+    const recess = mixColors(THEME.surface, THEME.background, 0.55);
 
-    g.fillStyle(mixColors(THEME.surface, THEME.primary, lit ? 0.12 + 0.2 * glow : 0), 1);
-    fillTile(g, style, cellVisual, radius);
-    g.lineStyle(2, lit ? mixColors(THEME.divider, THEME.primary, 0.55) : THEME.borderOff, 1);
-    strokeTile(g, style, cellVisual, radius);
+    // Portalámparas: hundido cuando está apagado, teñido de calor cuando está encendido
+    g.fillStyle(lit ? mixColors(THEME.surface, THEME.primary, 0.1 + 0.16 * glow) : recess, 1);
+    fillTile(g, style, socket, radius);
+    g.lineStyle(2, lit ? mixColors(THEME.divider, THEME.primary, 0.6) : THEME.borderOff, 1);
+    strokeTile(g, style, socket, radius);
+    g.lineStyle(2, lit ? mixColors(THEME.primary, THEME.surface, 0.6) : mixColors(THEME.borderOff, THEME.surface, 0.5), 0.75);
+    strokeTile(g, style, socket, radius, socket * 0.1);
+
     if (look.hintRing) {
       g.lineStyle(5, THEME.hintRing, 1);
-      strokeTile(g, style, cellVisual, radius, 3);
+      strokeTile(g, style, socket, radius, 3);
     }
     if (look.marks) {
       const inset = cellVisual * 0.12;
@@ -1903,38 +2153,25 @@ export class GameScene extends Phaser.Scene {
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) g.fillCircle(sx * (half - inset), sy * (half - inset), dot);
     }
 
-    const w = Math.max(8, cellVisual * 0.12) * style.wireScale;
-    const reach = half * 0.62;
-    const legs = [
-      { dx: 0, dy: -1, reach },
-      { dx: 1, dy: 0, reach },
-      { dx: 0, dy: 1, reach },
-      { dx: -1, dy: 0, reach },
-    ];
+    const r = cellVisual * (style.node === 'sun' ? 0.22 : 0.26);
     if (lit) {
-      for (const [scale, alpha] of [[3.1, 0.06], [2.2, 0.1], [1.55, 0.16]] as const) {
-        for (const leg of legs) {
-          g.lineStyle(w * scale * (0.6 + 0.4 * style.halo), THEME.primary, Math.min(1, (alpha + 0.12 * glow) * style.halo));
-          g.beginPath();
-          g.moveTo(0, 0);
-          g.lineTo(leg.dx * leg.reach, leg.dy * leg.reach);
-          g.strokePath();
-        }
+      // Halo en capas (de más grande y tenue a más pequeño y fuerte), sin pasar del borde de la casilla
+      const steps = 6;
+      const outer = half * 0.96;
+      for (let i = 0; i < steps; i++) {
+        const radiusStep = outer - ((outer - r * 1.2) * i) / (steps - 1);
+        g.fillStyle(THEME.primary, (0.045 + 0.04 * glow) * Math.min(1.4, style.halo));
+        g.fillCircle(0, 0, radiusStep);
       }
-      for (const leg of legs) strokeLitLeg(g, style, THEME, leg, w, glow);
-      g.fillStyle(THEME.primary, Math.min(1, (0.22 + 0.3 * glow) * Math.min(1.4, style.halo)));
-      g.fillCircle(0, 0, w * 2.1);
-      fillNode(g, style, w * 1.35, THEME.primary);
-      fillNode(g, style, w * 0.6, THEME.energyCore);
+      fillNode(g, style, r, THEME.primary);
+      fillNode(g, style, r * 0.66, THEME.primaryGlow);
+      fillNode(g, style, r * 0.32, THEME.energyCore);
     } else {
-      for (const leg of legs) {
-        g.lineStyle(w * 0.7, THEME.wireOff, 1);
-        g.beginPath();
-        g.moveTo(0, 0);
-        g.lineTo(leg.dx * leg.reach, leg.dy * leg.reach);
-        g.strokePath();
-      }
-      fillNode(g, style, w * 0.8, THEME.wireOffHub);
+      // Vidrio apagado: borde de cristal con el interior del color del portalámparas y un puntito de filamento frío
+      fillNode(g, style, r, mixColors(THEME.surface, THEME.wireOff, 0.5));
+      fillNode(g, style, r * 0.8, recess);
+      g.fillStyle(THEME.wireOffHub, 1);
+      g.fillCircle(0, 0, Math.max(2, r * 0.16));
     }
   }
 
@@ -2023,6 +2260,12 @@ export class GameScene extends Phaser.Scene {
       }
       const total = this.board.rows * this.board.cols;
       feedback.setIntensity(total > 0 ? lit / total : 0);
+      const glow = this.lightsGlow;
+      if (glow?.active) {
+        this.tweens.killTweensOf(glow);
+        this.tweens.add({ targets: glow, alpha: 0.1 + 0.6 * (total > 0 ? lit / total : 0), duration: this.dur(300) });
+      }
+      if (this.dirRect) this.renderDirectionButton();
       return;
     }
     const powered = computePowerFlow(this.board);

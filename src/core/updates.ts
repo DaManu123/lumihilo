@@ -71,12 +71,7 @@ export function pickLatest(releases: unknown): UpdateInfo | null {
   return best;
 }
 
-/**
- * ¿Hay que avisar? Solo si la versión publicada es más nueva que la instalada y no se le ha preguntado ya
- * al jugador por esa misma versión (el aviso sale una sola vez por versión).
- */
-export function shouldPromptUpdate(current: string, latest: UpdateInfo | null, lastPrompted: string): boolean {
-  if (!latest) return false;
-  if (compareVersions(latest.version, current) <= 0) return false;
-  return latest.version !== lastPrompted;
+/** ¿La versión publicada es más nueva que la instalada? (El aviso sale cada vez que se abre la app mientras sea así.) */
+export function isUpdateAvailable(current: string, latest: UpdateInfo | null): boolean {
+  return latest !== null && compareVersions(latest.version, current) > 0;
 }
