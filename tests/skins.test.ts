@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultProgress, sanitizeProgress } from '../src/core/progress';
-import { DEFAULT_SKIN, SKINS, buySkin, isSkinUnlocked, sanitizeUnlockedSkins, usableSkin } from '../src/core/skins';
+import { DEFAULT_SKIN, SKINS, buySkin, skinInfo, isSkinUnlocked, sanitizeUnlockedSkins, usableSkin } from '../src/core/skins';
 
 const rich = (sparks: number) => ({ ...createDefaultProgress(1), sparks });
 
@@ -18,7 +18,8 @@ describe('Aspectos', () => {
   });
 
   it('comprar descuenta las Chispas y desbloquea el aspecto', () => {
-    const result = buySkin(rich(300), 'cyberpunk');
+    const price = skinInfo('cyberpunk').price;
+    const result = buySkin(rich(price + 150), 'cyberpunk');
     expect(result).not.toBeNull();
     expect(result!.sparks).toBe(150);
     expect(isSkinUnlocked(result!, 'cyberpunk')).toBe(true);
@@ -26,15 +27,15 @@ describe('Aspectos', () => {
   });
 
   it('no deja comprar sin Chispas suficientes ni dos veces el mismo', () => {
-    expect(buySkin(rich(149), 'cyberpunk')).toBeNull();
-    const once = buySkin(rich(1000), 'solar')!;
+    expect(buySkin(rich(skinInfo('cyberpunk').price - 1), 'cyberpunk')).toBeNull();
+    const once = buySkin(rich(5000), 'solar')!;
     expect(buySkin(once, 'solar')).toBeNull();
-    expect(once.sparks).toBe(600);
+    expect(once.sparks).toBe(5000 - skinInfo('solar').price);
     expect(buySkin(rich(1000), DEFAULT_SKIN)).toBeNull();
   });
 
   it('un aspecto no comprado o desconocido vuelve al inicial', () => {
-    const p = buySkin(rich(500), 'matrix')!;
+    const p = buySkin(rich(5000), 'matrix')!;
     expect(usableSkin(p, 'matrix')).toBe('matrix');
     expect(usableSkin(p, 'solar')).toBe(DEFAULT_SKIN);
     expect(usableSkin(p, 'inventado')).toBe(DEFAULT_SKIN);

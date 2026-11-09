@@ -48,7 +48,7 @@ export const RICH = {
  * Abre el juego en un contexto limpio. Devuelve utilidades para tocar el lienzo, leer el estado guardado
  * y contar lo que suena y vibra (se instrumentan AudioContext y navigator.vibrate antes de cargar).
  */
-export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX' } = {}) {
+export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null } = {}) {
   const ctx = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
@@ -101,7 +101,8 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(`[${label}] ${m.text()}`); });
   page.on('pageerror', (e) => consoleErrors.push(`[${label}] PAGEERROR ${e.message}`));
 
-  await page.goto(URL);
+  if (beforeLoad) await beforeLoad(page);
+  await page.goto(URL + query);
   if (seed) {
     await page.evaluate((s) => {
       for (const [k, v] of Object.entries(s)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
@@ -147,8 +148,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     tutorialOk: [360, H / 2 + 700 / 2 - 84],
     // Estadísticas (tarjeta de 862 px): "Ajustes", "Aspectos" y "Cerrar"
     statsSettings: [360 - 191.3, H / 2 + 862 / 2 - 84], statsSkins: [360, H / 2 + 862 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 862 / 2 - 84],
-    // Aspectos (tarjeta de 1040 px, filas de 150 px)
-    skinRow: (i) => [360, H / 2 - 285 + 150 * i], skinsDone: [360, H / 2 + 436],
+    // Aspectos (tarjeta de 1190 px, filas de 150 px)
+    skinRow: (i) => [360, H / 2 - 360 + 150 * i], skinsDone: [360, H / 2 + 511],
+    // Aviso de versión nueva (tarjeta de 620 px)
+    updateLater: [360 - 144.5, H / 2 + 226], updateNow: [360 + 144.5, H / 2 + 226],
     // Ajustes (tarjeta de 1150 px)
     setEffects: [360, H / 2 - 405], setMusic: [360, H / 2 - 321],
     styleSwing: [220, H / 2 - 147], styleAmbient: [500, H / 2 - 147],

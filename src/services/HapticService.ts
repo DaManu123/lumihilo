@@ -52,10 +52,11 @@ interface GameHapticsPlugin {
   trigger(options: TriggerOptions): Promise<TriggerResult>;
   diagnose(): Promise<HapticDiagnostics>;
   lastCrash(): Promise<{ text: string }>;
+  openUrl(options: { url: string }): Promise<void>;
 }
 
 /** Plugin nativo propio (android/.../GameHapticsPlugin.java); en el navegador no existe. */
-const GameHaptics = registerPlugin<GameHapticsPlugin>('GameHaptics');
+export const GameHaptics = registerPlugin<GameHapticsPlugin>('GameHaptics');
 
 /**
  * Vibración real. En el teléfono usa el plugin nativo `GameHaptics`, que prueba varias vías a la vez

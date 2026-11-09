@@ -174,6 +174,22 @@ export const SKIN_COLORS: Record<SkinId, { dark: SkinEntry; light: SkinEntry }> 
       divider: 0xcfe3d5, borderOff: 0xcfe3d5, cardBorder: 0xaecbb7, wireOff: 0x7a9a85, wireOffHub: 0x5f826b, hintRing: 0x0c2a17,
     },
   },
+  // Aguamarina y coral sobre azul abisal
+  oceano: {
+    dark: {
+      background: 0x04131c, surface: 0x0a2433, text: '#e6f7fb', mutedText: '#8fb9c7',
+      primary: 0x35e0c4, primaryGlow: 0x8ff5e3, energyCore: 0xe8fffa, onPrimary: '#00201a',
+      accent: 0xff7a59, clockwise: 0x7ab8ff, counterClockwise: 0xffd36e,
+      divider: 0x16384c, borderOff: 0x16384c, cardBorder: 0x2b6a8a, wireOff: 0x3f7f9a, wireOffHub: 0x5a9db8, hintRing: 0xffffff,
+    },
+    light: {
+      background: 0xe3f3f7, surface: 0xffffff, text: '#06303d', mutedText: '#3d6574',
+      primary: 0x005a50, primaryGlow: 0x2fcdb8, energyCore: 0xbff5ec, onPrimary: '#ffffff',
+      accent: 0xc2410c, clockwise: 0x1864ab, counterClockwise: 0x8f2dae,
+      divider: 0xcfe6ee, borderOff: 0xcfe6ee, cardBorder: 0xa9cfdb, wireOff: 0x6b8f9e, wireOffHub: 0x557a8a, hintRing: 0x06303d,
+      hc: { wireOff: 0x66739c, wireOffHub: 0x55628a },
+    },
+  },
   // Amarillo sol sobre granate oscuro
   solar: {
     dark: {
@@ -221,23 +237,24 @@ export function setActiveTheme(mode: 'dark' | 'light', highContrast = false, ski
  */
 export interface SkinStyle {
   /** Forma de la casilla: redondeada, con esquinas cortadas, cuadrada o circular. */
-  tile: 'round' | 'chamfer' | 'square' | 'circle';
+  tile: 'round' | 'chamfer' | 'square' | 'circle' | 'pill';
   /** Forma de los nodos del centro. */
-  node: 'circle' | 'diamond' | 'square' | 'sun';
+  node: 'circle' | 'diamond' | 'square' | 'sun' | 'bubble';
   /** Cable encendido: macizo, de doble pista (circuito), de bits (datos) o de plasma (núcleo ancho al rojo blanco). */
-  wire: 'solid' | 'double' | 'bits' | 'plasma';
+  wire: 'solid' | 'double' | 'bits' | 'plasma' | 'wave';
   /** Multiplicador del grosor del cable. */
   wireScale: number;
   /** Multiplicador del halo de luz alrededor del cable encendido. */
   halo: number;
   /** Fondo: nada, cuadrícula en perspectiva, lluvia de código u órbitas con rayos. */
-  backdrop: 'none' | 'grid' | 'rain' | 'orbit';
+  backdrop: 'none' | 'grid' | 'rain' | 'orbit' | 'waves';
 }
 
 export const SKIN_STYLES: Record<SkinId, SkinStyle> = {
   filamento: { tile: 'round', node: 'circle', wire: 'solid', wireScale: 1, halo: 1, backdrop: 'none' },
   cyberpunk: { tile: 'chamfer', node: 'diamond', wire: 'double', wireScale: 1.1, halo: 1.25, backdrop: 'grid' },
   matrix: { tile: 'square', node: 'square', wire: 'bits', wireScale: 0.85, halo: 0.8, backdrop: 'rain' },
+  oceano: { tile: 'pill', node: 'bubble', wire: 'wave', wireScale: 0.95, halo: 1.2, backdrop: 'waves' },
   solar: { tile: 'circle', node: 'sun', wire: 'plasma', wireScale: 1.05, halo: 1.5, backdrop: 'orbit' },
 };
 

@@ -4,6 +4,18 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.1.0-beta.9] - 2026-11-09
+
+### Mejorado
+- Los aspectos Cyberpunk, Matrix y Solar ya no solo cambian de color: cada uno tiene su forma de casilla, de nodo y de cable, y su propio fondo (cuadrícula con barrido, lluvia de código, órbitas con rayos). Las muestras de la tienda enseñan esas formas. Con alto contraste el fondo se atenúa y se queda quieto; con las animaciones desactivadas también.
+
+### Añadido
+- **Aviso de versión nueva** (APK y escritorio): al abrir el juego se busca una versión más nueva en GitHub y, si la hay, se pregunta una sola vez por versión si quieres actualizar; con «Ahora no» sigues jugando. La web no consulta nada. Al pasar a Google Play basta con cambiar `UPDATE_SOURCE` a `'play'` (ver `docs/08`). La política de privacidad lo explica.
+- Quinto aspecto, **Océano**: casillas en píldora, nodos de burbuja, cable en onda, olas con haces de luz y burbujas que suben.
+
+### Cambiado
+- **Precios de los aspectos** recalculados con un modelo de ritmo de juego (`docs/10-economia-chispas.md`): Cyberpunk 150, Matrix 350, Océano 550 y Solar 800 Chispas. El primer aspecto se consigue el mismo día con juego habitual.
+
 ### Mejorado
 - Los aspectos de la tienda ya no solo cambian de color: cada uno tiene su forma y su fondo. **Cyberpunk**: casillas con esquinas cortadas, nodos en rombo, cable de doble pista y cuadrícula en perspectiva con una franja de escaneo. **Matrix**: casillas y nodos cuadrados, cable de bits y lluvia de código. **Solar**: casillas circulares, nodos en forma de sol, cable al rojo blanco y órbitas con rayos que giran muy despacio. Las muestras de la tienda enseñan esas formas. Con alto contraste el fondo se atenúa y se queda quieto; con las animaciones desactivadas también.
 

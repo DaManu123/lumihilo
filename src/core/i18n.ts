@@ -79,6 +79,13 @@ export const EN: Record<string, string> = {
   'Ajustes': 'Settings',
   'Cerrar': 'Close',
 
+  // Actualizaciones
+  'Hay una versión nueva': 'New version available',
+  'Ya está disponible Lumihilo {0}. Tú tienes la {1}.': 'Lumihilo {0} is now available. You have {1}.',
+  'Puedes seguir jugando: actualizar es opcional y no volveremos a preguntarte por esta versión.': 'You can keep playing: updating is optional and we will not ask again about this version.',
+  'Ahora no': 'Not now',
+  'Actualizar': 'Update',
+
   // Aspectos
   'Aspectos': 'Skins',
   'Equipado': 'Equipped',
@@ -88,6 +95,7 @@ export const EN: Record<string, string> = {
   'Filamento': 'Filament',
   'Cyberpunk': 'Cyberpunk',
   'Matrix': 'Matrix',
+  'Océano': 'Ocean',
   'Solar': 'Solar',
 
   // Ajustes

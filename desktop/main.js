@@ -9,7 +9,7 @@
  * ruta donde esté instalada la aplicación.
  */
 
-const { app, BrowserWindow, Menu, net, protocol, screen } = require('electron');
+const { app, BrowserWindow, Menu, net, protocol, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -78,8 +78,12 @@ function createWindow() {
 
   win.once('ready-to-show', () => win.show());
 
-  // El juego no abre ventanas nuevas ni navega fuera de sí mismo
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // El juego no abre ventanas nuevas ni navega fuera de sí mismo; lo único que deja abrir (en el navegador del
+  // sistema) es la página de descargas del propio repositorio, para el aviso de versión nueva
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://github.com/DaManu123/lumihilo/')) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   win.webContents.on('will-navigate', (event, target) => {
     if (!target.startsWith(`${SCHEME}://${HOST}/`)) event.preventDefault();
   });
