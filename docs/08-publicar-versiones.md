@@ -69,7 +69,9 @@ Android solo instala un APK firmado, y la firma debe ser **siempre la misma** en
 
 ## Aviso de versión nueva (y el paso a Google Play)
 
-La app de Android y la de escritorio buscan, poco después de abrirse, una versión más nueva en las publicaciones de GitHub (`src/services/UpdateService.ts`). Si la hay, preguntan **una sola vez por versión** («Actualizar» abre la página de descargas, «Ahora no» sigue jugando; queda anotado en `updatePromptedVersion`). La web no consulta nada. Las betas son *prereleases*, por eso se lee la lista de publicaciones y no `/releases/latest`.
+La app de Android y la de escritorio buscan, poco después de abrirse, una versión más nueva (`src/services/UpdateService.ts`). Si la hay, se la ofrecen al jugador **cada vez que abre la app por completo** («Actualizar» abre la página de descargas, «Ahora no» sigue jugando; al cerrar la app del todo y abrirla otra vez, vuelve a preguntar). También hay un botón **Ajustes → Buscar actualizaciones** que siempre contesta (oferta, «estás al día» o el motivo del fallo). La web no consulta nada.
+
+La lista de versiones sale de dos fuentes, en este orden: `https://damanu123.github.io/lumihilo/releases.json` (un archivo pequeño que el flujo `pages.yml` regenera con cada fusión a `main` y al terminar cada «Release», sin límite de consultas) y, si falla, la API de GitHub. Las betas son *prereleases*, por eso se lee la lista y no `/releases/latest`. Tras publicar una versión, el archivo se actualiza cuando termina el flujo «Publicar la web» que lanza el «Release» (unos minutos).
 
 **Al publicar en Google Play hay que:**
 1. Cambiar `UPDATE_SOURCE` a `'play'` en `src/config.ts`: la app deja de consultar GitHub y no pregunta nada.

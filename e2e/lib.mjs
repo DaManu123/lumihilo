@@ -151,6 +151,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     statsSettings: [360 - 191.3, H / 2 + 1012 / 2 - 84], statsSkins: [360, H / 2 + 1012 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 1012 / 2 - 84],
     // Aspectos (tarjeta de 1190 px, filas de 150 px)
     skinRow: (i) => [360, H / 2 - 360 + 150 * i], skinsDone: [360, H / 2 + 511],
+    // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
+    settingsUpdates: [360, H / 2 + 429],
+    // Mini tutorial de Luces (tarjeta de 1090 px) y panel de luces (siempre en [360, 502])
+    lightsTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
     // Aviso de versión nueva (tarjeta de 620 px)
     updateLater: [360 - 144.5, H / 2 + 226], updateNow: [360 + 144.5, H / 2 + 226],
     // Ajustes (tarjeta de 1150 px)

@@ -4,6 +4,13 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Cambiado
+- **Aviso de versión nueva:** ahora sale **cada vez que se abre la app por completo** mientras exista una versión más nueva (antes, una sola vez por versión). La lista de versiones se lee de un archivo de la web (`releases.json`, sin límite de consultas) con la API de GitHub de respaldo, y hay un botón nuevo, **Ajustes → Buscar actualizaciones**, que siempre contesta (oferta, «estás al día» o el motivo del fallo).
+- **Luces con diseño propio:** ya no parece Circuitos. Cada casilla es un portalámparas con una bombilla de vidrio (apagada, hueca; encendida, con halo) cuya forma sale del aspecto, sobre una placa con remaches y una luz ambiente que crece al encender; el panel cuenta «N de M luces encendidas» con una barra.
+
+### Añadido
+- **Mini tutorial de Luces**, una sola vez (y de nuevo al tocar el panel de luces): un tablero de ejemplo animado donde un dedo toca el centro y cambian las cinco lámparas, con tres frases cortas.
+
 ## [0.1.0-beta.10] - 2026-11-09
 
 ### Añadido
