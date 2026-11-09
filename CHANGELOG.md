@@ -4,6 +4,9 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Mejorado
+- Los aspectos de la tienda ya no solo cambian de color: cada uno tiene su forma y su fondo. **Cyberpunk**: casillas con esquinas cortadas, nodos en rombo, cable de doble pista y cuadrícula en perspectiva con una franja de escaneo. **Matrix**: casillas y nodos cuadrados, cable de bits y lluvia de código. **Solar**: casillas circulares, nodos en forma de sol, cable al rojo blanco y órbitas con rayos que giran muy despacio. Las muestras de la tienda enseñan esas formas. Con alto contraste el fondo se atenúa y se queda quieto; con las animaciones desactivadas también.
+
 ## [0.1.0-beta.8] - 2026-11-09
 
 ### Añadido
