@@ -1,12 +1,15 @@
 import {
+  FLOW_CONNECT_NOTES,
   HINT_NOTES,
   WIN_CHORD,
   connectNote,
+  flowStepNote,
   noteForCell,
   winStepNote,
 } from '../core/sound';
 import type { HapticDiagnostics, HapticLevel, HapticMode } from '../core/haptics';
 import { MUSIC_VOLUME_DEFAULT, MusicStyle } from '../core/music';
+import type { PuzzleType } from '../core/puzzles';
 import type { AudioService } from './AudioService';
 import type { HapticService } from './HapticService';
 import { MusicPlayer, NoopMusicPlayer } from './MusicService';
@@ -112,7 +115,7 @@ export class FeedbackService {
   }
 
   /** Puzzle que se juega: en Luces la música cambia a su caja de música. */
-  setPuzzle(puzzle: 'circuits' | 'lights'): void {
+  setPuzzle(puzzle: PuzzleType): void {
     this.music.setPuzzle(puzzle);
   }
 
@@ -132,6 +135,28 @@ export class FeedbackService {
     });
     const turnedOn = changes.filter((c) => c.on).length;
     this.vibrate(() => (turnedOn > changes.length - turnedOn ? this.haptics.mediumTap() : this.haptics.lightTap()));
+  }
+
+  /** Hilos: el hilo avanza una casilla; la nota asciende conforme se alarga. */
+  flowStep(length: number): void {
+    this.sound(() => this.audio.note(flowStepNote(length), { volume: 0.34 }));
+  }
+
+  /** Hilos: se empieza un trazo (vibración ligera, sin sonido). */
+  flowStart(): void {
+    this.vibrate(() => this.haptics.lightTap());
+  }
+
+  /** Hilos: el hilo corta el de otra pareja (clic seco). */
+  flowCut(): void {
+    this.sound(() => this.audio.note(2, { volume: 0.34, kind: 'tick' }));
+    this.vibrate(() => this.haptics.lightTap());
+  }
+
+  /** Hilos: se une una pareja (campanita de dos notas y toque medio). */
+  flowConnected(): void {
+    this.sound(() => FLOW_CONNECT_NOTES.forEach((n, i) => this.audio.note(n, { volume: 0.5, bright: true, delaySec: i * 0.08 })));
+    this.vibrate(() => this.haptics.mediumTap());
   }
 
   /** Tocar una piedra de Luces: golpe sordo y vibración ligera. */

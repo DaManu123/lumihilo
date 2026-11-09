@@ -9,6 +9,7 @@ import {
   degreeFrequency,
   musicGainScale,
 } from '../core/music';
+import type { PuzzleType } from '../core/puzzles';
 import { AudioEngine, MUSIC_VOLUME } from './AudioService';
 
 /** Música de fondo del juego. */
@@ -23,8 +24,8 @@ export interface MusicPlayer {
   resolve(): void;
   /** Estilo de la música; si ya suena, cambia en el siguiente compás. */
   setStyle(style: MusicStyle): void;
-  /** Puzzle que se juega: en Luces suena la caja de música propia («cristal») en vez del estilo elegido. */
-  setPuzzle(puzzle: 'circuits' | 'lights'): void;
+  /** Puzzle que se juega: Luces (caja de música «cristal») e Hilos (cuerda pulsada «hilo») tienen su propia pista en vez del estilo elegido. */
+  setPuzzle(puzzle: PuzzleType): void;
   /** Volumen en porcentaje: 100 es el estándar del juego (0 = silencio, 200 = el doble). */
   setVolume(percent: number): void;
 }
@@ -60,7 +61,7 @@ export class WebMusicPlayer implements MusicPlayer {
   private intensity = 0;
   private quietBars = 0;
   private style: MusicStyle = 'swing';
-  private puzzle: 'circuits' | 'lights' = 'circuits';
+  private puzzle: PuzzleType = 'circuits';
   private volume = 1;
   /** Vaivén suave de afinación, como el de una cinta antigua: da calidez al teclado y a la melodía. */
   private wobble: { lfo: OscillatorNode; depth: GainNode } | null = null;
@@ -127,16 +128,16 @@ export class WebMusicPlayer implements MusicPlayer {
     this.bar = 0;
   }
 
-  setPuzzle(puzzle: 'circuits' | 'lights'): void {
-    if (puzzle === this.puzzle) return;
+  setPuzzle(puzzle: PuzzleType): void {
+    const before = this.track;
     this.puzzle = puzzle;
-    // La caja de música de Luces y el estilo elegido son pistas distintas: la nueva empieza su frase
-    this.bar = 0;
+    // La caja de música de Luces y el estilo elegido son pistas distintas: si cambia la pista, la nueva empieza su frase
+    if (this.track !== before) this.bar = 0;
   }
 
   /** Pista que suena ahora: la caja de música en Luces, y el estilo elegido en Circuitos. */
   private get track(): MusicTrack {
-    return this.puzzle === 'lights' ? 'cristal' : this.style;
+    return this.puzzle === 'lights' ? 'cristal' : this.puzzle === 'flow' ? 'hilo' : this.style;
   }
 
   setVolume(percent: number): void {
@@ -156,7 +157,11 @@ export class WebMusicPlayer implements MusicPlayer {
     this.target = 0.1;
     this.quietBars = 2;
     const t = ctx.currentTime + 0.05;
-    if (this.track === 'cristal') {
+    if (this.track === 'hilo') {
+      // Arpegio ascendente de cuerda pulsada que cierra el nivel
+      ([0, 2, 3, 4, 2] as Degree[]).forEach((degree, i) => this.pluck(degreeFrequency(degree, i > 2 ? 1 : 0), t + i * 0.13, 2.4, 0.55 + 0.05 * i));
+      for (const degree of CHORDS.C.tones) this.pad(degree, 0, t, 5 * beatSeconds('hilo'), 0.4, 0.3);
+    } else if (this.track === 'cristal') {
       // Arpegio ascendente de campanitas: la caja de música cierra el nivel
       ([0, 2, 3, 1] as Degree[]).forEach((degree, i) => this.bell(degreeFrequency(degree, 1), t + i * 0.16, 3, 0.5, true));
       for (const degree of CHORDS.C.tones) this.pad(degree, 0, t, 5 * beatSeconds('cristal'), 0.4, 0.3);
@@ -207,6 +212,9 @@ export class WebMusicPlayer implements MusicPlayer {
         break;
       case 'keys':
         this.keys(freq, when, length, event.velocity);
+        break;
+      case 'pluck':
+        this.pluck(freq, when, length, event.velocity);
         break;
       case 'lead':
         this.lead(freq, when, length, event.velocity);
@@ -308,6 +316,48 @@ export class WebMusicPlayer implements MusicPlayer {
     body.onended = () => {
       env.disconnect();
       shineGain.disconnect();
+    };
+  }
+
+  /**
+   * Cuerda pulsada (Hilos): ataque instantáneo y caída rápida, con un filtro que se cierra como el sonido de una cuerda al
+   * apagarse. Más seca que la campanita de cristal.
+   */
+  private pluck(freq: number, when: number, length: number, velocity: number): void {
+    const ctx = this.engine.context();
+    const bus = this.engine.musicBus;
+    if (!ctx || !bus) return;
+    const body = ctx.createOscillator();
+    body.type = 'triangle';
+    body.frequency.value = freq;
+    const upper = ctx.createOscillator();
+    upper.type = 'sine';
+    upper.frequency.value = freq * 3;
+    const upperGain = ctx.createGain();
+    upperGain.gain.value = 0.25;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 1.2;
+    filter.frequency.setValueAtTime(Math.min(6000, freq * 9), when);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(300, freq * 1.6), when + 0.45);
+    const dur = Math.min(0.55 + length * 0.12, 1.1);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(0.24 * velocity, when + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    body.connect(filter);
+    upper.connect(upperGain);
+    upperGain.connect(filter);
+    filter.connect(env);
+    env.connect(bus);
+    body.start(when);
+    upper.start(when);
+    body.stop(when + dur + 0.1);
+    upper.stop(when + dur + 0.1);
+    body.onended = () => {
+      env.disconnect();
+      filter.disconnect();
+      upperGain.disconnect();
     };
   }
 

@@ -42,6 +42,14 @@ export const WIN_CHORD = [0, 2, 3, 5] as const;
 /** Campanita de la pista: dos notas agudas. */
 export const HINT_NOTES = [7, 9] as const;
 
+/** Nota de cada casilla que recorre el hilo en Hilos: asciende por la escala conforme el hilo se alarga. */
+export function flowStepNote(length: number): number {
+  return Math.min(NOTE_COUNT - 1, Math.max(0, Math.floor(length) - 1));
+}
+
+/** Campanita de cuando se une una pareja: dos notas que suben. */
+export const FLOW_CONNECT_NOTES = [5, 7] as const;
+
 /** Nota de "conexión": una quinta pentatónica por encima de la nota de la casilla, sin pasarse de la escala. */
 export function connectNote(index: number): number {
   return Math.min(NOTE_COUNT - 1, Math.max(0, Math.floor(index)) + 3);

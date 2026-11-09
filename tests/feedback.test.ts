@@ -4,8 +4,9 @@ import type { AudioService, NoteOptions } from '../src/services/AudioService';
 import type { HapticService } from '../src/services/HapticService';
 import type { MusicPlayer } from '../src/services/MusicService';
 import type { MusicStyle } from '../src/core/music';
+import type { PuzzleType } from '../src/core/puzzles';
 import type { HapticDiagnostics, HapticLevel, HapticMode } from '../src/core/haptics';
-import { NOTE_COUNT, noteForCell, WIN_CHORD, HINT_NOTES } from '../src/core/sound';
+import { NOTE_COUNT, noteForCell, WIN_CHORD, HINT_NOTES, FLOW_CONNECT_NOTES } from '../src/core/sound';
 
 class FakeAudio implements AudioService {
   notes: Array<{ index: number; options?: NoteOptions }> = [];
@@ -26,8 +27,8 @@ class FakeMusic implements MusicPlayer {
   style: MusicStyle | null = null;
   volume: number | null = null;
   setStyle(style: MusicStyle) { this.style = style; }
-  puzzle: 'circuits' | 'lights' | null = null;
-  setPuzzle(puzzle: 'circuits' | 'lights') { this.puzzle = puzzle; }
+  puzzle: PuzzleType | null = null;
+  setPuzzle(puzzle: PuzzleType) { this.puzzle = puzzle; }
   setVolume(percent: number) { this.volume = percent; }
 }
 
@@ -97,6 +98,20 @@ describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () =
     expect(audio.notes).toHaveLength(1);
     expect(audio.notes[0].options?.kind).toBe('thud');
     expect(haptics.calls).toEqual(['light']);
+  });
+
+  it('en Hilos la nota asciende con el hilo, el corte suena seco y unir una pareja suena a campanita', () => {
+    feedback.flowStep(1);
+    feedback.flowStep(4);
+    feedback.flowStep(40);
+    expect(audio.notes.map((n) => n.index)).toEqual([0, 3, NOTE_COUNT - 1]);
+    feedback.flowCut();
+    expect(audio.notes[3].options?.kind).toBe('tick');
+    feedback.flowConnected();
+    expect(audio.notes.slice(4).map((n) => n.index)).toEqual([...FLOW_CONNECT_NOTES]);
+    expect(audio.notes[4].options?.bright).toBe(true);
+    feedback.flowStart();
+    expect(haptics.calls).toEqual(['light', 'medium', 'light']);
   });
 
   it('el puzzle activo se pasa a la música', () => {

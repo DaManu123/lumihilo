@@ -25,6 +25,10 @@ import {
   dailyParams,
   dailySeed,
   dailyLightsSeed,
+  dailyFlowSeed,
+  lastDailyOf,
+  levelOf,
+  withLevel,
   dailyTier,
   dateKey,
   formatSparks,
@@ -78,7 +82,27 @@ import {
   litCount,
   toggleLights,
 } from '../../core/lights';
-import { PUZZLES, PUZZLE_LABELS, PuzzleType, isPuzzleType, lightsRecordKey } from '../../core/puzzles';
+import { PUZZLES, PUZZLE_LABELS, PuzzleType, isPuzzleType, recordKeyFor } from '../../core/puzzles';
+import {
+  FlowCell,
+  FlowLevel,
+  FlowState,
+  beginStroke,
+  cloneFlowState,
+  connectedCount,
+  createFlowState,
+  extendStroke,
+  flowHint,
+  flowParamsForTier,
+  generateFlow,
+  isFlowSolved,
+  applySolutionPath,
+  pathOwner,
+  endpointPair,
+  sameCell,
+} from '../../core/flow';
+import { FlowCellLook, flowLooks } from '../flowLooks';
+import { paintFlowCell } from '../flowArt';
 import { SKINS, SkinId, buySkin, isSkinUnlocked, skinInfo, usableSkin } from '../../core/skins';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
@@ -199,6 +223,8 @@ interface CellLook {
   lights?: boolean;
   /** Piedra de Luces: casilla bloqueada. */
   stone?: boolean;
+  /** Casilla de Hilos. */
+  flow?: FlowCellLook;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -227,6 +253,12 @@ export class GameScene extends Phaser.Scene {
   private lightGrid: LightsGrid = [];
   /** Piedras de Luces: casillas inertes. */
   private lightBlocked: LightsGrid = [];
+  /** Hilos: nivel, hilos trazados, trazo en curso y pasos para deshacer. */
+  private flowLevelData!: FlowLevel;
+  private flowState: FlowState = { paths: [] };
+  private flowDrag: { pair: number; start: FlowCell; began: boolean; before: FlowState; steps: number } | null = null;
+  private flowUndo: FlowState[] = [];
+  private lastFlowCell: FlowCell | null = null;
   private lastLightsTap: { row: number; col: number } | null = null;
   private dailyKey = '';
 
@@ -312,6 +344,11 @@ export class GameScene extends Phaser.Scene {
     this.checkAndShowTutorial();
     this.scheduleUpdateCheck();
     this.maybeShowLightsTutorial();
+    this.maybeShowFlowTutorial();
+    // Hilos se juega arrastrando: el movimiento y el soltar se siguen en toda la pantalla (el dedo puede salirse del tablero)
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.flowPointerMove(pointer));
+    this.input.on('pointerup', () => this.flowPointerUp());
+    this.input.on('pointerupoutside', () => this.flowPointerUp());
 
     // Cronómetro interno (actualiza cada segundo)
     this.timerEvent = this.time.addEvent({
@@ -575,7 +612,7 @@ export class GameScene extends Phaser.Scene {
 
   private refreshModeBar(): void {
     if (!this.modeSeg) return;
-    const lastDaily = this.puzzle === 'lights' ? this.progress.lastLightsDailyCompleted : this.progress.lastDailyCompleted;
+    const lastDaily = lastDailyOf(this.progress, this.puzzle);
     const dailyDone = lastDaily === dateKey(new Date());
 
     this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: t('Modo') });
@@ -653,6 +690,42 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderDirectionButton(): void {
+    if (this.puzzle === 'flow') {
+      // En Hilos no se gira nada: el panel cuenta los hilos unidos (y al tocarlo explica cómo se juega)
+      const { w, h } = this.dirRect;
+      const total = this.flowLevelData?.pairs.length ?? 0;
+      const joined = this.flowLevelData ? connectedCount(this.flowState, this.flowLevelData) : 0;
+      const fraction = total > 0 ? joined / total : 0;
+      this.dirPanel.clear();
+      this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.06 + 0.1 * fraction), 1);
+      this.dirPanel.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
+      this.dirPanel.lineStyle(4, THEME.primary, 1);
+      this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
+      this.dirTitle.setText(t('{0} de {1} hilos unidos', joined, total)).setColor(THEME.primaryCss).setPosition(40, -16);
+      this.dirSub.setText('');
+      this.dirIcon.clear();
+      // Icono: dos puntos unidos por un hilo
+      const ix = -w / 2 + 84;
+      const tone = fraction > 0 ? THEME.primary : THEME.wireOff;
+      this.dirIcon.lineStyle(9, tone, 1);
+      this.dirIcon.beginPath();
+      this.dirIcon.moveTo(ix - 24, 8);
+      this.dirIcon.lineTo(ix, -10);
+      this.dirIcon.lineTo(ix + 24, 8);
+      this.dirIcon.strokePath();
+      this.dirIcon.fillStyle(tone, 1);
+      this.dirIcon.fillCircle(ix - 26, 10, 11);
+      this.dirIcon.fillCircle(ix + 26, 10, 11);
+      const barW = 400;
+      const barX = 40 - barW / 2;
+      this.dirIcon.fillStyle(THEME.divider, 1);
+      this.dirIcon.fillRoundedRect(barX, 18, barW, 16, 8);
+      if (fraction > 0) {
+        this.dirIcon.fillStyle(THEME.primary, 1);
+        this.dirIcon.fillRoundedRect(barX, 18, Math.max(16, barW * fraction), 16, 8);
+      }
+      return;
+    }
     if (this.puzzle === 'lights') {
       // En Luces no se gira nada: el panel cuenta cuántas luces hay encendidas (y al tocarlo explica cómo se juega)
       const { w, h } = this.dirRect;
@@ -701,6 +774,10 @@ export class GameScene extends Phaser.Scene {
   private toggleRotationDirection(): void {
     if (this.puzzle === 'lights') {
       this.showLightsTutorial();
+      return;
+    }
+    if (this.puzzle === 'flow') {
+      this.showFlowTutorial();
       return;
     }
     this.rotationDirection = this.rotationDirection === 'cw' ? 'ccw' : 'cw';
@@ -1841,6 +1918,10 @@ export class GameScene extends Phaser.Scene {
       this.loadLightsLevel(levelIndex);
       return;
     }
+    if (this.puzzle === 'flow') {
+      this.loadFlowLevel(levelIndex);
+      return;
+    }
 
     if (this.isDaily) {
       // Mismo puzzle para todos los jugadores del día: no depende de su nivel ni de su perfil
@@ -1858,7 +1939,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Nivel por el que va el jugador en el puzzle activo. */
   private puzzleLevel(): number {
-    return this.puzzle === 'lights' ? this.progress.lightsLevel : this.progress.currentLevel;
+    return levelOf(this.progress, this.puzzle);
   }
 
   /** Carga un nivel de Luces: el tablero de luces y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
@@ -1892,12 +1973,44 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /** Carga un nivel de Hilos: los hilos y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
+  private loadFlowLevel(levelIndex: number): void {
+    // El reto diario no depende del jugador: misma dificultad y semilla para todos ese día
+    const params = flowParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier);
+    const level = generateFlow(
+      params,
+      this.isDaily ? dailyFlowSeed(this.dailyKey) : levelSeed((this.progress.seedBase ^ 0x7f4a7c15) >>> 0, levelIndex)
+    );
+    const size = level.params.size;
+    this.flowLevelData = level;
+    this.flowState = createFlowState(level);
+    this.flowUndo = [];
+    this.flowDrag = null;
+    this.lastFlowCell = null;
+    this.currentParams = { width: size, height: size, extraLoops: 0, branchBias: 0 };
+    const grid = Array.from({ length: size }, (_, row) =>
+      Array.from({ length: size }, (_, col) => ({ row, col, baseMask: 0, rotation: 0, isSource: false }))
+    );
+    this.board = { rows: size, cols: size, grid, source: { row: 0, col: 0 } };
+    this.currentLevelData = {
+      seed: level.seed,
+      params: this.currentParams,
+      board: this.board,
+      solutionRotations: [],
+      initialRotations: [],
+      minTaps: level.minTaps,
+      difficulty: 0,
+      branches: 0,
+      cycles: 0,
+    };
+  }
+
   private startLevel(levelIndex: number): void {
     this.loadLevel(levelIndex);
 
     // Guardar en qué nivel va el jugador para retomarlo al reabrir la app
     if (!this.isDaily && this.puzzleLevel() !== levelIndex) {
-      this.progress = this.puzzle === 'lights' ? { ...this.progress, lightsLevel: levelIndex } : { ...this.progress, currentLevel: levelIndex };
+      this.progress = withLevel(this.progress, this.puzzle, levelIndex);
       storage.saveProgress(this.progress);
     }
 
@@ -1947,6 +2060,7 @@ export class GameScene extends Phaser.Scene {
     this.buildUi();
     if (start) this.startLevel(this.puzzleLevel());
     if (start) this.maybeShowLightsTutorial();
+    if (start) this.maybeShowFlowTutorial();
   }
 
   private toggleTheme(): void {
@@ -2033,8 +2147,9 @@ export class GameScene extends Phaser.Scene {
         const cell = this.board.grid[r][c];
         const container = this.add.container(startX + c * cellSize, startY + r * cellSize);
 
-        // La zona táctil ocupa toda la celda (incluido el hueco entre casillas)
-        const hit = this.add.zone(0, 0, cellSize, cellSize).setInteractive({ useHandCursor: true });
+        // La zona táctil ocupa toda la celda (incluido el hueco entre casillas); en Hilos hay una sola zona para todo el tablero
+        const hit = this.add.zone(0, 0, cellSize, cellSize);
+        if (this.puzzle !== 'flow') hit.setInteractive({ useHandCursor: true });
         const img = this.add.image(0, 0, '__DEFAULT');
 
         container.add([img, hit]);
@@ -2053,6 +2168,16 @@ export class GameScene extends Phaser.Scene {
       }
       this.cellViews.push(rowViews);
     }
+
+    if (this.puzzle === 'flow') {
+      const boardW = cols * cellSize;
+      const boardH = rows * cellSize;
+      const zone = this.add
+        .zone(startX - cellSize / 2 + boardW / 2, startY - cellSize / 2 + boardH / 2, boardW, boardH)
+        .setInteractive({ useHandCursor: true });
+      zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.flowPointerDown(pointer));
+      this.boardContainer.add(zone);
+    }
   }
 
   /**
@@ -2063,6 +2188,10 @@ export class GameScene extends Phaser.Scene {
   private drawCell(view: CellView, powered: boolean): void {
     if (this.puzzle === 'lights') {
       this.drawLightsCell(view, powered);
+      return;
+    }
+    if (this.puzzle === 'flow') {
+      this.drawFlowCell(view);
       return;
     }
     const { cellVisual, gap } = this.geometry;
@@ -2119,6 +2248,22 @@ export class GameScene extends Phaser.Scene {
     const prefix = `L|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${cellSize}|${cellVisual}`;
     const key = `lcell|${prefix}|${lit ? 1 : 0}${view.hintRing ? 1 : 0}${marks ? 1 : 0}${stone ? 'S' : ''}|${glowStep}`;
     if (key === view.textureKey) return;
+    this.ensureCellTexture(key, prefix, look);
+    view.img.setTexture(key);
+    view.textureKey = key;
+  }
+
+  /** Casilla de Hilos: la textura depende del color del hilo, de sus tramos y de si la pareja está unida (se pinta una sola vez). */
+  private drawFlowCell(view: CellView, looks?: FlowCellLook[][]): void {
+    const { cellVisual, cellSize } = this.geometry;
+    const flow = (looks ?? flowLooks(this.flowLevelData, this.flowState, cellSize / 2))[view.row][view.col];
+    flow.hintRing = view.hintRing;
+    flow.glow = Math.round(Math.min(1, Math.max(0, view.glow)) * GLOW_STEPS) / GLOW_STEPS;
+    const legs = flow.legs.map((l) => `${l.dx},${l.dy}`).join(';');
+    const prefix = `F|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${cellSize}|${cellVisual}`;
+    const key = `fcell|${prefix}|${flow.owner}|${flow.endpoint ? 1 : 0}${flow.complete ? 1 : 0}${flow.hintRing ? 1 : 0}|${Math.round(flow.glow * GLOW_STEPS)}|${legs}`;
+    if (key === view.textureKey) return;
+    const look: CellLook = { powered: false, isSource: false, hintRing: flow.hintRing, glowStep: 0, marks: false, legs: [], flow };
     this.ensureCellTexture(key, prefix, look);
     view.img.setTexture(key);
     view.textureKey = key;
@@ -2230,6 +2375,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private paintCell(g: Phaser.GameObjects.Graphics, look: CellLook): void {
+    if (look.flow) {
+      paintFlowCell(g, THEME, skinStyle(THEME.skin), this.geometry.cellVisual, look.flow);
+      return;
+    }
     if (look.lights) {
       this.paintLightsCell(g, look);
       return;
@@ -2303,6 +2452,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateFlowVisuals(): void {
+    if (this.puzzle === 'flow') {
+      const looks = flowLooks(this.flowLevelData, this.flowState, this.geometry.cellSize / 2);
+      for (const row of this.cellViews) for (const view of row) this.drawFlowCell(view, looks);
+      const total = this.flowLevelData.pairs.length;
+      feedback.setIntensity(total > 0 ? connectedCount(this.flowState, this.flowLevelData) / total : 0);
+      if (this.dirRect) this.renderDirectionButton();
+      return;
+    }
     if (this.puzzle === 'lights') {
       let lit = 0;
       for (let r = 0; r < this.board.rows; r++) {
@@ -2339,6 +2496,7 @@ export class GameScene extends Phaser.Scene {
    * @param invert true cuando se usa el clic derecho: gira en el sentido contrario al seleccionado.
    */
   private handleCellTap(view: CellView, invert = false): void {
+    if (this.puzzle === 'flow') return; // Hilos se juega arrastrando (ver flowPointerDown)
     if (this.puzzle === 'lights') {
       this.handleLightsTap(view);
       return;
@@ -2446,9 +2604,302 @@ export class GameScene extends Phaser.Scene {
     this.updateFlowVisuals();
   }
 
+  // ---------------------------------------------------------------------------
+  // Hilos
+  // ---------------------------------------------------------------------------
+
+  /** Casilla del tablero bajo un punto de la pantalla (o null si cae fuera). */
+  private flowCellAt(x: number, y: number): FlowCell | null {
+    const { cellSize, startX, startY } = this.geometry;
+    const col = Math.floor((x - (startX - cellSize / 2)) / cellSize);
+    const row = Math.floor((y - (startY - cellSize / 2)) / cellSize);
+    return row >= 0 && row < this.board.rows && col >= 0 && col < this.board.cols ? { row, col } : null;
+  }
+
+  /** Casillas que hay que recorrer para ir de una a otra sin saltarse ninguna (si el dedo va rápido, el movimiento se interpola). */
+  private flowStepsTo(from: FlowCell, to: FlowCell): FlowCell[] {
+    const steps: FlowCell[] = [];
+    let row = from.row;
+    let col = from.col;
+    while (row !== to.row || col !== to.col) {
+      const dr = to.row - row;
+      const dc = to.col - col;
+      if (Math.abs(dr) >= Math.abs(dc)) row += Math.sign(dr);
+      else col += Math.sign(dc);
+      steps.push({ row, col });
+    }
+    return steps;
+  }
+
+  /** Dedo abajo: prepara un trazo desde un punto o desde un hilo ya trazado. El estado no cambia hasta que el dedo se mueve. */
+  private flowPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.puzzle !== 'flow' || this.isWon || this.overlayOpen()) return;
+    const cell = this.flowCellAt(pointer.x, pointer.y);
+    if (!cell) return;
+    const endpoint = endpointPair(this.flowLevelData, cell);
+    const owner = endpoint >= 0 ? endpoint : pathOwner(this.flowState, cell);
+    if (owner < 0) return;
+    this.flowDrag = { pair: owner, start: cell, began: false, before: cloneFlowState(this.flowState), steps: 0 };
+    feedback.flowStart();
+  }
+
+  /** Dedo en movimiento: el hilo sigue al dedo casilla a casilla. */
+  private flowPointerMove(pointer: Phaser.Input.Pointer): void {
+    const drag = this.flowDrag;
+    if (!drag || this.puzzle !== 'flow' || this.isWon) return;
+    const cell = this.flowCellAt(pointer.x, pointer.y);
+    if (!cell) return;
+    const level = this.flowLevelData;
+    const path = () => this.flowState.paths[drag.pair];
+    const tail: FlowCell = drag.began ? path()[path().length - 1] ?? drag.start : drag.start;
+    if (sameCell(tail, cell)) return;
+
+    let changed = false;
+    for (const step of this.flowStepsTo(tail, cell)) {
+      if (!drag.began) {
+        beginStroke(this.flowState, level, drag.start);
+        drag.began = true;
+      }
+      const result = extendStroke(this.flowState, level, drag.pair, step);
+      if (result === 'blocked') {
+        // Si ni siquiera se pudo dar el primer paso, el trazo no cambia nada (no se pierde un hilo ya unido)
+        if (drag.steps === 0) {
+          this.flowState = cloneFlowState(drag.before);
+          drag.began = false;
+        }
+        break;
+      }
+      if (result === 'none') continue;
+      changed = true;
+      drag.steps++;
+      this.lastFlowCell = step;
+      if (result === 'cut') feedback.flowCut();
+      feedback.flowStep(path().length);
+      if (result === 'completed') feedback.flowConnected();
+    }
+    if (changed) this.updateFlowVisuals();
+  }
+
+  /** Dedo arriba: si el trazo cambió algo, cuenta como un toque y se puede deshacer. */
+  private flowPointerUp(): void {
+    const drag = this.flowDrag;
+    this.flowDrag = null;
+    if (!drag || !drag.began || this.puzzle !== 'flow') return;
+    if (JSON.stringify(drag.before.paths) === JSON.stringify(this.flowState.paths)) return;
+    this.tapCount++;
+    this.flowUndo.push(drag.before);
+    this.moveHistory.push({ row: 0, col: 0, step: 0 });
+    this.updateHud();
+    this.updateUndoButtonState();
+    this.updateFlowVisuals();
+    this.evaluateVictory();
+  }
+
+  /** Pista en Hilos: por 10 Chispas, traza por ti el hilo de la pareja que menos estropea. */
+  private useFlowHint(): void {
+    const pair = flowHint(this.flowState, this.flowLevelData);
+    if (pair === null) {
+      this.showToast(t('Todo está unido.'));
+      return;
+    }
+    const afterPurchase = spendSparks(this.progress, HINT_COST);
+    if (!afterPurchase) {
+      feedback.denied();
+      this.showToast(t('Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.', HINT_COST));
+      return;
+    }
+    this.progress = afterPurchase;
+    storage.saveProgress(this.progress);
+    this.hintsUsed++;
+    feedback.hint();
+    // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
+    this.moveHistory = [];
+    this.flowUndo = [];
+    this.updateUndoButtonState();
+    this.updateHud();
+    this.updateHintButtonState();
+
+    applySolutionPath(this.flowState, this.flowLevelData, pair);
+    const solution = this.flowLevelData.solution[pair];
+    this.lastFlowCell = solution[solution.length - 1];
+    const marked = solution.map((cell) => this.cellViews[cell.row][cell.col]);
+    for (const view of marked) view.hintRing = true;
+    this.updateFlowVisuals();
+    this.evaluateVictory();
+    // Los anillos se mantienen un instante para que se vea qué hilo se trazó
+    this.time.delayedCall(1000, () => {
+      for (const view of marked) {
+        if (this.cellViews[view.row]?.[view.col] !== view) continue;
+        view.hintRing = false;
+        this.drawCell(view, false);
+      }
+    });
+  }
+
+  /** Primera vez que se juega Hilos: muestra el mini tutorial (una sola vez; se vuelve a ver tocando el panel de hilos). */
+  private maybeShowFlowTutorial(): void {
+    if (this.puzzle !== 'flow' || this.isDaily) return;
+    if (!this.settings.hasSeenTutorial || this.settings.hasSeenFlowTip) return;
+    if (this.overlayOpen()) return;
+    this.showFlowTutorial();
+  }
+
+  /** Textura de una casilla del tutorial de Hilos con el aspecto actual. */
+  private flowTutorialKey(look: FlowCellLook, size: number): string {
+    const legs = look.legs.map((l) => `${l.dx},${l.dy}`).join(';');
+    const key = `ftut|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${size}|${look.owner}|${look.endpoint ? 1 : 0}${look.complete ? 1 : 0}|${legs}`;
+    if (!this.textures.exists(key)) {
+      const texture = this.textures.addDynamicTexture(key, size + 16, size + 16);
+      if (texture) {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        paintFlowCell(g, THEME, skinStyle(THEME.skin), size, look);
+        texture.draw(g, (size + 16) / 2, (size + 16) / 2);
+        g.destroy();
+      }
+    }
+    return key;
+  }
+
+  /**
+   * Mini tutorial de Hilos para cualquier edad: un tablero de ejemplo donde un dedo arrastra de un punto al otro de cada
+   * color (se repite solo), tres frases cortas y un botón.
+   */
+  private showFlowTutorial(): void {
+    const cardH = 1090;
+    const { overlay, w } = this.createCard(cardH, 250);
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Hilos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    // Tablero de ejemplo 3×3: dos parejas, una por cada lado
+    const size = 116;
+    const step = size + 14;
+    const top = -cardH / 2 + 150 + size / 2;
+    const demo: FlowLevel = {
+      seed: 0,
+      params: { size: 3, pairs: 2 },
+      pairs: [{ a: { row: 0, col: 0 }, b: { row: 2, col: 0 } }, { a: { row: 0, col: 2 }, b: { row: 2, col: 2 } }],
+      solution: [
+        [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 2, col: 0 }],
+        [{ row: 0, col: 2 }, { row: 1, col: 2 }, { row: 2, col: 2 }],
+      ],
+      minTaps: 2,
+    };
+    const plate = this.add.graphics();
+    plate.fillStyle(mixColors(THEME.background, THEME.surface, 0.45), 1);
+    plate.fillRoundedRect(-step * 1.5 - 4, top - size / 2 - 18, step * 3 + 8, step * 3 + 22, 30);
+    plate.lineStyle(3, THEME.cardBorder, 1);
+    plate.strokeRoundedRect(-step * 1.5 - 4, top - size / 2 - 18, step * 3 + 8, step * 3 + 22, 30);
+    overlay.add(plate);
+    const images: Phaser.GameObjects.Image[][] = [];
+    for (let r = 0; r < 3; r++) {
+      const row: Phaser.GameObjects.Image[] = [];
+      for (let c = 0; c < 3; c++) {
+        const image = this.add.image((c - 1) * step, top + r * step, '__DEFAULT');
+        overlay.add(image);
+        row.push(image);
+      }
+      images.push(row);
+    }
+    const render = (paths: FlowCell[][]) => {
+      const looks = flowLooks(demo, { paths }, step / 2);
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) images[r][c].setTexture(this.flowTutorialKey(looks[r][c], size));
+    };
+
+    // El dedo (un anillo) que va de un punto al otro
+    const finger = this.add.graphics();
+    finger.lineStyle(7, THEME.accent, 1);
+    finger.strokeCircle(0, 0, 42);
+    finger.fillStyle(THEME.accent, 0.35);
+    finger.fillCircle(0, 0, 30);
+    finger.setAlpha(0);
+    overlay.add(finger);
+    const at = (cell: FlowCell) => ({ x: (cell.col - 1) * step, y: top + cell.row * step });
+
+    // Cada paso de la animación: (hilos trazados, dónde está el dedo)
+    const red = demo.solution[0];
+    const blue = demo.solution[1];
+    const frames: Array<{ paths: FlowCell[][]; finger: FlowCell | null }> = [
+      { paths: [[], []], finger: red[0] },
+      { paths: [[red[0]], []], finger: red[0] },
+      { paths: [red.slice(0, 2), []], finger: red[1] },
+      { paths: [red, []], finger: red[2] },
+      { paths: [red, []], finger: blue[0] },
+      { paths: [red, [blue[0]]], finger: blue[0] },
+      { paths: [red, blue.slice(0, 2)], finger: blue[1] },
+      { paths: [red, blue], finger: blue[2] },
+      { paths: [red, blue], finger: null },
+    ];
+    const alive = () => overlay.active;
+    const show = (frame: (typeof frames)[number], index: number) => {
+      if (!alive()) return;
+      render(frame.paths);
+      if (frame.finger) {
+        const target = at(frame.finger);
+        finger.setAlpha(1);
+        if (index === 0 || this.reducedMotion()) finger.setPosition(target.x, target.y);
+        else this.tweens.add({ targets: finger, x: target.x, y: target.y, duration: 320, ease: 'Sine.easeInOut' });
+        if (index === 3 || index === 7) feedback.flowConnected();
+      } else {
+        finger.setAlpha(0);
+      }
+    };
+    const cycle = () => {
+      if (!alive()) return;
+      frames.forEach((frame, index) => this.time.delayedCall(300 + index * 620, () => show(frame, index)));
+    };
+    render([[], []]);
+    cycle();
+    const timer = this.time.addEvent({ delay: 300 + frames.length * 620 + 900, loop: true, callback: cycle });
+    overlay.once('destroy', () => timer.remove(false));
+
+    // Tres frases cortas
+    const lines = [t('Arrastra el dedo de un punto al otro del mismo color.'), t('Los hilos no pueden cruzarse: si pasas por otro, lo cortas.'), t('Une todas las parejas para ganar.')];
+    let y = top + step * 2 + size / 2 + 56;
+    for (const line of lines) {
+      const dot = this.add.graphics();
+      dot.fillStyle(THEME.primary, 1);
+      dot.fillCircle(-w / 2 + 56, y + 17, 7);
+      const text = this.uiText(-w / 2 + 84, y, line, { size: 29, weight: '500', wrap: w - 140 });
+      text.setOrigin(0, 0);
+      overlay.add([dot, text]);
+      y += text.height + 26;
+    }
+    const tip = this.uiText(0, y + 10, t('¿Atascado? La pista une una pareja por ti.'), {
+      size: FONT.small,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+      originX: 0.5,
+    });
+    tip.setOrigin(0.5, 0).setAlign('center');
+    overlay.add(tip);
+
+    this.addCardButton(
+      overlay,
+      { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
+      t('Entendido'),
+      () => {
+        this.settings.hasSeenFlowTip = true;
+        storage.saveSettings(this.settings);
+        overlay.destroy();
+      },
+      true
+    );
+  }
+
   private handleUndo(): void {
     if (this.isWon || this.moveHistory.length === 0) return;
 
+    if (this.puzzle === 'flow') {
+      const previous = this.flowUndo.pop();
+      this.moveHistory.pop();
+      if (previous) {
+        this.flowState = previous;
+        feedback.undo(0, 0);
+      }
+      this.updateUndoButtonState();
+      this.updateFlowVisuals();
+      return;
+    }
     if (this.puzzle === 'lights') {
       const last = this.moveHistory.pop()!;
       this.updateUndoButtonState();
@@ -2493,6 +2944,10 @@ export class GameScene extends Phaser.Scene {
     if (this.isWon) return;
     if (this.puzzle === 'lights') {
       this.useLightsHint();
+      return;
+    }
+    if (this.puzzle === 'flow') {
+      this.useFlowHint();
       return;
     }
 
@@ -2589,10 +3044,11 @@ export class GameScene extends Phaser.Scene {
   private playWinPulse(): number {
     if (this.reducedMotion()) return 0;
 
-    const lightsMode = this.puzzle === 'lights';
+    const lightsMode = this.puzzle === 'lights' || this.puzzle === 'flow';
     const { rows, cols } = this.board;
-    // En Luces la onda sale de la última casilla tocada y todo el tablero acaba encendido
-    const source = lightsMode ? (this.lastLightsTap ?? { row: rows >> 1, col: cols >> 1 }) : this.board.source;
+    // En Luces y en Hilos la onda sale de la última casilla tocada y todo el tablero acaba encendido
+    const lastTouched = this.puzzle === 'flow' ? this.lastFlowCell && { row: this.lastFlowCell.row, col: this.lastFlowCell.col } : this.lastLightsTap;
+    const source = lightsMode ? (lastTouched ?? { row: rows >> 1, col: cols >> 1 }) : this.board.source;
     const powered = lightsMode ? this.board.grid.map((row) => row.map(() => true)) : computePowerFlow(this.board);
     let maxDelay = 0;
     const maxStep = lightsMode
@@ -2633,7 +3089,8 @@ export class GameScene extends Phaser.Scene {
 
   private evaluateVictory(): void {
     if (this.isWon) return;
-    const solved = this.puzzle === 'lights' ? isAllLit(this.lightGrid) : checkVictory(this.board);
+    const solved =
+      this.puzzle === 'lights' ? isAllLit(this.lightGrid) : this.puzzle === 'flow' ? isFlowSolved(this.flowState, this.flowLevelData) : checkVictory(this.board);
     if (!solved) return;
 
     this.isWon = true;
@@ -2643,9 +3100,8 @@ export class GameScene extends Phaser.Scene {
 
     const today = dateKey(new Date());
     const minTaps = this.currentLevelData.minTaps;
-    const lightsMode = this.puzzle === 'lights';
     const playedTier = this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier;
-    const recordKey = lightsMode ? lightsRecordKey(playedTier) : String(playedTier);
+    const recordKey = recordKeyFor(this.puzzle, playedTier);
 
     // Evaluar desempeño; el reto diario NO altera el perfil adaptativo (es igual para todos)
     const { updatedProfile, evaluation } = evaluateAndAdapt(this.profile, {
@@ -2661,7 +3117,7 @@ export class GameScene extends Phaser.Scene {
 
     // Recompensa de Chispas: el reto diario paga doble la primera vez de cada día y nada al repetirlo
     const countsAsTodaysDaily = this.isDaily && this.dailyKey === today;
-    const lastDaily = lightsMode ? this.progress.lastLightsDailyCompleted : this.progress.lastDailyCompleted;
+    const lastDaily = lastDailyOf(this.progress, this.puzzle);
     const firstDailyToday = countsAsTodaysDaily && lastDaily !== today;
     const multiplier = this.isDaily ? (firstDailyToday ? 2 : 0) : 1;
     const isNewRecord =
@@ -2685,15 +3141,13 @@ export class GameScene extends Phaser.Scene {
       sparksEarned: reward.total,
       hintsUsed: this.hintsUsed,
       isDaily: countsAsTodaysDaily,
-      lightsDaily: lightsMode,
+      dailyPuzzle: this.puzzle,
       today,
       recordKey,
     });
     if (!this.isDaily) {
       // Al ganar, el jugador retoma en el siguiente nivel si cierra la app
-      this.progress = lightsMode
-        ? { ...this.progress, lightsLevel: this.currentLevelIndex + 1 }
-        : { ...this.progress, currentLevel: this.currentLevelIndex + 1 };
+      this.progress = withLevel(this.progress, this.puzzle, this.currentLevelIndex + 1);
     }
     storage.saveProgress(this.progress);
     this.updateHud();
@@ -2780,7 +3234,7 @@ export class GameScene extends Phaser.Scene {
       keyboard?.off('keydown-SPACE', goNext);
     });
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, this.puzzle === 'lights' ? t('Todo encendido') : t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    overlay.add(this.uiText(0, -cardH / 2 + 70, this.puzzle === 'lights' ? t('Todo encendido') : this.puzzle === 'flow' ? t('Todo unido') : t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
     overlay.add(
       this.uiText(0, -cardH / 2 + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
         size: 28,

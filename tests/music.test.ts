@@ -7,6 +7,7 @@ import {
   barEvents,
   chordAt,
   crystalBarEvents,
+  threadBarEvents,
   beatSeconds,
   barSeconds,
   degreeFrequency,
@@ -189,5 +190,59 @@ describe('Caja de música de Luces (pista «cristal»)', () => {
     const sparkle = (level: number) => BARS.some((b) => box(b, level).some((e) => e.octave === 2));
     expect(sparkle(0.5)).toBe(false);
     expect(sparkle(0.9)).toBe(true);
+  });
+});
+
+describe('Cuerda pulsada de Hilos (pista «hilo»)', () => {
+  const thread = (bar: number, level: number, seed = 7) => barEvents(bar, level, seed, 'hilo');
+
+  it('es otra pista, más viva que la caja de música de Luces, y se despacha desde barEvents', () => {
+    expect(beatSeconds('hilo')).toBeLessThan(beatSeconds('cristal'));
+    expect(barSeconds('hilo')).toBeCloseTo((60 / 100) * 4, 6);
+    expect(thread(3, 0.5)).toEqual(threadBarEvents(3, 0.5, 7));
+    expect(JSON.stringify(BARS.map((b) => thread(b, 0.6)))).not.toBe(JSON.stringify(BARS.map((b) => barEvents(b, 0.6, 7, 'cristal'))));
+  });
+
+  it('es determinista, sin batería y la melodía es de cuerda pulsada', () => {
+    for (const bar of [0, 1, 9]) expect(thread(bar, 0.6)).toEqual(thread(bar, 0.6));
+    for (const bar of BARS) for (const e of thread(bar, 1)) expect(['pad', 'bass', 'pluck']).toContain(e.voice);
+    expect(BARS.some((b) => countVoice(thread(b, 0.5), 'pluck') > 0)).toBe(true);
+  });
+
+  it('cada compás empieza con nota (el primer tiempo siempre suena) y toca más con más hilos unidos', () => {
+    for (const bar of BARS) expect(thread(bar, 0).some((e) => e.voice === 'pluck' && e.beat === 0)).toBe(true);
+    const few = BARS.reduce((n, b) => n + countVoice(thread(b, 0), 'pluck'), 0);
+    const many = BARS.reduce((n, b) => n + countVoice(thread(b, 1), 'pluck'), 0);
+    expect(many).toBeGreaterThan(few + BARS.length * 2);
+  });
+
+  it('la melodía no da saltos grandes entre una nota y la siguiente (se «hila» por la escala)', () => {
+    for (const bar of BARS) {
+      const melody = thread(bar, 0.5).filter((e) => e.voice === 'pluck' && e.octave < 2);
+      for (let i = 1; i < melody.length; i++) {
+        const pos = (e: (typeof melody)[number]) => e.octave * 5 + e.degree;
+        // Los saltos de las notas que se omiten pueden sumar varios pasos, pero nunca pasar de dos octavas
+        expect(Math.abs(pos(melody[i]) - pos(melody[i - 1]))).toBeLessThanOrEqual(9);
+      }
+    }
+  });
+
+  it('todas las notas son de la pentatónica, caen dentro del compás y tienen volumen válido', () => {
+    for (const bar of BARS) {
+      for (const e of thread(bar, 0.9)) {
+        expect(e.degree).toBeGreaterThanOrEqual(0);
+        expect(e.degree).toBeLessThan(PENTATONIC_SEMITONES.length);
+        expect(e.beat).toBeGreaterThanOrEqual(0);
+        expect(e.beat).toBeLessThan(BEATS_PER_BAR);
+        expect(e.velocity).toBeGreaterThan(0);
+        expect(e.velocity).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('la segunda voz aguda solo entra cuando casi todo está unido', () => {
+    const second = (level: number) => BARS.some((b) => thread(b, level).some((e) => e.voice === 'pluck' && e.octave === 2));
+    expect(second(0.5)).toBe(false);
+    expect(second(0.9)).toBe(true);
   });
 });

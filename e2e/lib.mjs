@@ -125,6 +125,19 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     else await page.mouse.click(p.x, p.y);
     await page.waitForTimeout(wait);
   };
+  // Arrastra el ratón (o el dedo) por una lista de puntos del lienzo: pulsa en el primero, pasa por los demás y suelta
+  g.drag = async (points, wait = 350, stepWait = 40) => {
+    const first = await g.at(...points[0]);
+    await page.mouse.move(first.x, first.y);
+    await page.mouse.down();
+    for (const point of points.slice(1)) {
+      const p = await g.at(...point);
+      await page.mouse.move(p.x, p.y, { steps: 3 });
+      await page.waitForTimeout(stepWait);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(wait);
+  };
   g.state = () => page.evaluate(() => {
     const read = (k) => {
       const raw = localStorage.getItem(k);
@@ -147,14 +160,14 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     dir: [360, 502], stats: [650, 56],
     tutorialOk: [360, H / 2 + 700 / 2 - 84],
     // Estadísticas (tarjeta de 1012 px): selector de puzzle y "Ajustes", "Aspectos" y "Cerrar"
-    puzzleCircuits: [360 - 140, H / 2 + 290], puzzleLights: [360 + 140, H / 2 + 290],
+    puzzleCircuits: [360 - 186.7, H / 2 + 290], puzzleLights: [360, H / 2 + 290], puzzleFlow: [360 + 186.7, H / 2 + 290],
     statsSettings: [360 - 191.3, H / 2 + 1012 / 2 - 84], statsSkins: [360, H / 2 + 1012 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 1012 / 2 - 84],
     // Aspectos (tarjeta de 1220 px, filas de 130 px)
     skinRow: (i) => [360, H / 2 - 385 + 130 * i], skinsDone: [360, H / 2 + 526],
     // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
     settingsUpdates: [360, H / 2 + 429],
     // Mini tutorial de Luces (tarjeta de 1090 px) y panel de luces (siempre en [360, 502])
-    lightsTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
+    lightsTutorialOk: [360, H / 2 + 1090 / 2 - 84], flowTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
     // Aviso de versión nueva (tarjeta de 620 px)
     updateLater: [360 - 144.5, H / 2 + 226], updateNow: [360 + 144.5, H / 2 + 226],
     // Ajustes (tarjeta de 1150 px)
