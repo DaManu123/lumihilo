@@ -161,7 +161,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     await page.reload();
   }
   await page.waitForSelector('canvas');
-  await page.waitForLoadState('networkidle');
+  // «networkidle» puede no llegar nunca con varios navegadores arrancando a la vez: se intenta un rato y se sigue,
+  // y lo que importa de verdad es que las tipografías estén listas (el texto del lienzo las usa)
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+  await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(1300);
 
   const g = { ctx, page };
