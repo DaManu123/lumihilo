@@ -18,6 +18,7 @@ export type IconKind =
   | 'home'
   | 'menu'
   | 'back'
+  | 'help'
   | 'circuits'
   | 'lights'
   | 'flow';
@@ -181,6 +182,18 @@ export function drawIcon(
       g.moveTo(cx + s * 0.1, by + r * 0.95);
       g.lineTo(cx + s * 0.1, cy + s * 0.2);
       g.strokePath();
+      break;
+    }
+
+    case 'help': {
+      // Signo de interrogación dentro de un círculo
+      g.strokeCircle(cx, cy, s * 0.44);
+      g.lineStyle(Math.max(3, s * 0.1), color, 1);
+      g.beginPath();
+      g.arc(cx, cy - s * 0.1, s * 0.14, Math.PI * 1.05, Math.PI * 2.25, false);
+      g.lineTo(cx, cy + s * 0.1);
+      g.strokePath();
+      g.fillCircle(cx, cy + s * 0.25, Math.max(2.5, s * 0.06));
       break;
     }
 

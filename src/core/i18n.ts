@@ -28,6 +28,33 @@ export function resolveLanguage(setting: LanguageSetting, deviceLanguage: string
 }
 
 export const EN: Record<string, string> = {
+  // Ayuda y tutoriales de Circuitos y Luces
+  'Ayuda': 'Help',
+  'cómo jugar': 'how to play',
+  'Saltar': 'Skip',
+  'Cómo se juega Circuitos': 'How to play Circuits',
+  'El sentido del giro': 'Rotation direction',
+  'Trucos para Circuitos': 'Circuits tips',
+  'Gira las piezas hasta que todas queden conectadas a la fuente.': 'Rotate the pieces until all of them are connected to the source.',
+  'Cuando todo el circuito se enciende, ganas.': 'When the whole circuit lights up, you win.',
+  '¿Atascado? La pista coloca bien una pieza por 10 Chispas.': 'Stuck? A hint places one piece correctly for 10 Sparks.',
+  'El botón grande de debajo de la barra cambia el sentido: a la derecha o a la izquierda.': 'The big button below the bar changes the direction: right or left.',
+  'Elige el sentido que te deje colocar cada pieza con menos toques.': 'Pick the direction that places each piece in fewer taps.',
+  'En computadora, el clic derecho gira al revés.': 'On a computer, right-click rotates the other way.',
+  'Deshacer devuelve la última pieza que giraste.': 'Undo turns back the last piece you rotated.',
+  'Empieza por las esquinas y los bordes: sus piezas tienen menos posiciones posibles.': 'Start with the corners and edges: their pieces have fewer possible positions.',
+  'Las piezas rectas solo tienen dos posiciones distintas.': 'Straight pieces only have two different positions.',
+  'Sigue la luz desde la fuente: lo que ya está encendido va bien.': 'Follow the light from the source: whatever is already lit is right.',
+  'Cuantos menos toques uses y más rápido termines, más Chispas ganas y antes sube la dificultad.': 'The fewer taps you use and the faster you finish, the more Sparks you earn and the sooner the difficulty goes up.',
+  'Si te atascas varias veces seguidas, la dificultad baja sola.': 'If you get stuck several times in a row, the difficulty goes down by itself.',
+  'Dos toques se anulan': 'Two taps cancel out',
+  'Truco: fila por fila': 'Tip: row by row',
+  'Tocar dos veces la misma casilla la deja como estaba.': 'Tapping the same tile twice leaves it as it was.',
+  'El orden no importa: solo cuenta qué casillas tocas.': "The order doesn't matter: only which tiles you tap.",
+  'Menos toques, más Chispas. Al ganar ves el mínimo posible.': 'Fewer taps, more Sparks. When you win you see the minimum possible.',
+  'Ve fila por fila, de arriba abajo.': 'Go row by row, from top to bottom.',
+  'Si una luz está apagada, toca la casilla de justo debajo: se enciende sin desordenar las filas de arriba.': 'If a light is off, tap the tile right below it: it turns on without messing up the rows above.',
+  'Si al final queda algo apagado en la última fila, toca casillas de la primera fila y repite.': 'If something in the last row is still off, tap tiles in the first row and repeat.',
   // Menú principal
   'Menú': 'Menu',
   'Gira y conecta todo': 'Rotate and connect it all',
@@ -108,11 +135,7 @@ export const EN: Record<string, string> = {
   'Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.': 'You need {0} Sparks for a hint.\nSolve levels to earn more.',
 
   // Tutorial
-  'Cómo se juega': 'How to play',
   'Toca una pieza para girarla.': 'Tap a piece to rotate it.',
-  'El botón grande cambia el sentido del giro.': 'The big button changes the rotation direction.',
-  'Conecta todo el circuito a la fuente.': 'Connect the whole circuit to the source.',
-  'Gana Chispas y úsalas en las pistas.': 'Earn Sparks and spend them on hints.',
   'Cada día hay un reto nuevo. Cuida tu racha.': 'There is a new challenge every day. Keep your streak.',
   'Entendido': 'Got it',
 

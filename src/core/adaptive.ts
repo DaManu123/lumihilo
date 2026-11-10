@@ -1,4 +1,5 @@
 import { LevelParams } from './types';
+import type { PuzzleType } from './puzzles';
 
 /**
  * Modos de juego elegibles por el usuario.
@@ -26,14 +27,54 @@ export const DIFFICULTY_TIERS: Record<number, LevelParams> = {
   10: { width: 7, height: 7, extraLoops: 6, branchBias: 0.85 },
 };
 
-/** Eficiencia mínima de toques (minTaps / toques reales) para considerar maestría. */
+/** Eficiencia mínima de toques (minTaps / toques reales) para considerar maestría en Circuitos. */
 export const MASTERY_MIN_EFFICIENCY = 0.6;
+
+/**
+ * Cómo se mide a un buen jugador en cada puzzle. Cada uno se juega distinto, así que no se le puede pedir lo mismo:
+ * - **Circuitos:** cada giro es rápido; ≈ 2,5 s por giro mínimo. `minTaps` cuenta los giros en ambos sentidos, así que
+ *   quien solo gira en un sentido sin desperdiciar ronda 0,67 de eficiencia: la maestría pide 0,6.
+ * - **Luces:** cada toque cambia cinco casillas y hay que pensarlo; ≈ 3,5 s por toque mínimo más un rato para leer el
+ *   tablero. Encontrar el mínimo exacto es difícil incluso jugando bien: la maestría pide 0,5 (el doble del mínimo).
+ * - **Hilos:** el «toque» es un trazo y el mínimo es uno por pareja; lo que lleva tiempo es recorrer las casillas, así
+ *   que el tiempo esperado crece con el tablero (≈ 0,8 s por casilla y 2 s por hilo). La maestría pide 0,6 (rehacer
+ *   algún trazo está bien; rehacerlos todos, no).
+ * `struggleEfficiency`: por debajo de esta eficiencia y tardando mucho, la partida cuenta como atasco.
+ */
+export interface PuzzleTuning {
+  expectedSeconds(minTaps: number, cells: number): number;
+  masteryEfficiency: number;
+  struggleEfficiency: number;
+}
+
+export const PUZZLE_TUNING: Record<PuzzleType, PuzzleTuning> = {
+  circuits: { expectedSeconds: (minTaps) => Math.max(12, minTaps * 2.5), masteryEfficiency: MASTERY_MIN_EFFICIENCY, struggleEfficiency: 0.32 },
+  lights: { expectedSeconds: (minTaps) => Math.max(15, 10 + minTaps * 3.5), masteryEfficiency: 0.5, struggleEfficiency: 0.25 },
+  flow: { expectedSeconds: (minTaps, cells) => Math.max(15, 6 + cells * 0.8 + minTaps * 2), masteryEfficiency: 0.6, struggleEfficiency: 0.3 },
+};
+
+/** Tiempo que tarda un buen jugador en resolver un nivel (lo usan la dificultad y el bono de rapidez de Chispas). */
+export function expectedSecondsFor(puzzle: PuzzleType, minTaps: number, cells: number): number {
+  return PUZZLE_TUNING[puzzle].expectedSeconds(Math.max(1, minTaps), Math.max(1, cells));
+}
 
 export const MIN_TIER = 1;
 export const MAX_TIER = 10;
 
-/** Victorias seguidas sin atasco que suben un peldaño de dificultad. */
-export const WINS_TO_RISE = 3;
+/**
+ * Subir de peldaño se gana con puntos: una victoria buena (maestría: eficiente y a buen ritmo, sin pistas) da 2 y una
+ * victoria normal da 1. Con `RISE_POINTS` se sube. Así, quien juega muy bien sube cada 3 niveles y quien va justo, cada 6;
+ * un atasco borra los puntos. Los puntos se guardan en `consecutiveWinsWithoutStruggle` (nombre heredado).
+ */
+export const MASTERY_POINTS = 2;
+export const WIN_POINTS = 1;
+export const RISE_POINTS = 6;
+/** Victorias buenas seguidas que suben un peldaño (RISE_POINTS / MASTERY_POINTS). */
+export const WINS_TO_RISE = RISE_POINTS / MASTERY_POINTS;
+/** Atascos seguidos que bajan un peldaño. */
+export const STRUGGLES_TO_DROP = 2;
+/** Más de este múltiplo del tiempo esperado es atasco aunque se haya jugado sin desperdiciar toques. */
+export const STRUGGLE_TIME_SHARE = 3.5;
 
 /** Una victoria «dominante» (eficiencia ≥ 0,9 y en menos del 60 % del tiempo esperado) tras otra victoria seguida salta dos peldaños. */
 export const DOMINANT_MIN_EFFICIENCY = 0.9;
@@ -69,6 +110,10 @@ export interface AdaptiveProfile {
  * Métricas registradas tras completar un nivel.
  */
 export interface MatchResult {
+  /** Puzzle jugado (Circuitos si no se indica): cambia el tiempo esperado y la eficiencia que se pide. */
+  puzzle?: PuzzleType;
+  /** Casillas del tablero (Hilos mide el tiempo por casillas). */
+  cells?: number;
   minTaps: number;
   actualTaps: number;
   elapsedSeconds: number;
@@ -81,6 +126,8 @@ export interface MatchResult {
  */
 export interface PerformanceEvaluation {
   tapEfficiency: number; // minTaps / actualTaps (1.0 = perfecto)
+  /** Tiempo que tarda un buen jugador en este nivel. */
+  expectedSeconds: number;
   isStruggle: boolean; // ¿Se atascó el jugador?
   isMastery: boolean; // ¿Completó con alta maestría?
   performanceScore: number; // 0.0 a 2.0+
@@ -125,11 +172,11 @@ export function getLevelParamsForProfile(profile: AdaptiveProfile): LevelParams 
  * Evalúa el resultado de una partida y actualiza el perfil adaptativo.
  * 
  * Reglas de salida verificables:
- * 1. "Nadie se atora más de 3 niveles seguidos sin que baje la dificultad":
- *    Si consecutiveStruggles >= 3, baja el tier automáticamente.
- * 2. "Nadie resuelve 3 seguidos sin que suba la dificultad":
- *    Si consecutiveWinsWithoutStruggle >= WINS_TO_RISE, sube el tier automáticamente.
+ * 1. Dos atascos seguidos (STRUGGLES_TO_DROP) bajan un peldaño.
+ * 2. Las victorias suman puntos (buena = 2, normal = 1); con RISE_POINTS sube un peldaño: quien juega muy bien sube cada
+ *    3 niveles, quien va justo cada 6, y un atasco borra los puntos.
  * 3. Una victoria dominante (muy eficiente y rápida) tras otra victoria seguida sube dos peldaños.
+ * Lo que es «bueno» depende del puzzle (PUZZLE_TUNING).
  */
 export function evaluateAndAdapt(
   profile: AdaptiveProfile,
@@ -148,6 +195,7 @@ export function evaluateAndAdapt(
       updatedProfile: updated,
       evaluation: {
         tapEfficiency: 0,
+        expectedSeconds: 0,
         isStruggle: false,
         isMastery: false,
         performanceScore: 0,
@@ -163,7 +211,7 @@ export function evaluateAndAdapt(
     updated.rating = Math.max(500, updated.rating - 50);
 
     let newTier = updated.currentTier;
-    if (updated.consecutiveStruggles >= 3) {
+    if (updated.consecutiveStruggles >= STRUGGLES_TO_DROP) {
       newTier = Math.max(MIN_TIER, updated.currentTier - 1);
       updated.currentTier = newTier;
       updated.consecutiveStruggles = 0;
@@ -173,6 +221,7 @@ export function evaluateAndAdapt(
       updatedProfile: updated,
       evaluation: {
         tapEfficiency: 0,
+        expectedSeconds: 0,
         isStruggle: true,
         isMastery: false,
         performanceScore: 0,
@@ -190,42 +239,36 @@ export function evaluateAndAdapt(
   const safeMinTaps = Math.max(result.minTaps, 1);
   const tapEfficiency = Math.min(1.0, safeMinTaps / safeActualTaps);
 
-  // Tiempo esperado de referencia según toques mínimos (≈ 2.5 seg por toque óptimo)
-  const expectedSeconds = Math.max(12, safeMinTaps * 2.5);
+  // Tiempo esperado y exigencia según el puzzle (ver PUZZLE_TUNING)
+  const tuning = PUZZLE_TUNING[result.puzzle ?? 'circuits'];
+  const expectedSeconds = tuning.expectedSeconds(safeMinTaps, Math.max(1, result.cells ?? 1));
   const timeFactor = Math.min(2.0, expectedSeconds / Math.max(result.elapsedSeconds, 4));
+  const timeShare = result.elapsedSeconds / expectedSeconds;
 
-  // Puntuación combinada de rendimiento
-  const performanceScore = tapEfficiency * 0.6 + Math.min(timeFactor, 1.5) * 0.4;
+  // Puntuación combinada de rendimiento (eficiencia relativa a lo que se pide en ese puzzle)
+  const relativeEfficiency = Math.min(1.5, tapEfficiency / tuning.masteryEfficiency);
+  const performanceScore = Math.min(1, relativeEfficiency) * 0.6 + Math.min(timeFactor, 1.5) * 0.4;
 
-  // Criterios de atasco (Struggle):
-  // - Necesitó más de 3.2x los toques mínimos Y tardó más del doble del tiempo esperado.
-  // - O usó 2 o más pistas.
-  // En modo relajado nunca se considera atasco (sin penalización por lentitud ni reintentos).
+  // Atasco (nunca en Relajado): 2 o más pistas, muchos toques de más y lento, o muchísimo más lento de lo esperado
   const isStruggle =
     updated.mode !== 'relaxed' &&
-    ((safeActualTaps >= safeMinTaps * 3.2 && result.elapsedSeconds > expectedSeconds * 1.8) ||
-    hintsUsed >= 2);
+    (hintsUsed >= 2 ||
+      (tapEfficiency < tuning.struggleEfficiency && timeShare > 1.8) ||
+      timeShare > STRUGGLE_TIME_SHARE);
 
-  // Criterio de maestría:
-  // - Eficiencia de toques >= 0.6 y tiempo dentro de lo esperado.
-  // minTaps considera giros en ambos sentidos; un jugador que solo gira en sentido horario
-  // y no desperdicia ningún toque ronda ~0.67 de eficiencia, así que 0.6 no lo penaliza.
-  // La maestría exige haberlo resuelto sin pistas: si no, resolver con ayuda subiría la dificultad.
-  const isMastery =
-    hintsUsed === 0 &&
-    tapEfficiency >= MASTERY_MIN_EFFICIENCY &&
-    result.elapsedSeconds <= expectedSeconds * 1.25;
+  // Maestría: sin pistas, con la eficiencia que pide el puzzle y a buen ritmo
+  const isMastery = hintsUsed === 0 && tapEfficiency >= tuning.masteryEfficiency && timeShare <= 1.25;
 
   const isDominant =
     isMastery &&
     updated.consecutiveWinsWithoutStruggle >= 1 && // ya llevaba al menos una victoria seguida antes de esta
-    tapEfficiency >= DOMINANT_MIN_EFFICIENCY &&
-    result.elapsedSeconds <= expectedSeconds * DOMINANT_TIME_SHARE;
+    tapEfficiency >= Math.max(DOMINANT_MIN_EFFICIENCY, tuning.masteryEfficiency + 0.3) &&
+    timeShare <= DOMINANT_TIME_SHARE;
 
   let deltaRating = 0;
   if (isMastery) {
     deltaRating = Math.round(25 * performanceScore);
-    updated.consecutiveWinsWithoutStruggle++;
+    updated.consecutiveWinsWithoutStruggle += MASTERY_POINTS;
     updated.consecutiveStruggles = 0;
   } else if (isStruggle) {
     deltaRating = -20;
@@ -233,23 +276,23 @@ export function evaluateAndAdapt(
     updated.consecutiveWinsWithoutStruggle = 0;
   } else {
     deltaRating = 10;
-    updated.consecutiveWinsWithoutStruggle++;
+    updated.consecutiveWinsWithoutStruggle += WIN_POINTS;
     updated.consecutiveStruggles = 0;
   }
 
   updated.rating = Math.max(500, Math.min(2500, updated.rating + deltaRating));
 
-  // Ajuste de Tiers
+  // Ajuste de peldaño
   let newTier = updated.currentTier;
 
-  // Regla 1: Invariante de atasco (3 partidas atorado forzan bajada)
-  if (updated.consecutiveStruggles >= 3) {
+  // Regla 1: dos atascos seguidos bajan un peldaño
+  if (updated.consecutiveStruggles >= STRUGGLES_TO_DROP) {
     newTier = Math.max(MIN_TIER, updated.currentTier - 1);
     updated.consecutiveStruggles = 0;
   }
-  // Regla 2: Invariante de racha (3 victorias seguidas sin atasco fuerzan subida)
+  // Regla 2: con RISE_POINTS (3 victorias buenas o 6 normales) se sube un peldaño
   // Regla 3: una victoria dominante, con otra victoria seguida detrás, salta dos peldaños
-  else if (updated.consecutiveWinsWithoutStruggle >= WINS_TO_RISE || isDominant) {
+  else if (updated.consecutiveWinsWithoutStruggle >= RISE_POINTS || isDominant) {
     newTier = Math.min(MAX_TIER, updated.currentTier + (isDominant ? 2 : 1));
     updated.consecutiveWinsWithoutStruggle = 0;
   }
@@ -260,6 +303,7 @@ export function evaluateAndAdapt(
     updatedProfile: updated,
     evaluation: {
       tapEfficiency,
+      expectedSeconds,
       isStruggle,
       isMastery,
       performanceScore,

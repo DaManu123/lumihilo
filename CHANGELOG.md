@@ -4,6 +4,19 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.13] - 2026-11-10
+
+### Añadido
+- **Tutorial de Circuitos nuevo, animado y en tres pantallas** (como el de Hilos): un tablero de ejemplo donde un dedo gira las piezas mal puestas y todo se enciende; el sentido del giro (una pieza que gira a la derecha y a la izquierda con su flecha); y trucos (empezar por esquinas y bordes, las rectas solo tienen dos posiciones, seguir la luz desde la fuente, cómo se gana más y cómo baja la dificultad).
+- **Tutorial de Luces ampliado a tres pantallas:** la de siempre; «Dos toques se anulan» (tocar dos veces la misma casilla la deja igual y el orden no importa); y «Truco: fila por fila» (si una luz está apagada, se toca la de justo debajo), con un ejemplo animado que se resuelve en dos toques.
+- **Botón «Ayuda» en el juego** (a la izquierda de la barra, donde estaba «Modo»): vuelve a mostrar el tutorial del puzzle en juego. El modo se ve y se cambia en el menú. Los tutoriales tienen puntos de página y «Saltar».
+
+### Cambiado
+- **La dificultad se adapta a lo bien que juegas, en cada puzzle con su propia vara.** Antes los tres puzzles medían el tiempo como Circuitos (2,5 s por toque mínimo), así que en Hilos casi nadie llegaba a «rápido», y casi cualquier victoria hacía subir. Ahora: Luces da más tiempo para pensar y pide la mitad de eficiencia (encontrar el mínimo exacto es muy difícil); Hilos mide el tiempo por casillas del tablero y por hilo. Las victorias suman puntos: una buena (eficiente, a buen ritmo y sin pistas) 2 y una normal 1; con 6 se sube un peldaño. Quien juega muy bien sube cada 3 niveles, quien va justo cada 6, y un atasco borra los puntos. Bajar es más rápido: 2 atascos seguidos (antes 3), y tardar muchísimo más de lo esperado también cuenta como atasco. El bono de rapidez de Chispas usa el mismo tiempo esperado de cada puzzle.
+
+### Corregido
+- **Hilos: el aviso de casillas vacías ya no bloquea el tablero.** Antes, al unir todas las parejas sin llenar el tablero, el aviso «Faltan N casillas por llenar» impedía mover los hilos durante un par de segundos. Ahora el aviso se queda en pantalla sin bloquear nada y desaparece en cuanto vuelves a tocar los hilos (las casillas vacías siguen marcadas con su aro). Ningún aviso breve bloquea ya el juego.
+
 ## [0.2.0-beta.12] - 2026-11-10
 
 ### Añadido
