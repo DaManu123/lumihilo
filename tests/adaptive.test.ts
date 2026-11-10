@@ -34,12 +34,12 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
     expect(paramsChallenge.extraLoops).toBeGreaterThanOrEqual(2);
   });
 
-  it('criterio de salida: 5 victorias seguidas sin atasco suben la dificultad', () => {
+  it('criterio de salida: 3 victorias seguidas sin atasco suben la dificultad', () => {
     let profile = createDefaultProfile('normal');
     const initialTier = profile.currentTier; // Tier 2
 
-    // 5 victorias consecutivas estándar
-    for (let i = 0; i < 5; i++) {
+    // 3 victorias consecutivas estándar
+    for (let i = 0; i < 3; i++) {
       const res = evaluateAndAdapt(profile, {
         minTaps: 10,
         actualTaps: 12, // Rendimiento normal
@@ -50,7 +50,7 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
 
     // Debe haber subido de Tier
     expect(profile.currentTier).toBe(initialTier + 1);
-    expect(profile.gamesWon).toBe(5);
+    expect(profile.gamesWon).toBe(3);
   });
 
   it('criterio de salida: 3 partidas atorado bajan la dificultad para evitar frustración', () => {

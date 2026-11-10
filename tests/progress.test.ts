@@ -284,3 +284,29 @@ describe('Progreso del jugador (src/core/progress.ts)', () => {
     });
   });
 });
+
+describe('Chispas: bonus del aspecto equipado', () => {
+  const base = { tier: 4, tapEfficiency: 1, elapsedSeconds: 1, minTaps: 10, hintsUsed: 0, isNewRecord: false, multiplier: 1 };
+
+  it('sin aspecto con bonus no cambia nada', () => {
+    expect(computeSparksReward(base).skinBonus).toBe(0);
+    expect(computeSparksReward({ ...base, skinBonusPercent: 0 }).total).toBe(computeSparksReward(base).total);
+  });
+
+  it('suma un porcentaje del subtotal, redondeado', () => {
+    const plain = computeSparksReward(base); // 9 + 10 + 5 = 24
+    const withSkin = computeSparksReward({ ...base, skinBonusPercent: 25 });
+    expect(plain.total).toBe(24);
+    expect(withSkin.skinBonus).toBe(6);
+    expect(withSkin.total).toBe(30);
+  });
+
+  it('el reto diario multiplica también el bonus, y repetir el reto sigue sin pagar', () => {
+    expect(computeSparksReward({ ...base, skinBonusPercent: 25, multiplier: 2 }).total).toBe(60);
+    expect(computeSparksReward({ ...base, skinBonusPercent: 25, multiplier: 0 }).total).toBe(0);
+  });
+
+  it('un porcentaje negativo se ignora', () => {
+    expect(computeSparksReward({ ...base, skinBonusPercent: -50 }).total).toBe(24);
+  });
+});

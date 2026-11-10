@@ -19,6 +19,14 @@ const lightsProgress = (level, theme = 'dark', skin = 'filamento', tier = 6) => 
   return p;
 };
 
+const flowProgress = (level, theme = 'dark', skin = 'filamento', tier = 6) => {
+  const p = progress(1, theme, skin);
+  p.player_progress.flowLevel = level;
+  p.user_settings = { ...p.user_settings, puzzle: 'flow', hasSeenFlowTip: true };
+  p.profile_adaptive = { currentTier: tier };
+  return p;
+};
+
 const progress = (level, theme = 'dark', skin = 'filamento') => ({
   player_progress: { ...RICH.player_progress, currentLevel: level, sparks: 240, unlockedSkins: skin === 'filamento' ? [] : [skin] },
   user_settings: { ...SEEN_TUTORIAL.user_settings, theme, skin },
@@ -26,7 +34,7 @@ const progress = (level, theme = 'dark', skin = 'filamento') => ({
 
 try {
   await launch();
-  const open = (seed, label) => openGame({ width: 360, height: 720, seed, label, out });
+  const open = (seed, label) => openGame({ width: 360, height: 720, seed, label, out, scale: 2 });
 
   let g = await open(progress(14), 'tablero');
   await g.tap(...g.pos.hint, 500); await g.tap(...g.pos.hint, 500); await g.tap(...g.pos.hint, 500);
@@ -101,6 +109,26 @@ try {
   for (let i = 0; i < 3; i++) await g.tap(...g.pos.hint, 500);
   await g.page.waitForTimeout(900);
   await g.shot('09-luces-oceano'); await g.close();
+
+  g = await open(flowProgress(40, 'dark', 'filamento', 6), 'hilos');
+  for (let i = 0; i < 2; i++) await g.tap(...g.pos.hint, 600);
+  await g.page.waitForTimeout(900);
+  await g.shot('11-hilos'); await g.close();
+
+  g = await open(flowProgress(25, 'dark', 'oceano', 4), 'hilos-oceano');
+  for (let i = 0; i < 3; i++) await g.tap(...g.pos.hint, 600);
+  await g.page.waitForTimeout(900);
+  await g.shot('12-hilos-oceano'); await g.close();
+
+  // Victoria real: se arrastra cada hilo por su solución (sin pistas)
+  g = await openGame({ width: 360, height: 720, scale: 2, seed: flowProgress(12, 'dark', 'filamento', 3), label: 'hilos-victoria', out, query: '?debug' });
+  const sols = await g.page.evaluate(() => {
+    const sc = window.__game.scene.scenes.find((x) => x.flowLevelData);
+    return sc.flowLevelData.solution.map((p) => p.map((c) => [sc.cellViews[c.row][c.col].container.x, sc.cellViews[c.row][c.col].container.y]));
+  });
+  for (const path of sols) await g.drag(path, 200);
+  await g.page.waitForTimeout(3000);
+  await g.shot('13-hilos-victoria'); await g.close();
 } finally {
   await close();
   await server.close();

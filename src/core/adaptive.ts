@@ -13,16 +13,17 @@ export type GameMode = 'relaxed' | 'normal' | 'challenge';
  * Va desde Tier 1 (4x4 simple sin bucles) hasta Tier 10 (7x7 con 4 bucles).
  */
 export const DIFFICULTY_TIERS: Record<number, LevelParams> = {
-  1: { width: 4, height: 4, extraLoops: 0, branchBias: 0.5 },
-  2: { width: 4, height: 4, extraLoops: 1, branchBias: 0.55 },
-  3: { width: 4, height: 4, extraLoops: 2, branchBias: 0.6 },
-  4: { width: 5, height: 5, extraLoops: 1, branchBias: 0.5 },
-  5: { width: 5, height: 5, extraLoops: 2, branchBias: 0.6 },
-  6: { width: 5, height: 5, extraLoops: 3, branchBias: 0.65 },
-  7: { width: 6, height: 6, extraLoops: 2, branchBias: 0.6 },
-  8: { width: 6, height: 6, extraLoops: 3, branchBias: 0.7 },
-  9: { width: 6, height: 6, extraLoops: 4, branchBias: 0.75 },
-  10: { width: 7, height: 7, extraLoops: 4, branchBias: 0.8 },
+  // Peldaños 1-3: 4x4 (el modo Relajado no pasa de aquí); solo suben los bucles
+  1: { width: 4, height: 4, extraLoops: 1, branchBias: 0.5 },
+  2: { width: 4, height: 4, extraLoops: 2, branchBias: 0.6 },
+  3: { width: 4, height: 4, extraLoops: 3, branchBias: 0.65 },
+  4: { width: 5, height: 5, extraLoops: 2, branchBias: 0.55 },
+  5: { width: 5, height: 5, extraLoops: 3, branchBias: 0.65 },
+  6: { width: 5, height: 5, extraLoops: 4, branchBias: 0.7 },
+  7: { width: 6, height: 6, extraLoops: 3, branchBias: 0.65 },
+  8: { width: 6, height: 6, extraLoops: 4, branchBias: 0.75 },
+  9: { width: 6, height: 6, extraLoops: 6, branchBias: 0.8 },
+  10: { width: 7, height: 7, extraLoops: 6, branchBias: 0.85 },
 };
 
 /** Eficiencia mínima de toques (minTaps / toques reales) para considerar maestría. */
@@ -30,6 +31,24 @@ export const MASTERY_MIN_EFFICIENCY = 0.6;
 
 export const MIN_TIER = 1;
 export const MAX_TIER = 10;
+
+/** Victorias seguidas sin atasco que suben un peldaño de dificultad. */
+export const WINS_TO_RISE = 3;
+
+/** Una victoria «dominante» (eficiencia ≥ 0,9 y en menos del 60 % del tiempo esperado) tras otra victoria seguida salta dos peldaños. */
+export const DOMINANT_MIN_EFFICIENCY = 0.9;
+export const DOMINANT_TIME_SHARE = 0.6;
+
+/**
+ * Peldaño con el que se genera de verdad el nivel según el modo: Relajado no pasa del 3 y Reto no baja del 5.
+ * Luces e Hilos usan este mismo peldaño con sus propias tablas.
+ */
+export function effectiveTier(profile: Pick<AdaptiveProfile, 'mode' | 'currentTier'>): number {
+  const tier = Math.max(MIN_TIER, Math.min(profile.currentTier, MAX_TIER));
+  if (profile.mode === 'relaxed') return Math.min(tier, 3);
+  if (profile.mode === 'challenge') return Math.max(5, tier);
+  return tier;
+}
 
 /**
  * Perfil adaptativo del jugador guardado de forma persistente.
@@ -88,24 +107,18 @@ export function createDefaultProfile(mode: GameMode = 'normal'): AdaptiveProfile
 }
 
 /**
+ * Perfil de un puzzle que aún no tiene el suyo (Luces e Hilos con jugadores de versiones anteriores, que compartían el
+ * de Circuitos): hereda el modo y el peldaño actual, y empieza sin racha ni puntuación propias.
+ */
+export function profileFromShared(shared: AdaptiveProfile): AdaptiveProfile {
+  return { ...createDefaultProfile(shared.mode), currentTier: shared.currentTier };
+}
+
+/**
  * Obtiene los parámetros de nivel apropiados según el modo y el nivel del perfil.
  */
 export function getLevelParamsForProfile(profile: AdaptiveProfile): LevelParams {
-  if (profile.mode === 'relaxed') {
-    // En modo relajado se mantiene en 4x4 (tiers 1 a 3, aumentando solo los bucles)
-    const tier = Math.min(profile.currentTier, 3);
-    return DIFFICULTY_TIERS[tier] || DIFFICULTY_TIERS[1];
-  }
-
-  if (profile.mode === 'challenge') {
-    // En modo reto arranca mínimo en tier 5 y escala hasta 10
-    const tier = Math.max(5, Math.min(profile.currentTier, MAX_TIER));
-    return DIFFICULTY_TIERS[tier] || DIFFICULTY_TIERS[5];
-  }
-
-  // Modo normal: sigue el tier actual
-  const tier = Math.max(MIN_TIER, Math.min(profile.currentTier, MAX_TIER));
-  return DIFFICULTY_TIERS[tier] || DIFFICULTY_TIERS[2];
+  return DIFFICULTY_TIERS[effectiveTier(profile)] ?? DIFFICULTY_TIERS[MIN_TIER];
 }
 
 /**
@@ -114,8 +127,9 @@ export function getLevelParamsForProfile(profile: AdaptiveProfile): LevelParams 
  * Reglas de salida verificables:
  * 1. "Nadie se atora más de 3 niveles seguidos sin que baje la dificultad":
  *    Si consecutiveStruggles >= 3, baja el tier automáticamente.
- * 2. "Nadie resuelve 5 seguidos sin que suba la dificultad":
- *    Si consecutiveWinsWithoutStruggle >= 5, sube el tier automáticamente.
+ * 2. "Nadie resuelve 3 seguidos sin que suba la dificultad":
+ *    Si consecutiveWinsWithoutStruggle >= WINS_TO_RISE, sube el tier automáticamente.
+ * 3. Una victoria dominante (muy eficiente y rápida) tras otra victoria seguida sube dos peldaños.
  */
 export function evaluateAndAdapt(
   profile: AdaptiveProfile,
@@ -202,6 +216,12 @@ export function evaluateAndAdapt(
     tapEfficiency >= MASTERY_MIN_EFFICIENCY &&
     result.elapsedSeconds <= expectedSeconds * 1.25;
 
+  const isDominant =
+    isMastery &&
+    updated.consecutiveWinsWithoutStruggle >= 1 && // ya llevaba al menos una victoria seguida antes de esta
+    tapEfficiency >= DOMINANT_MIN_EFFICIENCY &&
+    result.elapsedSeconds <= expectedSeconds * DOMINANT_TIME_SHARE;
+
   let deltaRating = 0;
   if (isMastery) {
     deltaRating = Math.round(25 * performanceScore);
@@ -227,14 +247,10 @@ export function evaluateAndAdapt(
     newTier = Math.max(MIN_TIER, updated.currentTier - 1);
     updated.consecutiveStruggles = 0;
   }
-  // Regla 2: Invariante de racha (5 victorias seguidas sin atasco forzan subida)
-  else if (updated.consecutiveWinsWithoutStruggle >= 5) {
-    newTier = Math.min(MAX_TIER, updated.currentTier + 1);
-    updated.consecutiveWinsWithoutStruggle = 0;
-  }
-  // Subida ágil por maestría excepcional consecutiva
-  else if (isMastery && updated.consecutiveWinsWithoutStruggle >= 3 && updated.rating > 1050 + updated.currentTier * 50) {
-    newTier = Math.min(MAX_TIER, updated.currentTier + 1);
+  // Regla 2: Invariante de racha (3 victorias seguidas sin atasco fuerzan subida)
+  // Regla 3: una victoria dominante, con otra victoria seguida detrás, salta dos peldaños
+  else if (updated.consecutiveWinsWithoutStruggle >= WINS_TO_RISE || isDominant) {
+    newTier = Math.min(MAX_TIER, updated.currentTier + (isDominant ? 2 : 1));
     updated.consecutiveWinsWithoutStruggle = 0;
   }
 

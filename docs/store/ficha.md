@@ -6,19 +6,21 @@ Recursos listos para subir a Play Console (Presencia en Play Store → Ficha de 
 |---|---|---|
 | Icono | `icon-512.png` | 512×512 |
 | Gráfico de funciones | `grafico-de-funciones-1024x500.png` | 1024×500 |
-| Capturas de teléfono | `capturas/01…10-*.png` | 1080×2160 (relación 2:1) |
+| Capturas de teléfono | `capturas/01…13-*.png` | 1080×2160 (relación 2:1) |
 
 Las capturas se generan del juego real con `npm run build && node e2e/store.mjs` (necesita Chromium de Playwright, ver `docs/08`). El gráfico se compone con `grafico/feature.html`; si cambia el diseño del juego, hay que regenerar ambos.
+
+Capturas de Hilos: `11-hilos` (partida a medias, Filamento), `12-hilos-oceano` (aspecto Océano) y `13-hilos-victoria` (resultado «Todo unido»). Play admite como máximo **8** capturas de teléfono: hay 13, así que hay que elegir. Propuesta: 01, 08, 11, 02, 03, 12, 07 y 05 (un puzzle de cada tipo, reto diario, victoria y tienda de aspectos). Regenerar con `store.mjs` reescribe todas (cambian el reloj y las Chispas de cada una); conviene versionar solo las que cambien de verdad.
 
 ## Español (predeterminado)
 
 **Título (máx. 30):** Lumihilo
 
 **Descripción corta (máx. 80):**
-Conecta el circuito y enciende el hilo de luz. Un puzzle nuevo en cada partida.
+Tres puzzles de luz: conecta, enciende y une. Uno nuevo en cada partida.
 
 **Descripción completa:**
-Lumihilo es un puzzle de circuitos de luz. Gira las piezas para conectar toda la red y ver cómo el hilo se enciende de punta a punta.
+Lumihilo reúne tres puzzles de luz. Conecta circuitos, enciende tableros y une parejas de puntos con un hilo de luz, en partidas de menos de un minuto.
 
 • Tres puzzles: Circuitos (gira las piezas y conecta todo), Luces (enciende todo el tablero) y Hilos (une las parejas de puntos con un hilo de luz).
 • Un puzzle distinto en cada partida, siempre con solución.
@@ -39,10 +41,10 @@ Fácil de entender en cinco segundos y difícil de soltar.
 **Title:** Lumihilo
 
 **Short description:**
-Connect the circuit and light the thread. A brand-new puzzle every game.
+Three light puzzles: connect, switch on and join. A new one every game.
 
 **Full description:**
-Lumihilo is a light-circuit puzzle. Rotate the pieces to connect the whole network and watch the thread light up from end to end.
+Lumihilo brings together three light puzzles. Connect circuits, light up boards and join pairs of dots with a thread of light, in games that last under a minute.
 
 • Three puzzles: Circuits (rotate pieces and connect everything), Lights (light up the whole board) and Threads (join pairs of dots with a thread of light).
 • A different puzzle every game, always solvable.

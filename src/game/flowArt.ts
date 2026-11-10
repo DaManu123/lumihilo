@@ -67,6 +67,13 @@ export function paintFlowCell(g: G, theme: GameTheme, style: SkinStyle, cellVisu
     g.lineStyle(5, theme.hintRing, 1);
     strokeTile(g, style, cellVisual, radius, 3);
   }
+  if (look.missing) {
+    // Casilla que falta llenar: aro de aviso y un punto en el centro (no depende solo del color)
+    g.lineStyle(5, theme.accent, 1);
+    strokeTile(g, style, cellVisual, radius, 5);
+    g.fillStyle(theme.accent, 0.9);
+    g.fillCircle(0, 0, cellVisual * 0.09);
+  }
 
   const w = Math.max(10, cellVisual * 0.2) * style.wireScale;
   if (look.owner >= 0) {

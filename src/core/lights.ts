@@ -30,14 +30,29 @@ export interface LightsLevel {
   minTaps: number;
 }
 
-/** Tamaño y desorden según el nivel de habilidad (1 a 8) del jugador. */
+/**
+ * Tamaño, desorden y piedras según el nivel de habilidad (1 a 10). El desorden es el número de casillas que se tocan al
+ * azar desde «todo encendido»: el mínimo de toques para resolverlo ronda ese número, así que crece con el tablero
+ * (de ~1/3 de las casillas en los primeros peldaños a ~60 % en los últimos). Las piedras (desde el peldaño 3)
+ * obligan a cambiar de táctica, no solo a pensar más.
+ */
+const LIGHTS_TIERS: ReadonlyArray<LightsParams> = [
+  { size: 3, scrambles: 4, blocked: 0 },
+  { size: 4, scrambles: 7, blocked: 0 },
+  { size: 4, scrambles: 10, blocked: 1 },
+  { size: 5, scrambles: 11, blocked: 1 },
+  { size: 5, scrambles: 14, blocked: 2 },
+  { size: 6, scrambles: 17, blocked: 2 },
+  { size: 6, scrambles: 21, blocked: 3 },
+  { size: 7, scrambles: 25, blocked: 3 },
+  { size: 7, scrambles: 29, blocked: 4 },
+  { size: 7, scrambles: 33, blocked: 5 },
+];
+
 export function lightsParamsForTier(tier: number): LightsParams {
-  const t = Math.max(1, Math.min(8, Math.floor(tier)));
-  const size = t <= 2 ? 3 : t <= 4 ? 4 : t <= 6 ? 5 : 6;
-  const scrambles = Math.min(size * size - 1, 2 + t + Math.floor(size / 2));
-  // Desde el nivel de habilidad 3 aparecen piedras que estorban: un cambio de táctica, no solo más tablero
-  const blocked = t < 3 ? 0 : Math.min(4, Math.floor((t - 1) / 2));
-  return { size, scrambles: Math.min(scrambles, size * size - blocked - 1), blocked };
+  const t = Math.max(1, Math.min(LIGHTS_TIERS.length, Math.floor(tier)));
+  const base = LIGHTS_TIERS[t - 1];
+  return { ...base, scrambles: Math.min(base.scrambles, base.size * base.size - base.blocked - 1) };
 }
 
 export function createGrid(size: number, lit: boolean): LightsGrid {

@@ -36,13 +36,21 @@ export function sparksPerDay(p: Profile): number {
   return p.levels * sparksPerLevel(p, p.tier) + sparksPerLevel(p, weekAverageTier, 2);
 }
 
-/** Días hasta tener cada aspecto, comprándolos en orden (arrancando con las 30 Chispas iniciales). */
-export function daysToOwn(p: Profile): number[] {
+/**
+ * Días hasta tener cada aspecto, comprándolos en orden (arrancando con las 30 Chispas iniciales) y llevando puesto el
+ * último comprado: su bonus de Chispas acelera la siguiente compra. (Aproximación: el bonus se aplica al ingreso neto
+ * diario, aunque en realidad solo afecta a lo que se gana y no a lo que se gasta en pistas.)
+ */
+export function daysToOwn(p: Profile, withBonus = true): number[] {
   const perDay = sparksPerDay(p);
-  let spent = 0;
+  let days = 0;
+  let bonus = 0;
+  let first = true;
   return SKINS.filter((s) => s.price > 0).map((s) => {
-    spent += s.price;
-    return Math.max(0, (spent - 30) / perDay);
+    days += Math.max(0, s.price - (first ? 30 : 0)) / (perDay * (1 + bonus / 100));
+    first = false;
+    if (withBonus) bonus = s.sparksBonusPercent;
+    return days;
   });
 }
 
@@ -68,6 +76,19 @@ describe('Ritmo de Chispas (tienda de aspectos)', () => {
 
   it('el jugador ocasional completa la colección en un tiempo razonable (≤ 8 semanas)', () => {
     expect(daysToOwn(PROFILES[0]).at(-1)!).toBeLessThanOrEqual(56);
+  });
+
+  it('el bonus de cada aspecto crece con su precio y acelera la colección, sin regalarla', () => {
+    const bonuses = SKINS.map((s) => s.sparksBonusPercent);
+    expect(bonuses[0]).toBe(0);
+    expect([...bonuses].sort((a, b) => a - b)).toEqual(bonuses);
+    expect(Math.max(...bonuses)).toBeLessThanOrEqual(25);
+    for (const p of PROFILES) {
+      const con = daysToOwn(p).at(-1)!;
+      const sin = daysToOwn(p, false).at(-1)!;
+      expect(con, p.name).toBeLessThan(sin);
+      expect(con, p.name).toBeGreaterThan(sin * 0.75); // acelera, pero la colección sigue siendo una meta larga
+    }
   });
 
   it('imprime la tabla para la documentación', () => {

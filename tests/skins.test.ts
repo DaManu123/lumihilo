@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultProgress, sanitizeProgress } from '../src/core/progress';
-import { DEFAULT_SKIN, SKINS, buySkin, skinInfo, isSkinUnlocked, sanitizeUnlockedSkins, usableSkin } from '../src/core/skins';
+import { skinSparksBonus, DEFAULT_SKIN, SKINS, buySkin, skinInfo, isSkinUnlocked, sanitizeUnlockedSkins, usableSkin } from '../src/core/skins';
 
 const rich = (sparks: number) => ({ ...createDefaultProgress(1), sparks });
 
@@ -48,5 +48,15 @@ describe('Aspectos', () => {
     expect(sanitizeProgress({ unlockedSkins: ['matrix', 'basura'] }, 1).unlockedSkins).toEqual(['matrix']);
     // Un progreso de una versión anterior (sin aspectos) sigue siendo válido
     expect(sanitizeProgress({ sparks: 50 }, 1).unlockedSkins).toEqual([]);
+  });
+});
+
+describe('Aspectos: bonus de Chispas', () => {
+  it('el aspecto inicial no da bonus y los comprados dan más cuanto más cuestan', () => {
+    expect(skinSparksBonus(DEFAULT_SKIN)).toBe(0);
+    expect(skinSparksBonus('cyberpunk')).toBe(5);
+    expect(skinSparksBonus('aurora')).toBe(25);
+    expect(skinSparksBonus('no-existe')).toBe(0);
+    expect(skinSparksBonus(undefined)).toBe(0);
   });
 });

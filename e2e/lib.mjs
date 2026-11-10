@@ -3,6 +3,7 @@
 // El juego se dibuja en un <canvas>, así que no hay botones HTML que seleccionar: se toca por coordenadas
 // lógicas del lienzo (720 de ancho; el alto depende de la pantalla) y se comprueba el estado guardado en
 // localStorage después de cada acción.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { chromium } from 'playwright';
 
 export const URL = 'http://localhost:4173/';
@@ -10,9 +11,53 @@ export const URL = 'http://localhost:4173/';
 export const results = [];
 export const consoleErrors = [];
 
+// Cada escenario que corre en paralelo acumula su salida y la imprime entera al terminar (sin mezclarse con otros)
+const scenarioLog = new AsyncLocalStorage();
+
 export function check(name, ok, detail = '') {
   results.push({ name, ok: !!ok, detail });
-  console.log(`${ok ? 'OK   ' : 'FALLA'} ${name}${detail ? '  → ' + detail : ''}`);
+  const line = `${ok ? 'OK   ' : 'FALLA'} ${name}${detail ? '  → ' + detail : ''}`;
+  const store = scenarioLog.getStore();
+  if (store) store.lines.push(line);
+  else console.log(line);
+}
+
+/**
+ * Ejecuta escenarios independientes (`[título, función]`) con hasta `E2E_JOBS` a la vez (3 por defecto; 1 = en serie).
+ * Cada uno abre sus propios contextos de navegador, que no comparten almacenamiento. Los más largos van primero para
+ * repartir mejor la carga, y la salida de cada uno se imprime completa, con su duración, cuando termina.
+ */
+export async function runSections(sections) {
+  const jobs = Math.max(1, Number(process.env.E2E_JOBS || 3));
+  const only = process.env.E2E_ONLY ? process.env.E2E_ONLY.split(',') : null; // p. ej. E2E_ONLY=18,19
+  const queue = sections.filter(([title]) => !only || only.some((id) => title.startsWith(id + '. ')));
+  const started = Date.now();
+  const failures = [];
+  // Un Chromium por trabajador: con un solo navegador todos los contextos comparten el mismo proceso de gráficos
+  // (WebGL por software) y, con más de dos a la vez, se atascan unos a otros
+  const worker = async (index) => {
+    const own = jobs > 1 ? await launchBrowser(launchArgs) : browser;
+    const store = { lines: null, browser: own };
+    for (let next = queue.shift(); next; next = queue.shift()) {
+      const [title, run] = next;
+      const lines = [];
+      store.lines = lines;
+      const t0 = Date.now();
+      try {
+        await scenarioLog.run(store, run);
+      } catch (error) {
+        results.push({ name: `${title}: el escenario se interrumpió`, ok: false, detail: String(error?.message ?? error) });
+        lines.push(`FALLA ${title}: el escenario se interrumpió  → ${error?.stack ?? error}`);
+        failures.push(title);
+      }
+      console.log(`\n=== ${title} (${((Date.now() - t0) / 1000).toFixed(0)} s) ===\n${lines.join('\n')}`);
+    }
+    if (own !== browser) await own.close();
+  };
+  // Los escenarios más largos (por tamaño de código) primero
+  queue.sort((a, b) => b[1].toString().length - a[1].toString().length);
+  await Promise.all(Array.from({ length: jobs }, (_, i) => worker(i)));
+  console.log(`\nEscenarios: ${((Date.now() - started) / 1000).toFixed(0)} s con ${jobs} en paralelo`);
 }
 
 export function section(title) {
@@ -20,8 +65,13 @@ export function section(title) {
 }
 
 let browser;
+let launchArgs = [];
+const launchBrowser = (args) =>
+  // SwiftShader explícito: en máquinas sin GPU (WSL, CI) el WebGL por software va el doble de rápido que el predeterminado
+  chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', ...args] });
 export async function launch(args = []) {
-  browser = await chromium.launch({ args });
+  launchArgs = args;
+  browser = await launchBrowser(args);
   return browser;
 }
 export const close = () => browser?.close();
@@ -48,15 +98,16 @@ export const RICH = {
  * Abre el juego en un contexto limpio. Devuelve utilidades para tocar el lienzo, leer el estado guardado
  * y contar lo que suena y vibra (se instrumentan AudioContext y navigator.vibrate antes de cargar).
  */
-export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null } = {}) {
-  const ctx = await browser.newContext({
+export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null, scale = 1 } = {}) {
+  const ctx = await (scenarioLog.getStore()?.browser ?? browser).newContext({
     viewport: { width, height },
-    deviceScaleFactor: 2,
+    deviceScaleFactor: scale,
     isMobile: mobile,
     hasTouch: mobile,
     reducedMotion,
     locale,
   });
+  ctx.setDefaultTimeout(60000); // con varios navegadores a la vez la carga puede tardar más
   const page = await ctx.newPage();
   await page.addInitScript(() => {
     window.__osc = 0;
@@ -110,7 +161,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     await page.reload();
   }
   await page.waitForSelector('canvas');
-  await page.waitForLoadState('networkidle');
+  // «networkidle» puede no llegar nunca con varios navegadores arrancando a la vez: se intenta un rato y se sigue,
+  // y lo que importa de verdad es que las tipografías estén listas (el texto del lienzo las usa)
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+  await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(1300);
 
   const g = { ctx, page };
@@ -201,8 +255,8 @@ export async function winWithHints(g, maxTaps = 120) {
   for (let i = 0; i < maxTaps; i++) {
     await g.tap(...g.pos.hint, 0);
     await g.page
-      .waitForFunction((prev) => JSON.parse(localStorage.getItem('player_progress')).sparks !== prev, last, { timeout: 1500 })
-      .catch(() => undefined); // si el toque se ignoró (la pieza aún giraba) no hay cobro
+      .waitForFunction((prev) => JSON.parse(localStorage.getItem('player_progress')).sparks !== prev, last, { timeout: 5000 })
+      .catch(() => undefined); // si el toque se ignoró (la pieza aún giraba) no hay cobro; con varios navegadores a la vez el cobro puede tardar
     await g.page.waitForTimeout(450); // giro de la pieza + guardado de la victoria
     const after = await g.state();
     const sparks = after.progress.sparks;

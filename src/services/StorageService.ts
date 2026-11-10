@@ -1,6 +1,6 @@
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
-import { AdaptiveProfile, createDefaultProfile } from '../core/adaptive';
+import { AdaptiveProfile, createDefaultProfile, profileFromShared } from '../core/adaptive';
 import { PlayerProgress, sanitizeProgress } from '../core/progress';
 import type { HapticLevel, HapticMode } from '../core/haptics';
 import type { MusicStyle } from '../core/music';
@@ -204,18 +204,32 @@ export class HybridStorageService implements StorageService {
 
   // --- Métodos tipados para el juego ---
 
-  loadProfile(): AdaptiveProfile {
-    const raw = this.get('profile_adaptive');
-    if (!raw) return createDefaultProfile('normal');
-    try {
-      return { ...createDefaultProfile('normal'), ...JSON.parse(raw) };
-    } catch {
-      return createDefaultProfile('normal');
-    }
+  /** Clave del perfil adaptativo de cada puzzle (Circuitos conserva la de siempre). */
+  private profileKey(puzzle: PuzzleType): string {
+    return puzzle === 'circuits' ? 'profile_adaptive' : `profile_adaptive_${puzzle}`;
   }
 
-  saveProfile(profile: AdaptiveProfile): void {
-    this.set('profile_adaptive', JSON.stringify(profile));
+  /**
+   * Perfil adaptativo de un puzzle: cada uno tiene el suyo, para que lo que pasa en Circuitos no mueva la dificultad de
+   * Luces o Hilos. Si ese puzzle aún no tiene perfil, hereda modo y peldaño del de Circuitos.
+   */
+  loadProfile(puzzle: PuzzleType = 'circuits'): AdaptiveProfile {
+    const read = (key: string): AdaptiveProfile | null => {
+      const raw = this.get(key);
+      if (!raw) return null;
+      try {
+        return { ...createDefaultProfile('normal'), ...JSON.parse(raw) };
+      } catch {
+        return null;
+      }
+    };
+    const circuits = read(this.profileKey('circuits')) ?? createDefaultProfile('normal');
+    if (puzzle === 'circuits') return circuits;
+    return read(this.profileKey(puzzle)) ?? profileFromShared(circuits);
+  }
+
+  saveProfile(profile: AdaptiveProfile, puzzle: PuzzleType = 'circuits'): void {
+    this.set(this.profileKey(puzzle), JSON.stringify(profile));
   }
 
   /** Progreso del jugador (nivel, Chispas, estadísticas, racha). Se valida al leerlo. */

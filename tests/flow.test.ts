@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   FlowCell, FlowLevel, adjacentCells, applySolutionPath, beginStroke, cloneFlowState, connectedCount, createFlowState, endpointPair,
-  extendStroke, filledCount, flowHint, flowParamsForTier, generateFlow, isFlowSolved, ownerGrid, pairComplete, sameCell,
+  extendStroke, emptyCount, filledCount, flowCellCount, flowHint, flowParamsForTier, flowRequiresFill, generateFlow, isFlowComplete,
+  isFlowFull, isFlowJoinedButNotFull, isFlowSolved, ownerGrid, pairComplete, sameCell,
 } from '../src/core/flow';
 
 const cell = (row: number, col: number): FlowCell => ({ row, col });
@@ -17,22 +18,22 @@ describe('Hilos: dificultad', () => {
   it('el tamaño y el número de hilos crecen con el nivel de habilidad', () => {
     let last = flowParamsForTier(1);
     expect(last.size).toBe(4);
-    for (let tier = 2; tier <= 8; tier++) {
+    for (let tier = 2; tier <= 10; tier++) {
       const p = flowParamsForTier(tier);
       expect(p.size).toBeGreaterThanOrEqual(last.size);
       expect(p.pairs).toBeGreaterThanOrEqual(last.pairs);
-      expect(p.pairs).toBeLessThanOrEqual(p.size);
+      expect(p.pairs).toBeLessThanOrEqual(8); // ocho colores y símbolos distintos
       last = p;
     }
-    expect(last.size).toBe(7);
-    expect(flowParamsForTier(99)).toEqual(flowParamsForTier(8));
+    expect(last.size).toBe(8);
+    expect(flowParamsForTier(99)).toEqual(flowParamsForTier(10));
     expect(flowParamsForTier(-4)).toEqual(flowParamsForTier(1));
   });
 });
 
 describe('Hilos: generador', () => {
   it('todo nivel recorre el tablero entero con trazados contiguos y sin solaparse, y se resuelve con su solución', () => {
-    for (let tier = 1; tier <= 8; tier++) {
+    for (let tier = 1; tier <= 10; tier++) {
       const params = flowParamsForTier(tier);
       for (let seed = 1; seed <= 60; seed++) {
         const level = generateFlow(params, seed * 7919);
@@ -58,9 +59,10 @@ describe('Hilos: generador', () => {
         expect(isFlowSolved(state, level)).toBe(false);
         for (let i = 0; i < level.pairs.length; i++) drawSolution(level, state, i);
         expect(isFlowSolved(state, level), `${label}: la solución no resuelve`).toBe(true);
+        expect(isFlowComplete(state, level, true), `${label}: la solución no llena el tablero`).toBe(true);
       }
     }
-  });
+  }, 30000); // 10 peldaños × 60 niveles, con muchas comprobaciones cada uno
 
   it('es determinista y semillas distintas dan niveles distintos', () => {
     const params = flowParamsForTier(5);
@@ -243,5 +245,77 @@ describe('Hilos: aspecto de las casillas (src/game/flowLooks.ts)', () => {
     extendStroke(state, level, 1, level.solution[1][1]);
     looks = flowLooks(level, state, 20);
     expect(looks[level.pairs[1].a.row][level.pairs[1].a.col].complete).toBe(false);
+  });
+});
+
+describe('Hilos: llenar todo el tablero', () => {
+  // 3×3 con dos parejas: la roja va por el borde izquierdo e inferior; la azul puede dar la vuelta (llena todo) o ir directa
+  const red = [cell(0, 0), cell(1, 0), cell(2, 0), cell(2, 1), cell(2, 2)];
+  const blue = [cell(0, 1), cell(0, 2), cell(1, 2), cell(1, 1)];
+  const level: FlowLevel = {
+    seed: 0,
+    params: { size: 3, pairs: 2 },
+    pairs: [{ a: red[0], b: red[4] }, { a: blue[0], b: blue[3] }],
+    solution: [red, blue],
+    minTaps: 2,
+  };
+  const draw = (state: ReturnType<typeof createFlowState>, pair: number, path: FlowCell[]) => {
+    beginStroke(state, level, path[0]);
+    for (let i = 1; i < path.length; i++) extendStroke(state, level, pair, path[i]);
+  };
+
+  it('Normal, Reto y el reto diario exigen llenar; Relajado solo unir las parejas', () => {
+    expect(flowRequiresFill('normal', false)).toBe(true);
+    expect(flowRequiresFill('challenge', false)).toBe(true);
+    expect(flowRequiresFill('relaxed', false)).toBe(false);
+    expect(flowRequiresFill('relaxed', true)).toBe(true); // el reto diario es igual para todos
+  });
+
+  it('unir todas las parejas dejando casillas vacías solo gana en Relajado', () => {
+    const state = createFlowState(level);
+    draw(state, 0, red);
+    draw(state, 1, [blue[0], blue[3]]); // directa: deja (0,2) y (1,2) vacías
+    expect(isFlowSolved(state, level)).toBe(true);
+    expect(emptyCount(state, level)).toBe(2);
+    expect(isFlowFull(state, level)).toBe(false);
+    expect(isFlowJoinedButNotFull(state, level)).toBe(true);
+    expect(isFlowComplete(state, level, false)).toBe(true);
+    expect(isFlowComplete(state, level, true)).toBe(false);
+  });
+
+  it('el mismo tablero con la vuelta larga llena las nueve casillas y gana en todos los modos', () => {
+    const state = createFlowState(level);
+    draw(state, 0, red);
+    draw(state, 1, blue);
+    expect(flowCellCount(level)).toBe(9);
+    expect(emptyCount(state, level)).toBe(0);
+    expect(isFlowJoinedButNotFull(state, level)).toBe(false);
+    expect(isFlowComplete(state, level, true)).toBe(true);
+    expect(isFlowComplete(state, level, false)).toBe(true);
+  });
+
+  it('con todo unido pero sin llenar, la pista (si hay que llenar) enseña el hilo que falta y el tablero acaba lleno', () => {
+    const state = createFlowState(level);
+    draw(state, 0, red);
+    draw(state, 1, [blue[0], blue[3]]);
+    expect(flowHint(state, level)).toBeNull(); // sin la regla de llenar no hay nada que enseñar
+    const pair = flowHint(state, level, true);
+    expect(pair).toBe(1);
+    applySolutionPath(state, level, pair!);
+    expect(isFlowComplete(state, level, true)).toBe(true);
+    expect(flowHint(state, level, true)).toBeNull();
+  });
+
+  it('las casillas vacías se señalan solo cuando se pide (todo unido y falta llenar)', async () => {
+    const { flowLooks } = await import('../src/game/flowLooks');
+    const state = createFlowState(level);
+    draw(state, 0, red);
+    draw(state, 1, [blue[0], blue[3]]);
+    expect(flowLooks(level, state, 20).flat().some((l) => l.missing)).toBe(false);
+    const looks = flowLooks(level, state, 20, true);
+    expect(looks.flat().filter((l) => l.missing)).toHaveLength(2);
+    expect(looks[0][2].missing).toBe(true);
+    expect(looks[1][2].missing).toBe(true);
+    expect(looks[1][1].missing).toBe(false);
   });
 });

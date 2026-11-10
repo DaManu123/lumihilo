@@ -216,6 +216,8 @@ export interface RewardInput {
   isNewRecord: boolean;
   /** 1 = normal, 2 = primera vez que se completa el reto diario de hoy, 0 = repetición sin recompensa. */
   multiplier: number;
+  /** Bonus (%) del aspecto equipado sobre la recompensa; 0 por defecto. */
+  skinBonusPercent?: number;
 }
 
 export interface SparksReward {
@@ -223,6 +225,8 @@ export interface SparksReward {
   efficiencyBonus: number;
   speedBonus: number;
   recordBonus: number;
+  /** Chispas extra del aspecto equipado (antes de multiplicar por el reto diario). */
+  skinBonus: number;
   multiplier: number;
   total: number;
 }
@@ -244,9 +248,12 @@ export function computeSparksReward(input: RewardInput): SparksReward {
   const speedBonus = input.hintsUsed === 0 && input.elapsedSeconds <= expectedSeconds ? 5 : 0;
   const recordBonus = input.isNewRecord ? 5 : 0;
 
+  const subtotal = base + efficiencyBonus + speedBonus + recordBonus;
+  // El aspecto equipado suma un porcentaje del subtotal (redondeado); el reto diario multiplica todo después
+  const skinBonus = Math.round((subtotal * Math.max(0, input.skinBonusPercent ?? 0)) / 100);
   const multiplier = Math.max(0, input.multiplier);
-  const total = Math.round((base + efficiencyBonus + speedBonus + recordBonus) * multiplier);
-  return { base, efficiencyBonus, speedBonus, recordBonus, multiplier, total };
+  const total = Math.round((subtotal + skinBonus) * multiplier);
+  return { base, efficiencyBonus, speedBonus, recordBonus, skinBonus, multiplier, total };
 }
 
 /** ¿Este tiempo mejora el mejor tiempo del jugador en ese tier? (el primer nivel del tier no cuenta como récord). */
