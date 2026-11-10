@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FlowCell, FlowLevel, adjacentCells, applySolutionPath, beginStroke, cloneFlowState, connectedCount, createFlowState, endpointPair,
-  extendStroke, emptyCount, filledCount, flowCellCount, flowHint, flowParamsForTier, flowRequiresFill, generateFlow, isFlowComplete,
+  extendStroke, emptyCount, filledCount, flowCellCount, flowHint, flowParamsForTier, generateFlow, isFlowComplete,
   isFlowFull, isFlowJoinedButNotFull, isFlowSolved, ownerGrid, pairComplete, sameCell,
 } from '../src/core/flow';
 
@@ -59,7 +59,7 @@ describe('Hilos: generador', () => {
         expect(isFlowSolved(state, level)).toBe(false);
         for (let i = 0; i < level.pairs.length; i++) drawSolution(level, state, i);
         expect(isFlowSolved(state, level), `${label}: la solución no resuelve`).toBe(true);
-        expect(isFlowComplete(state, level, true), `${label}: la solución no llena el tablero`).toBe(true);
+        expect(isFlowComplete(state, level), `${label}: la solución no llena el tablero`).toBe(true);
       }
     }
   }, 30000); // 10 peldaños × 60 niveles, con muchas comprobaciones cada uno
@@ -264,14 +264,7 @@ describe('Hilos: llenar todo el tablero', () => {
     for (let i = 1; i < path.length; i++) extendStroke(state, level, pair, path[i]);
   };
 
-  it('Normal, Reto y el reto diario exigen llenar; Relajado solo unir las parejas', () => {
-    expect(flowRequiresFill('normal', false)).toBe(true);
-    expect(flowRequiresFill('challenge', false)).toBe(true);
-    expect(flowRequiresFill('relaxed', false)).toBe(false);
-    expect(flowRequiresFill('relaxed', true)).toBe(true); // el reto diario es igual para todos
-  });
-
-  it('unir todas las parejas dejando casillas vacías solo gana en Relajado', () => {
+  it('unir todas las parejas dejando casillas vacías no gana, en ningún modo', () => {
     const state = createFlowState(level);
     draw(state, 0, red);
     draw(state, 1, [blue[0], blue[3]]); // directa: deja (0,2) y (1,2) vacías
@@ -279,31 +272,28 @@ describe('Hilos: llenar todo el tablero', () => {
     expect(emptyCount(state, level)).toBe(2);
     expect(isFlowFull(state, level)).toBe(false);
     expect(isFlowJoinedButNotFull(state, level)).toBe(true);
-    expect(isFlowComplete(state, level, false)).toBe(true);
-    expect(isFlowComplete(state, level, true)).toBe(false);
+    expect(isFlowComplete(state, level)).toBe(false);
   });
 
-  it('el mismo tablero con la vuelta larga llena las nueve casillas y gana en todos los modos', () => {
+  it('el mismo tablero con la vuelta larga llena las nueve casillas y gana', () => {
     const state = createFlowState(level);
     draw(state, 0, red);
     draw(state, 1, blue);
     expect(flowCellCount(level)).toBe(9);
     expect(emptyCount(state, level)).toBe(0);
     expect(isFlowJoinedButNotFull(state, level)).toBe(false);
-    expect(isFlowComplete(state, level, true)).toBe(true);
-    expect(isFlowComplete(state, level, false)).toBe(true);
+    expect(isFlowComplete(state, level)).toBe(true);
   });
 
-  it('con todo unido pero sin llenar, la pista (si hay que llenar) enseña el hilo que falta y el tablero acaba lleno', () => {
+  it('con todo unido pero sin llenar, la pista enseña el hilo que falta y el tablero acaba lleno', () => {
     const state = createFlowState(level);
     draw(state, 0, red);
     draw(state, 1, [blue[0], blue[3]]);
-    expect(flowHint(state, level)).toBeNull(); // sin la regla de llenar no hay nada que enseñar
-    const pair = flowHint(state, level, true);
+    const pair = flowHint(state, level);
     expect(pair).toBe(1);
     applySolutionPath(state, level, pair!);
-    expect(isFlowComplete(state, level, true)).toBe(true);
-    expect(flowHint(state, level, true)).toBeNull();
+    expect(isFlowComplete(state, level)).toBe(true);
+    expect(flowHint(state, level)).toBeNull();
   });
 
   it('las casillas vacías se señalan solo cuando se pide (todo unido y falta llenar)', async () => {

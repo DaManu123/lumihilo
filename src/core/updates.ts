@@ -75,3 +75,19 @@ export function pickLatest(releases: unknown): UpdateInfo | null {
 export function isUpdateAvailable(current: string, latest: UpdateInfo | null): boolean {
   return latest !== null && compareVersions(latest.version, current) > 0;
 }
+
+/**
+ * Dirección del APK de una versión en su Release de GitHub (el archivo se llama siempre `Lumihilo-<versión>-android.apk`).
+ * Devuelve null si la versión no es válida.
+ */
+export function apkUrl(version: string): string | null {
+  if (!parseVersion(version)) return null;
+  const v = version.replace(/^v/, '');
+  return `https://github.com/DaManu123/lumihilo/releases/download/v${v}/Lumihilo-${v}-android.apk`;
+}
+
+/** Porcentaje descargado (0 a 100), o null si aún no se sabe el tamaño total. */
+export function downloadPercent(received: number, total: number): number | null {
+  if (!(total > 0) || !(received >= 0)) return null;
+  return Math.max(0, Math.min(100, Math.floor((received / total) * 100)));
+}

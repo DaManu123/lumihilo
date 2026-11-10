@@ -98,7 +98,6 @@ import {
   generateFlow,
   emptyCount,
   flowCellCount,
-  flowRequiresFill,
   isFlowComplete,
   isFlowJoinedButNotFull,
   applySolutionPath,
@@ -718,18 +717,17 @@ export class GameScene extends Phaser.Scene {
       const { w, h } = this.dirRect;
       const total = this.flowLevelData?.pairs.length ?? 0;
       const joined = this.flowLevelData ? connectedCount(this.flowState, this.flowLevelData) : 0;
-      const needFill = !!this.flowLevelData && this.flowFillRequired();
       const cells = this.flowLevelData ? flowCellCount(this.flowLevelData) : 0;
       const filled = this.flowLevelData ? cells - emptyCount(this.flowState, this.flowLevelData) : 0;
-      // La barra mide lo que falta para ganar: las casillas llenas (si hay que llenar) o los hilos unidos
-      const fraction = needFill ? (cells > 0 ? filled / cells : 0) : total > 0 ? joined / total : 0;
+      // La barra mide lo que falta para ganar: las casillas llenas
+      const fraction = cells > 0 ? filled / cells : 0;
       this.dirPanel.clear();
       this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.06 + 0.1 * fraction), 1);
       this.dirPanel.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
       this.dirPanel.lineStyle(4, THEME.primary, 1);
       this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
-      this.dirTitle.setText(t('{0} de {1} hilos unidos', joined, total)).setColor(THEME.primaryCss).setPosition(40, needFill ? -30 : -16);
-      this.dirSub.setText(needFill ? t('{0} de {1} casillas llenas', filled, cells) : '').setPosition(40, needFill ? 4 : 26);
+      this.dirTitle.setText(t('{0} de {1} hilos unidos', joined, total)).setColor(THEME.primaryCss).setPosition(40, -30);
+      this.dirSub.setText(t('{0} de {1} casillas llenas', filled, cells)).setPosition(40, 4);
       this.dirIcon.clear();
       // Icono: dos puntos unidos por un hilo
       const ix = -w / 2 + 84;
@@ -745,8 +743,8 @@ export class GameScene extends Phaser.Scene {
       this.dirIcon.fillCircle(ix + 26, 10, 11);
       const barW = 400;
       const barX = 40 - barW / 2;
-      const barY = needFill ? 34 : 18;
-      const barH = needFill ? 12 : 16;
+      const barY = 34;
+      const barH = 12;
       this.dirIcon.fillStyle(THEME.divider, 1);
       this.dirIcon.fillRoundedRect(barX, barY, barW, barH, barH / 2);
       if (fraction > 0) {
@@ -1251,7 +1249,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.overlayOpen()) return;
       updateOfferedThisRun = true;
-      this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
+      void this.offerUpdate(result.latest!);
     };
     offer();
   }
@@ -1272,13 +1270,65 @@ export class GameScene extends Phaser.Scene {
     if (result.error && !result.latest) {
       this.showToast(t('No se pudo consultar las versiones ({0}).\nRevisa tu conexión.', result.error));
     } else if (isUpdateAvailable(APP_VERSION, result.latest)) {
-      this.showUpdateModal(result.latest!, () => void this.updates.open(result.latest!));
+      void this.offerUpdate(result.latest!);
     } else {
       this.showToast(t('Ya tienes la última versión ({0}).', APP_VERSION) + '\n' + this.lastAutoCheckText());
     }
   }
 
-  private showUpdateModal(info: UpdateInfo, onUpdate: () => void): void {
+  /** Ofrece la versión nueva: si la app puede instalarla sola (APK de GitHub en Android) la descarga e instala; si no, abre la página. */
+  private async offerUpdate(info: UpdateInfo): Promise<void> {
+    const inApp = await this.updates.canInstallInApp();
+    if (!this.scene.isActive()) return;
+    this.showUpdateModal(info, () => void (inApp ? this.installUpdateInApp(info) : this.updates.open(info)), inApp);
+  }
+
+  /** Descarga el APK mostrando el avance y abre el instalador de Android (el jugador solo confirma). */
+  private async installUpdateInApp(info: UpdateInfo): Promise<void> {
+    const cardH = 560;
+    const { overlay, w } = this.createCard(cardH, 300);
+    const title = this.uiText(0, -cardH / 2 + 70, t('Descargando la actualización'), { size: 34, display: true, color: THEME.primaryCss, wrap: w - 88, originX: 0.5 });
+    title.setOrigin(0.5, 0.5).setAlign('center');
+    const status = this.uiText(0, -cardH / 2 + 150, t('Lumihilo {0}', info.version), { size: 28, weight: '600', color: THEME.text, wrap: w - 88, originX: 0.5 });
+    status.setOrigin(0.5, 0).setAlign('center').setLineSpacing(8);
+    const bar = this.add.graphics();
+    overlay.add([title, status, bar]);
+    const barW = w - 120;
+    const barY = 70;
+    const drawBar = (fraction: number) => {
+      bar.clear();
+      bar.fillStyle(THEME.divider, 1);
+      bar.fillRoundedRect(-barW / 2, barY, barW, 18, 9);
+      if (fraction > 0) {
+        bar.fillStyle(THEME.primary, 1);
+        bar.fillRoundedRect(-barW / 2, barY, Math.max(18, barW * fraction), 18, 9);
+      }
+    };
+    drawBar(0);
+    const alive = () => overlay.active;
+    const result = await this.updates.install(info, (percent) => {
+      if (!alive()) return;
+      drawBar(percent === null ? 0 : percent / 100);
+      status.setText(percent === null ? t('Descargando…') : t('{0} %', percent));
+    });
+    if (!alive()) return;
+    if (result === 'failed') {
+      overlay.destroy();
+      this.showToast(t('No se pudo descargar la actualización.\nSe abrirá la página de descarga.'));
+      void this.updates.open(info);
+      return;
+    }
+    drawBar(1);
+    title.setText(result === 'started' ? t('Listo para instalar') : t('Falta un permiso'));
+    status.setText(
+      result === 'started'
+        ? t('Android te pedirá confirmar la instalación. Al terminar, abre Lumihilo para usar la versión nueva.')
+        : t('Activa «Permitir de esta fuente» para Lumihilo en los ajustes que se abrieron, vuelve y pulsa Actualizar otra vez. La descarga ya está lista.')
+    );
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Entendido'), () => overlay.destroy(), true);
+  }
+
+  private showUpdateModal(info: UpdateInfo, onUpdate: () => void, inApp = false): void {
     const cardH = 620;
     const { overlay, w } = this.createCard(cardH, 300);
     overlay.add(this.uiText(0, -cardH / 2 + 70, t('Hay una versión nueva'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
@@ -1290,7 +1340,10 @@ export class GameScene extends Phaser.Scene {
       originX: 0.5,
     });
     body.setOrigin(0.5, 0).setAlign('center').setLineSpacing(8);
-    const note = this.uiText(0, -cardH / 2 + 300, t('Puedes seguir jugando: actualizar es opcional. Volveremos a avisarte la próxima vez que abras la app.'), {
+    const noteText = inApp
+      ? t('Se descarga aquí mismo y Android te pedirá confirmar la instalación. Actualizar es opcional: volveremos a avisarte la próxima vez que abras la app.')
+      : t('Puedes seguir jugando: actualizar es opcional. Volveremos a avisarte la próxima vez que abras la app.');
+    const note = this.uiText(0, -cardH / 2 + 300, noteText, {
       size: 24,
       weight: '500',
       color: THEME.mutedText,
@@ -2535,11 +2588,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** En Hilos, ¿hay que llenar todo el tablero para ganar? (Normal, Reto y reto diario; en Relajado no.) */
-  private flowFillRequired(): boolean {
-    return flowRequiresFill(this.profile.mode, this.isDaily);
-  }
-
   /** Avisa (una vez por situación) de que faltan casillas por llenar y hace latir las vacías. */
   private updateFlowMissing(missing: boolean): void {
     this.flowMissingPulse?.remove();
@@ -2570,7 +2618,7 @@ export class GameScene extends Phaser.Scene {
   private updateFlowVisuals(): void {
     if (this.puzzle === 'flow') {
       // Con todas las parejas unidas pero casillas vacías (y hay que llenar), esas casillas se señalan
-      const missing = this.flowFillRequired() && isFlowJoinedButNotFull(this.flowState, this.flowLevelData);
+      const missing = isFlowJoinedButNotFull(this.flowState, this.flowLevelData);
       const looks = flowLooks(this.flowLevelData, this.flowState, this.geometry.cellSize / 2, missing);
       for (const row of this.cellViews) for (const view of row) this.drawFlowCell(view, looks);
       this.updateFlowMissing(missing);
@@ -2816,7 +2864,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Pista en Hilos: por 10 Chispas, traza por ti el hilo de la pareja que menos estropea. */
   private useFlowHint(): void {
-    const pair = flowHint(this.flowState, this.flowLevelData, this.flowFillRequired());
+    const pair = flowHint(this.flowState, this.flowLevelData);
     if (pair === null) {
       this.showToast(t('Todo está unido.'));
       return;
@@ -2954,11 +3002,10 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Mini tutorial de Hilos para cualquier edad, en dos pantallas. Primera: un tablero de ejemplo donde un dedo arrastra
-   * de un punto al otro de cada color (se repite solo) y unas frases cortas. Segunda (cuando hay que llenar el tablero):
+   * de un punto al otro de cada color (se repite solo) y unas frases cortas. Segunda:
    * el mismo tablero resuelto de dos formas: la que lo llena todo gana (paloma) y la que deja casillas vacías no (equis).
    */
   private showFlowTutorial(page: 1 | 2 = 1): void {
-    const needFill = this.flowFillRequired();
     const cardH = 1090;
     const { overlay, w } = this.createCard(cardH, 250);
     const { level: demo, red, blue, blueShort } = this.flowDemoLevel();
@@ -3018,7 +3065,7 @@ export class GameScene extends Phaser.Scene {
       const lines = [
         t('Arrastra el dedo de un punto al otro del mismo color.'),
         t('Los hilos no pueden cruzarse: si pasas por otro, lo cortas.'),
-        needFill ? t('Para ganar, une todas las parejas y llena todas las casillas.') : t('Une todas las parejas para ganar. En Normal y Reto, además, hay que llenar todo el tablero.'),
+        t('Para ganar, une todas las parejas y llena todas las casillas.'),
       ];
       let y = top + step * 2 + size / 2 + 56;
       for (const line of lines) {
@@ -3043,14 +3090,10 @@ export class GameScene extends Phaser.Scene {
       this.addCardButton(
         overlay,
         { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
-        needFill ? t('Siguiente') : t('Entendido'),
+        t('Siguiente'),
         () => {
           overlay.destroy();
-          if (needFill) this.showFlowTutorial(2);
-          else {
-            this.settings.hasSeenFlowTip = true;
-            storage.saveSettings(this.settings);
-          }
+          this.showFlowTutorial(2);
         },
         true
       );
@@ -3305,7 +3348,7 @@ export class GameScene extends Phaser.Scene {
   private evaluateVictory(): void {
     if (this.isWon) return;
     const solved =
-      this.puzzle === 'lights' ? isAllLit(this.lightGrid) : this.puzzle === 'flow' ? isFlowComplete(this.flowState, this.flowLevelData, this.flowFillRequired()) : checkVictory(this.board);
+      this.puzzle === 'lights' ? isAllLit(this.lightGrid) : this.puzzle === 'flow' ? isFlowComplete(this.flowState, this.flowLevelData) : checkVictory(this.board);
     if (!solved) return;
 
     this.isWon = true;

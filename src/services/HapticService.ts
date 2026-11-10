@@ -1,4 +1,4 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { Haptics } from '@capacitor/haptics';
 import { t } from '../core/i18n';
 import {
@@ -53,6 +53,11 @@ interface GameHapticsPlugin {
   diagnose(): Promise<HapticDiagnostics>;
   lastCrash(): Promise<{ text: string }>;
   openUrl(options: { url: string }): Promise<void>;
+  /** Actualización dentro de la app (solo el APK de GitHub). */
+  updateSupport(): Promise<{ supported: boolean }>;
+  downloadUpdate(options: { url: string; version: string }): Promise<void>;
+  installUpdate(options: { version: string }): Promise<{ status: 'started' | 'needs-permission' }>;
+  addListener(event: 'updateProgress', listener: (data: { received: number; total: number }) => void): Promise<PluginListenerHandle>;
 }
 
 /** Plugin nativo propio (android/.../GameHapticsPlugin.java); en el navegador no existe. */

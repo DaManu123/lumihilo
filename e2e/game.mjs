@@ -556,6 +556,46 @@ export async function runGameScenarios(out) {
     check('"Actualizar" abre la página de la versión', opened.length === 1 && opened[0].includes('v99.0.0'), JSON.stringify(opened));
     await g.close();
 
+    // Actualización dentro de la app (APK de GitHub en Android): se simula el plugin nativo
+    const stubInstall = (g, result) => g.page.evaluate(`(() => { const u = ${scene}.updates; window.__installs = []; u.canInstallInApp = async () => true;
+      u.install = async (info, cb) => { window.__installs.push(info.version); cb(null); cb(45); await new Promise((r) => setTimeout(r, 300)); return '${result}'; }; })()`);
+    const askUpdate = async (g) => { await g.tap(...g.pos.stats, 500); await g.tap(...g.pos.statsSettings, 600); await g.tap(...g.pos.settingsUpdates, 900); };
+    g = await open(feed('v99.0.0'));
+    await settle(g);
+    await g.tap(...g.pos.updateLater, 500);
+    await stubInstall(g, 'started');
+    await askUpdate(g);
+    check('con instalación dentro de la app el aviso dice que se descarga aquí mismo', (await texts(g)).includes('Se descarga aquí mismo'), (await texts(g)).slice(-300));
+    await g.tap(...g.pos.updateNow, 300);
+    await g.page.waitForFunction(`(function walk(list) { return list.some((o) => (o.type === 'Text' && /Listo para instalar/.test(o.text)) || (o.list && walk(o.list))); })(${scene}.children.getAll())`, null, { timeout: 20000 });
+    const installs = await g.page.evaluate(() => window.__installs);
+    const opened2 = await g.page.evaluate(() => window.__opened);
+    check('«Actualizar» descarga e instala dentro de la app sin abrir la página', installs.length === 1 && installs[0] === '99.0.0' && opened2.length === 0, JSON.stringify({ installs, opened2 }));
+    check('al terminar dice que Android pedirá confirmar', (await texts(g)).includes('Android te pedirá confirmar'));
+    await g.shot('e18-instalar-dentro-de-la-app');
+    await g.close();
+
+    g = await open(feed('v99.0.0'));
+    await settle(g);
+    await g.tap(...g.pos.updateLater, 500);
+    await stubInstall(g, 'needs-permission');
+    await askUpdate(g);
+    await g.tap(...g.pos.updateNow, 300);
+    await g.page.waitForFunction(`(function walk(list) { return list.some((o) => (o.type === 'Text' && /Falta un permiso/.test(o.text)) || (o.list && walk(o.list))); })(${scene}.children.getAll())`, null, { timeout: 20000 });
+    check('si falta permitir instalar, lo explica y no abre la página', (await texts(g)).includes('Permitir de esta fuente') && (await g.page.evaluate(() => window.__opened)).length === 0);
+    await g.close();
+
+    g = await open(feed('v99.0.0'));
+    await settle(g);
+    await g.tap(...g.pos.updateLater, 500);
+    await stubInstall(g, 'failed');
+    await askUpdate(g);
+    await g.tap(...g.pos.updateNow, 300);
+    await g.page.waitForFunction(() => window.__opened.length > 0, null, { timeout: 20000 });
+    const opened3 = await g.page.evaluate(() => window.__opened);
+    check('si la descarga falla, abre la página de la versión', opened3.length === 1 && opened3[0].includes('v99.0.0'), JSON.stringify(opened3));
+    await g.close();
+
     g = await open(feed('v0.0.1'));
     await settle(g);
     check('con una versión igual o más vieja no avisa', !(await cardOpen(g)));
@@ -876,7 +916,7 @@ export async function runGameScenarios(out) {
     check('guarda un récord de tiempo con su propia clave', Object.keys(s.progress.stats.bestTimeByTier).some((k) => k.startsWith('F')) || s.progress.stats.levelsSolved >= 1);
     await g.close();
 
-    // Llenar todo el tablero: unir las parejas sin llenarlo no gana en Normal (y avisa), y sí en Relajado
+    // Llenar todo el tablero: unir las parejas sin llenarlo no gana (ni en Normal ni en Relajado) y avisa
     g = await openGame({ label: 'hilos-llenar', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
     const route = `(() => { const sc = ${scene}; const L = sc.flowLevelData; const n = L.params.size; const key = (c) => c.row + ',' + c.col;
       const sameC = (a, b) => a.row === b.row && a.col === b.col;
@@ -904,11 +944,11 @@ export async function runGameScenarios(out) {
     } else {
       await g.page.waitForTimeout(800);
       const tx = await texts(g);
-      check('con todas las parejas unidas pero casillas vacías no se gana en Normal', joinedNotFull.won === false && joinedNotFull.filled < joinedNotFull.cells && joinedNotFull.mode === 'normal', JSON.stringify(joinedNotFull));
+      check('con todas las parejas unidas pero casillas vacías no se gana', joinedNotFull.won === false && joinedNotFull.filled < joinedNotFull.cells && joinedNotFull.mode === 'normal', JSON.stringify(joinedNotFull));
       check('avisa de las casillas que faltan por llenar', /por llenar/.test(tx) && new RegExp('\\d+ de \\d+ casillas llenas').test(tx), tx.slice(0, 200));
       await g.shot('e20-hilos-faltan-casillas');
       const relaxedWin = await g.page.evaluate(`(() => { const sc = ${scene}; sc.profile.mode = 'relaxed'; sc.updateFlowVisuals(); sc.evaluateVictory(); return sc.isWon; })()`);
-      check('en Relajado basta con unir las parejas', relaxedWin === true);
+      check('tampoco se gana en Relajado: hay que llenar todo el tablero en todos los modos', relaxedWin === false);
     }
     await g.close();
 

@@ -40,7 +40,8 @@ git push origin :refs/tags/v0.1.0-beta.2 && git tag -d v0.1.0-beta.2
 
 - La etiqueta, `package.json`, `desktop/package.json` y las notas coinciden.
 - Pruebas de tipos y pruebas unitarias del juego.
-- **APK:** está firmado, tiene la versión correcta, contiene el juego y registra el plugin de vibración.
+- **APK** (variante `github`): está firmado, tiene la versión correcta, contiene el juego, registra el plugin de vibración y declara el permiso de instalar paquetes (para actualizarse solo).
+- **AAB** (variante `play`): lleva la firma de subida, el juego, no lleva el aviso de GitHub y **no declara** `REQUEST_INSTALL_PACKAGES` (Google Play lo restringe).
 - **Windows y Linux:** se arranca la aplicación empaquetada de verdad (con el AppImage, el portable y la carpeta desempaquetada) y se comprueba que el juego carga: lienzo, tipografías y guardado. La captura queda en los artefactos del flujo (`smoke-…`).
 
 ## Firma del APK

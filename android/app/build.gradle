@@ -20,6 +20,13 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Dos variantes: `github` (el APK que se descarga de GitHub; puede instalar su propia actualización) y `play` (el AAB
+    // de Google Play, SIN el permiso de instalar paquetes, que Play restringe). Ver docs/08-publicar-versiones.md.
+    flavorDimensions "dist"
+    productFlavors {
+        github { dimension "dist" }
+        play { dimension "dist" }
+    }
     signingConfigs {
         release {
             if (releaseKeystorePath) {
