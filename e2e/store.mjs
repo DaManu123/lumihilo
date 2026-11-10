@@ -34,7 +34,7 @@ const progress = (level, theme = 'dark', skin = 'filamento') => ({
 
 try {
   await launch();
-  const open = (seed, label) => openGame({ width: 360, height: 720, seed, label, out });
+  const open = (seed, label) => openGame({ width: 360, height: 720, seed, label, out, scale: 2 });
 
   let g = await open(progress(14), 'tablero');
   await g.tap(...g.pos.hint, 500); await g.tap(...g.pos.hint, 500); await g.tap(...g.pos.hint, 500);
@@ -121,7 +121,7 @@ try {
   await g.shot('12-hilos-oceano'); await g.close();
 
   // Victoria real: se arrastra cada hilo por su solución (sin pistas)
-  g = await openGame({ width: 360, height: 720, seed: flowProgress(12, 'dark', 'filamento', 3), label: 'hilos-victoria', out, query: '?debug' });
+  g = await openGame({ width: 360, height: 720, scale: 2, seed: flowProgress(12, 'dark', 'filamento', 3), label: 'hilos-victoria', out, query: '?debug' });
   const sols = await g.page.evaluate(() => {
     const sc = window.__game.scene.scenes.find((x) => x.flowLevelData);
     return sc.flowLevelData.solution.map((p) => p.map((c) => [sc.cellViews[c.row][c.col].container.x, sc.cellViews[c.row][c.col].container.y]));

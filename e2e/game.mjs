@@ -1,10 +1,10 @@
 // Escenarios de flujo completo del juego. Cada uno abre un contexto limpio, toca la interfaz como lo haría
 // una persona y comprueba el estado guardado, el audio y la vibración.
-import { SEEN_TUTORIAL, RICH, check, consoleErrors, openGame, section, today, winWithHints } from './lib.mjs';
+import { SEEN_TUTORIAL, RICH, check, consoleErrors, openGame, runSections, section, today, winWithHints } from './lib.mjs';
 
 export async function runGameScenarios(out) {
-  section('1. Primera visita: tutorial y valores iniciales');
-  {
+  const sections = []; // [título, función]: cada una abre sus propios contextos de navegador y no comparte estado con las demás
+  sections.push(['1. Primera visita: tutorial y valores iniciales', async () => {
     const g = await openGame({ label: 'tutorial', out });
     let s = await g.state();
     check('arranca con 30 Chispas y en el nivel 1', s.progress?.sparks === 30 && s.progress?.currentLevel === 1, JSON.stringify(s.progress && { sparks: s.progress.sparks, level: s.progress.currentLevel }));
@@ -17,10 +17,9 @@ export async function runGameScenarios(out) {
     await g.reload();
     await g.shot('e1-sin-tutorial');
     await g.close();
-  }
+  }]);
 
-  section('2. Sentido de giro y tema se guardan');
-  {
+  sections.push(['2. Sentido de giro y tema se guardan', async () => {
     const g = await openGame({ label: 'ajustes', seed: SEEN_TUTORIAL, out });
     await g.tap(...g.pos.dir);
     let s = await g.state();
@@ -40,10 +39,9 @@ export async function runGameScenarios(out) {
     check('el tema claro persiste al recargar', s.settings?.theme === 'light');
     await g.shot('e2-tema-claro');
     await g.close();
-  }
+  }]);
 
-  section('3. Pistas: coste y saldo insuficiente');
-  {
+  sections.push(['3. Pistas: coste y saldo insuficiente', async () => {
     const g = await openGame({ label: 'pistas', seed: SEEN_TUTORIAL, out });
     await g.tap(...g.pos.hint, 450);
     let s = await g.state();
@@ -57,10 +55,9 @@ export async function runGameScenarios(out) {
     check('sin saldo no se cobra ni se queda negativo', s.progress.sparks === 0);
     await g.shot('e3-sin-saldo');
     await g.close();
-  }
+  }]);
 
-  section('4. Resolver un nivel: progreso, racha y exploit de pistas');
-  {
+  sections.push(['4. Resolver un nivel: progreso, racha y exploit de pistas', async () => {
     const g = await openGame({ label: 'victoria', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
     const r = await winWithHints(g);
     check('se puede resolver el nivel solo con pistas', !!r, r ? `${r.hints} pistas` : 'no se resolvió');
@@ -80,10 +77,9 @@ export async function runGameScenarios(out) {
       check('al recargar retoma en el nivel 2', s2.progress.currentLevel === 2);
     }
     await g.close();
-  }
+  }]);
 
-  section('5. Reto diario: doble recompensa una vez y no toca el perfil');
-  {
+  sections.push(['5. Reto diario: doble recompensa una vez y no toca el perfil', async () => {
     const g = await openGame({ label: 'diario', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
     await g.tap(...g.pos.daily, 700);
     await g.shot('e5-diario');
@@ -103,10 +99,9 @@ export async function runGameScenarios(out) {
       check('repetir el reto no suma otro reto completado', r2 && r2.after.progress.stats.dailyCompleted === 1);
     }
     await g.close();
-  }
+  }]);
 
-  section('6. Estadísticas');
-  {
+  sections.push(['6. Estadísticas', async () => {
     const g = await openGame({ label: 'stats', seed: SEEN_TUTORIAL, out });
     await g.tap(...g.pos.stats, 500);
     await g.shot('e6-estadisticas');
@@ -114,10 +109,9 @@ export async function runGameScenarios(out) {
     const s = await g.state();
     check('abrir y cerrar estadísticas no altera los datos', s.progress.sparks === 30 && s.progress.stats.levelsSolved === 0);
     await g.close();
-  }
+  }]);
 
-  section('7. Datos guardados corruptos');
-  {
+  sections.push(['7. Datos guardados corruptos', async () => {
     const g = await openGame({
       label: 'corrupto',
       seed: { player_progress: '{esto no es json', user_settings: '[1,2,3]', profile_adaptive: 'null' },
@@ -129,18 +123,17 @@ export async function runGameScenarios(out) {
     const s = await g.state();
     check('se recupera con valores por defecto y sigue funcionando', s.progress?.sparks === 20, JSON.stringify(s.progress && s.progress.sparks));
     await g.close();
-  }
+  }]);
 
-  section('8. Movimiento reducido');
-  {
+  sections.push(['8. Movimiento reducido', async () => {
     const g = await openGame({ label: 'movimiento-reducido', reducedMotion: 'reduce', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
     const r = await winWithHints(g);
     check('con "reducir movimiento" también se resuelve y se muestra el resultado', !!r && r.after.progress.stats.levelsSolved === 1);
     await g.shot('e8-movimiento-reducido');
     await g.close();
-  }
+  }]);
 
-  section('9. Distintos tamaños de pantalla');
+  sections.push(['9. Distintos tamaños de pantalla', async () => {
   for (const vp of [
     { name: 'móvil pequeño 360x640', width: 360, height: 640 },
     { name: 'móvil alto 412x915', width: 412, height: 915 },
@@ -158,9 +151,9 @@ export async function runGameScenarios(out) {
     await g.shot(`e9-${vp.width}x${vp.height}`);
     await g.close();
   }
+  }]);
 
-  section('10. Sonido, música, vibración y ajustes');
-  {
+  sections.push(['10. Sonido, música, vibración y ajustes', async () => {
     const g = await openGame({ label: 'sonido', seed: SEEN_TUTORIAL, out });
     let a = await g.audio();
     check('no suena nada antes del primer toque (los navegadores exigen un gesto)', a.osc === 0);
@@ -235,10 +228,9 @@ export async function runGameScenarios(out) {
     check('música, efectos e intensidad persisten al recargar',
       s.settings?.musicEnabled === false && s.settings?.soundEnabled === false && s.settings?.hapticsLevel === 'soft');
     await g.close();
-  }
+  }]);
 
-  section('10b. La música se puede reactivar sin recargar');
-  {
+  sections.push(['10b. La música se puede reactivar sin recargar', async () => {
     const g = await openGame({ label: 'musica', seed: { user_settings: { hasSeenTutorial: true, musicEnabled: false } }, out });
     await g.tap(...g.pos.hint, 450);
     await g.page.waitForTimeout(3500);
@@ -252,12 +244,13 @@ export async function runGameScenarios(out) {
     await g.page.waitForTimeout(4500);
     check('al activar la música sin recargar empieza a sonar', (await g.audio()).osc > quiet);
     await g.close();
-  }
+  }]);
 
-  section('11. Victoria con melodía y reinicio instantáneo');
-  {
+  sections.push(['11. Victoria con melodía y reinicio instantáneo', async () => {
     const g = await openGame({ label: 'victoria-sonora', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
     const r = await winWithHints(g);
+    // La melodía y la vibración de la victoria llegan con el pulso de luz: se espera a que lleguen (con carga tardan más)
+    await g.page.waitForFunction((min) => window.__osc >= 20 && window.__vib >= min, (r?.hints ?? 0) + 3, { timeout: 15000 }).catch(() => undefined);
     const a = await g.audio();
     check('la victoria hace sonar el acorde y la melodía del pulso', !!r && a.osc >= 20, `osciladores ${a.osc}`);
     check('la victoria vibra con un patrón de varios pulsos', a.vib >= (r?.hints ?? 0) + 3, `vibraciones ${a.vib} (pistas ${r?.hints})`);
@@ -267,10 +260,9 @@ export async function runGameScenarios(out) {
     check('tocar fuera de la tarjeta de victoria carga el siguiente nivel', s.progress.currentLevel === 2 && r.after.progress.currentLevel === 2);
     await g.shot('e11-siguiente-nivel');
     await g.close();
-  }
+  }]);
 
-  section('12. Estilo y volumen de la música');
-  {
+  sections.push(['12. Estilo y volumen de la música', async () => {
     const g = await openGame({ label: 'estilo', seed: SEEN_TUTORIAL, out });
     await g.tap(...g.pos.hint, 450); // primer toque: arranca la música (por defecto, swing)
     await g.page.waitForTimeout(3500);
@@ -332,10 +324,9 @@ export async function runGameScenarios(out) {
     s = await g.state();
     check('estilo y volumen persisten al recargar', s.settings?.musicStyle === 'swing' && s.settings?.musicVolume === 130);
     await g.close();
-  }
+  }]);
 
-  section('13. Ajustes de música y vibración corruptos');
-  {
+  sections.push(['13. Ajustes de música y vibración corruptos', async () => {
     const g = await openGame({
       label: 'ajustes-corruptos',
       seed: { user_settings: { hasSeenTutorial: true, musicVolume: 'muy alto', musicStyle: 'rock', hapticsMode: 'laser' } },
@@ -349,10 +340,9 @@ export async function runGameScenarios(out) {
     const s = await g.state();
     check('y se recupera: la barra funciona con normalidad', s.settings?.musicVolume === 120, `guardado ${s.settings?.musicVolume}`);
     await g.close();
-  }
+  }]);
 
-  section('14. Prueba y diagnóstico de la vibración');
-  {
+  sections.push(['14. Prueba y diagnóstico de la vibración', async () => {
     const g = await openGame({ label: 'diagnostico', seed: SEEN_TUTORIAL, out });
     await g.tap(...g.pos.stats, 500);
     await g.tap(...g.pos.statsSettings, 500);
@@ -383,10 +373,9 @@ export async function runGameScenarios(out) {
     s = await g.state();
     check('la vía elegida persiste al recargar', s.settings?.hapticsMode === 'all');
     await g.close();
-  }
+  }]);
 
-  section('15. Accesibilidad: alto contraste, marcas y velocidad de animación');
-  {
+  sections.push(['15. Accesibilidad: alto contraste, marcas y velocidad de animación', async () => {
     const g = await openGame({ label: 'accesibilidad', seed: { user_settings: { hasSeenTutorial: true, animationSpeed: 'turbo' } }, out });
     await g.tap(...g.pos.stats, 500);
     await g.tap(...g.pos.statsSettings, 500);
@@ -421,10 +410,9 @@ export async function runGameScenarios(out) {
     check('cambiar de tema conserva el alto contraste', s.settings?.theme === 'light' && s.settings?.highContrast === true);
     await g.shot('e15-claro-alto-contraste');
     await g.close();
-  }
+  }]);
 
-  section('16. Idioma: español e inglés');
-  {
+  sections.push(['16. Idioma: español e inglés', async () => {
     const g = await openGame({ label: 'idioma', seed: { user_settings: { hasSeenTutorial: true, language: 'klingon' } }, out });
     check('con un idioma inválido guardado el juego arranca', !!(await g.page.$('canvas')));
     await g.tap(...g.pos.stats, 500);
@@ -459,10 +447,9 @@ export async function runGameScenarios(out) {
     await ctxEn.shot('e16-auto-ingles');
     check('con el dispositivo en inglés y el ajuste en automático el juego funciona', !!(await ctxEn.page.$('canvas')));
     await ctxEn.close();
-  }
+  }]);
 
-  section('17. Tienda de aspectos');
-  {
+  sections.push(['17. Tienda de aspectos', async () => {
     // Sin Chispas suficientes no se compra
     let g = await openGame({ label: 'aspectos-pobre', seed: { user_settings: { hasSeenTutorial: true } }, out });
     await g.tap(...g.pos.stats, 500);
@@ -516,10 +503,9 @@ export async function runGameScenarios(out) {
     check('un aspecto no comprado guardado en los ajustes no rompe el juego', !!(await g.page.$('canvas')));
     await g.shot('e17-sin-comprar');
     await g.close();
-  }
+  }]);
 
-  section('18. Aviso de versión nueva');
-  {
+  sections.push(['18. Aviso de versión nueva', async () => {
     const feed = (tag) => JSON.stringify([{ tag_name: tag, html_url: `https://github.com/DaManu123/lumihilo/releases/tag/${tag}`, draft: false }]);
     // Las dos fuentes de la lista de versiones: el archivo de la web y la API de GitHub
     const mock = (body, status = 200) => async (page) => {
@@ -634,10 +620,9 @@ export async function runGameScenarios(out) {
     await settle(g);
     check('la versión web normal no consulta nada', requests === 0, `${requests} consultas`);
     await g.close();
-  }
+  }]);
 
-  section('19. Segundo puzzle: Luces');
-  {
+  sections.push(['19. Segundo puzzle: Luces', async () => {
     const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
     const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
     const lightsState = (g) => g.page.evaluate(`(() => { const sc = ${scene}; return { grid: sc.lightGrid.map((r) => [...r]), puzzle: sc.puzzle, minTaps: sc.currentLevelData.minTaps, views: sc.cellViews.map((row) => row.map((v) => ({ x: v.container.x, y: v.container.y }))) }; })()`);
@@ -770,11 +755,10 @@ export async function runGameScenarios(out) {
     g = await openGame({ label: 'luces-invalido', seed: { user_settings: { hasSeenTutorial: true, puzzle: 'ajedrez' } }, out });
     check('un puzzle inválido guardado cae en Circuitos', !!(await g.page.$('canvas')));
     await g.close();
-  }
+  }]);
 
 
-  section('20. Tercer puzzle: Hilos');
-  {
+  sections.push(['20. Tercer puzzle: Hilos', async () => {
     const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
     const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
     // Estado de los hilos y, por cada pareja, los puntos del lienzo de su solución (para arrastrar por ellos)
@@ -861,6 +845,7 @@ export async function runGameScenarios(out) {
     await g.page.waitForTimeout(3000);
     info = await flowInfo(g);
     check('unir todas las parejas resuelve el nivel', info.won === true);
+    for (let i = 0; i < 20 && !(await texts(g)).includes('Todo unido'); i++) await g.page.waitForTimeout(500); // la tarjeta tarda más con carga
     check('sale el resultado «Todo unido»', (await texts(g)).includes('Todo unido'), (await texts(g)).slice(0, 200));
     await g.shot('e20-hilos-victoria');
     s = await g.state();
@@ -891,9 +876,12 @@ export async function runGameScenarios(out) {
       check(`Hilos con ${label} se dibuja`, !!(await g.page.$('canvas')) && (await connected(g)) === 1);
       await g.close();
     }
-  }
+  }]);
+
+
+  await runSections(sections);
 
   section('Errores de consola durante toda la batería');
-  const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403|status of 404/i.test(e));
+  const real = consoleErrors.filter((e) => !/WebGL|GPU stall|swiftshader|AudioContext|status of 403|status of 404|status of 503/i.test(e));
   check('sin errores de JavaScript ni de consola', real.length === 0, real.slice(0, 3).join(' | '));
 }

@@ -38,10 +38,11 @@ npm test                  # unitarias (Vitest): 431 pruebas
 npm run build             # tsc + vite build → dist/
 npm run build:play        # build con UPDATE_SOURCE=play
 npm run cap:sync          # build + cap sync android (necesario al cambiar plugins)
-npm run test:e2e          # navegador (Playwright, ~10-12 min, 181 comprobaciones). Compila solo.
+npm run test:e2e          # navegador (Playwright, ~9 min, 184 comprobaciones). Compila solo.
 npm run test:audio        # mide volumen/pico en dBFS de música y efectos
 npm run test:perf         # CPU por fotograma (requiere ?debug)
 ```
+- e2e: los 21 escenarios de `e2e/game.mjs` son independientes y corren **3 a la vez, cada uno con su propio Chromium** (`E2E_JOBS=1` los pone en serie, ~33 min; `E2E_ONLY=18,19` corre solo esos; `--no-build` salta la compilación). Con 4 o más a la vez, o con un solo navegador compartido, el WebGL por software se atasca y salen timeouts. Chromium arranca con SwiftShader explícito (el doble de rápido) y `openGame` usa escala 1 (`scale: 2` solo en `store.mjs`). Cada escenario imprime su salida entera con su duración al terminar. Al añadir uno: va en `sections.push([...])`, sin estado compartido con otros, y esperas por condición en vez de tiempos fijos (con carga todo tarda más).
 - e2e: el puerto **4173 debe estar libre**; no lanzar dos pasadas a la vez ni `npm run build` mientras corre una (cambia `dist/`). Lanzarlas en segundo plano y esperar el aviso. Resultado: línea `Resumen: N/N comprobaciones correctas`.
 - Capturas de la tienda: `npm run build && node e2e/store.mjs` → `docs/store/capturas/`. Aspecto de un skin: `node e2e/skins-look.mjs <carpeta>`.
 - Escritorio local: `npm run build`, luego `cd desktop && npm install && npm start`.
@@ -77,7 +78,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 ## 7. Pendientes (por prioridad)
 1. **Retomar aquí:** el usuario probará la beta.8 en el teléfono. Esperar su feedback sobre Hilos: control táctil (arrastre rápido/diagonal, cortes accidentales), dificultad/tamaño, música de cuerda. Ajustar lo que diga (probable: sensibilidad del trazo en `flowPointerMove`, `flowStepsTo`).
 2. Tareas **del usuario** (bloquean Play): cuenta de Play Console (#7), clave de subida (#46; pasos en `docs/store/play-console.md`), reintentar búsqueda de marca en el IMPI, reclutar ≥12 testers para prueba cerrada de 14 días (#49).
-3. Capturas de la tienda con Hilos (añadir a `e2e/store.mjs`) y mención en la ficha ya actualizada.
+3. Capturas de la tienda con Hilos: hechas (11-13). Falta elegir las 8 que se suben a Play (propuesta en `docs/store/ficha.md`) y, si se quiere, versión en inglés.
 4. Ideas: leaderboard del reto diario (Google Play Games; requiere cuentas → pospuesto), nuevos aspectos, refactor de `GameScene.ts` (extraer lógica por puzzle), 4.º puzzle (Espejos/Mareas).
 5. Al publicar en Play: usar el AAB `aab-android` de Actions (ya sale con `'play'`), revisar política de privacidad (`docs/politica-de-privacidad.md`, `landing/`).
 
@@ -85,7 +86,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 - **Docs:** `README.md`, `PROJECT_CONTEXT.md` (histórico de las fases 0-4), `docs/05` y `docs/store/play-console.md` se pusieron al día el 2026-11-09. El plan de trabajo vigente está en `docs/11-plan-beta9.md`.
 - **Caídas de GitHub Actions:** la Release falló alguna vez con 504 al descargar herramientas de `electron-builder-binaries` o por un incidente de Actions («workflow file issue»); se repite con `gh run rerun <id> --failed` (o sin `--failed`). Tras una Release, `releases.json` tarda unos minutos (workflow «Publicar la web»); borrar una Release no lo regenera (`gh workflow run pages.yml --ref main`).
 - **Nombres confusos:** en `GameScene`, `updateFlowVisuals`/`flowState`… mezclan «flujo de energía» de Circuitos con el puzzle **Hilos** (`puzzle==='flow'`, `src/core/flow.ts`). `Scene.lights` choca con Phaser (por eso el campo es `lightGrid`).
-- **e2e frágiles ante el reloj:** el reloj del juego va más lento que el real en headless; esperar con `settle()`/3 s tras ganar. Si una pasada sale con pocas comprobaciones, repetir.
+- **e2e frágiles ante el reloj:** el reloj del juego va más lento que el real en headless; esperar con `settle()`/3 s tras ganar. Si una pasada sale con pocas comprobaciones, repetir (una pasada en serie del 2026-11-09 dio solo 139 de 184 sin que se viera el motivo: con el reparto en escenarios, cualquier interrupción sale como FALLA con su nombre).
 - Lista de Releases de GitHub se ordena por nombre de etiqueta (`beta.10` < `beta.9`); la app usa SemVer (`src/core/updates.ts`).
 - WSL: posibles falsos cambios CRLF/LF (falta `.gitattributes`); `gh pr edit` falla por proyectos clásicos (usar `gh api -X PATCH`).
 - Windows/Linux sin firmar (SmartScreen avisa).
