@@ -1,5 +1,7 @@
 # 11 · Plan para la beta.9 (escrito el 2026-11-09)
 
+**Estado (2026-11-09): las partes 1 a 6 están hechas en `dev`** (commits `d04b65f`, `4d014a9`, `6b89cff`, `de06f2b`, `2843cd7`, `f5ebb89`); typecheck, 450 unitarias y 185/185 e2e en verde. Nada está publicado ni etiquetado: falta la prueba en teléfono y que el usuario pida la beta.
+
 Se desarrolla parte por parte, en `dev`, con commit por parte y CI verde. **No se publica ninguna beta hasta que el usuario lo pida.**
 
 ## Parte 1 · El aviso de versión no sale solo

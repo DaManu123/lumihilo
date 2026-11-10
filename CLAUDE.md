@@ -38,7 +38,7 @@ npm test                  # unitarias (Vitest): 450 pruebas
 npm run build             # tsc + vite build → dist/
 npm run build:play        # build con UPDATE_SOURCE=play
 npm run cap:sync          # build + cap sync android (necesario al cambiar plugins)
-npm run test:e2e          # navegador (Playwright, ~9-12 min, 185 comprobaciones). Compila solo.
+npm run test:e2e          # navegador (Playwright, ~9-16 min según la carga, 185 comprobaciones). Compila solo.
 npm run test:audio        # mide volumen/pico en dBFS de música y efectos
 npm run test:perf         # CPU por fotograma (requiere ?debug)
 ```
@@ -77,6 +77,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 **Descartado**: iOS, anuncios/cuentas por ahora, Espejos/Mareas como tercer puzzle.
 
 ## 7. Pendientes (por prioridad)
+0. **Hecho en `dev` y sin publicar (candidato a beta.9; el usuario pedirá la beta):** aviso de versión con reintentos (`updateRetry.ts`), docs al día, e2e en paralelo, dificultad por puzzle y más alta, bonus de Chispas por aspecto, capturas de Hilos. Verificado el 2026-11-09: typecheck, 450 unitarias y 185/185 e2e. **Falta probarlo en el teléfono** (Hilos con el dedo, la nueva dificultad y que el aviso salga solo). Plan y estado en `docs/11-plan-beta9.md`. El usuario quiere empezar la prueba cerrada de Play cuanto antes: hacen falta su cuenta (#7), la clave de subida (#46) y ≥12 testers (#49).
 1. **Retomar aquí:** el usuario probará la beta.8 en el teléfono. Esperar su feedback sobre Hilos: control táctil (arrastre rápido/diagonal, cortes accidentales), dificultad/tamaño, música de cuerda. Ajustar lo que diga (probable: sensibilidad del trazo en `flowPointerMove`, `flowStepsTo`).
 2. Tareas **del usuario** (bloquean Play): cuenta de Play Console (#7), clave de subida (#46; pasos en `docs/store/play-console.md`), reintentar búsqueda de marca en el IMPI, reclutar ≥12 testers para prueba cerrada de 14 días (#49).
 3. Capturas de la tienda con Hilos: hechas (11-13). Falta elegir las 8 que se suben a Play (propuesta en `docs/store/ficha.md`) y, si se quiere, versión en inglés.
