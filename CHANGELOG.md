@@ -4,6 +4,12 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- **Actualizar sin salir de la app (APK de Android).** Al pulsar «Actualizar» en el aviso de versión, el juego descarga el APK de la versión nueva (con una barra de avance) y abre el instalador de Android: solo tienes que confirmar. La primera vez, Android pide permitir a Lumihilo «instalar apps desconocidas»: se abre ese ajuste, lo activas, vuelves y pulsas «Actualizar» otra vez (la descarga ya está hecha). Si algo falla, se abre la página de descarga como antes. Solo existe en el APK de GitHub; la versión de Google Play se actualiza por la tienda y no lleva ese permiso. La primera versión que lo trae hay que instalarla a mano; desde ahí, ya se actualiza sola.
+
+### Cambiado
+- **Hilos: hay que llenar todo el tablero en todos los modos,** también en Relajado (en la beta.9 Relajado seguía bastando con unir las parejas). Relajado mantiene los tableros más pequeños y fáciles de los niveles bajos.
+
 ## [0.2.0-beta.9] - 2026-11-10
 
 ### Añadido

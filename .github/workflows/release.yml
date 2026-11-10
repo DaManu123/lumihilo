@@ -155,7 +155,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          ./gradlew --no-daemon assembleGithubRelease
 
       # El APK (GitHub) busca versiones nuevas en GitHub; el AAB (Google Play) no: lo gestiona la tienda.
       - name: Recompilar el juego para Google Play y generar el AAB
@@ -172,12 +172,12 @@ jobs:
           npx cap sync android
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon bundleRelease
+          ./gradlew --no-daemon bundlePlayRelease
 
       - name: Verificar el APK (firma, versión, juego y plugins)
         run: |
           set -euo pipefail
-          APK=android/app/build/outputs/apk/release/app-release.apk
+          APK=android/app/build/outputs/apk/github/release/app-github-release.apk
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
 
           echo "== Firma"
@@ -200,6 +200,10 @@ jobs:
           grep -q "api.github.com" "$RUNNER_TEMP/apk-js.txt" \
             || { echo "::error::El APK no lleva el aviso de versión de GitHub"; exit 1; }
 
+          echo "== El APK puede instalar su propia actualización (permiso de instalar paquetes)"
+          "$BT/aapt2" dump permissions "$APK" | grep -q "REQUEST_INSTALL_PACKAGES" \
+            || { echo "::error::El APK de GitHub no declara el permiso de instalar paquetes (variante github)"; exit 1; }
+
           mkdir -p out
           cp "$APK" "out/Lumihilo-$VERSION-android.apk"
           ls -la out
@@ -207,7 +211,7 @@ jobs:
       - name: Verificar el AAB (el formato que exige Google Play)
         run: |
           set -euo pipefail
-          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          AAB=android/app/build/outputs/bundle/playRelease/app-play-release.aab
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
 
           echo "== Firma de subida"
@@ -222,6 +226,14 @@ jobs:
           [ -s "$RUNNER_TEMP/aab-js.txt" ] || { echo "::error::No se encontró el juego dentro del AAB"; exit 1; }
           if grep -q "api.github.com" "$RUNNER_TEMP/aab-js.txt"; then
             echo "::error::El AAB lleva el aviso de versión de GitHub: debe compilarse con UPDATE_SOURCE=play"; exit 1
+          fi
+
+          echo "== El AAB no declara el permiso de instalar paquetes (Google Play lo restringe)"
+          unzip -p "$AAB" base/manifest/AndroidManifest.xml > "$RUNNER_TEMP/aab-manifest.bin"
+          grep -aq "android.permission.VIBRATE" "$RUNNER_TEMP/aab-manifest.bin" \
+            || { echo "::error::No se pudo leer el manifiesto del AAB"; exit 1; }
+          if grep -aq "REQUEST_INSTALL_PACKAGES" "$RUNNER_TEMP/aab-manifest.bin"; then
+            echo "::error::El AAB declara REQUEST_INSTALL_PACKAGES: debe compilarse con la variante play"; exit 1
           fi
 
           cp "$AAB" "out/Lumihilo-$VERSION-android.aab"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compareVersions, isUpdateAvailable, parseVersion, pickLatest } from '../src/core/updates';
+import { apkUrl, compareVersions, downloadPercent, isUpdateAvailable, parseVersion, pickLatest } from '../src/core/updates';
 
 describe('Versiones', () => {
   it('lee versiones con y sin prelanzamiento', () => {
@@ -61,5 +61,22 @@ describe('¿Hay una actualización?', () => {
     expect(isUpdateAvailable('0.1.0-beta.10', latest)).toBe(false);
     expect(isUpdateAvailable('0.2.0', latest)).toBe(false);
     expect(isUpdateAvailable('0.1.0-beta.9', null)).toBe(false);
+  });
+});
+
+describe('Actualización dentro de la app', () => {
+  it('la dirección del APK sigue el nombre de las Releases y solo acepta versiones válidas', () => {
+    expect(apkUrl('0.2.0-beta.10')).toBe('https://github.com/DaManu123/lumihilo/releases/download/v0.2.0-beta.10/Lumihilo-0.2.0-beta.10-android.apk');
+    expect(apkUrl('v1.0.0')).toBe('https://github.com/DaManu123/lumihilo/releases/download/v1.0.0/Lumihilo-1.0.0-android.apk');
+    expect(apkUrl('../../x')).toBeNull();
+    expect(apkUrl('basura')).toBeNull();
+  });
+
+  it('el porcentaje descargado va de 0 a 100 y es nulo si no se sabe el total', () => {
+    expect(downloadPercent(0, 1000)).toBe(0);
+    expect(downloadPercent(500, 1000)).toBe(50);
+    expect(downloadPercent(1500, 1000)).toBe(100);
+    expect(downloadPercent(10, 0)).toBeNull();
+    expect(downloadPercent(10, -1)).toBeNull();
   });
 });

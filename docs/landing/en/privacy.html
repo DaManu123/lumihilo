@@ -29,7 +29,7 @@
   <h2>3. What is stored and where</h2>
   <p>Your progress (level, Sparks, streak, statistics) and your settings (sound, music, vibration, theme, accessibility, language) are saved <strong>only on your device</strong>: in the app's preferences on Android, or in the browser's local storage in the web version. They are not synced or sent anywhere.</p>
 
-  <p><strong>New-version notice.</strong> When it starts, the Android and desktop apps read the public list of published game versions (a file on <code>damanu123.github.io</code>, or the GitHub API as a fallback) to tell you if a newer one exists. It is a read-only request that <strong>includes no data about you or your games</strong>; GitHub may log technical data about the request, such as the IP address. You are asked once each time you open the app while a newer version exists, and you can keep playing without updating; you can also check manually in Settings. The web version does not make this request. When the game is distributed through Google Play, this check is replaced by Play's own updates and the app stops contacting GitHub.</p>
+  <p><strong>New-version notice.</strong> When it starts, the Android and desktop apps read the public list of published game versions (a file on <code>damanu123.github.io</code>, or the GitHub API as a fallback) to tell you if a newer one exists. It is a read-only request that <strong>includes no data about you or your games</strong>; GitHub may log technical data about the request, such as the IP address. You are asked once each time you open the app while a newer version exists, and you can keep playing without updating; you can also check manually in Settings. The web version does not make this request. When the game is distributed through Google Play, this check is replaced by Play's own updates and the app stops contacting GitHub. <strong>Updating without leaving the app (only the Android APK downloaded from GitHub).</strong> If you accept the update, the app downloads the new version's APK from the game's official Releases page on GitHub (GitHub may log technical data about the download, such as the IP address) and opens Android's installer, where you confirm the installation; Android only installs APKs signed with the same key as the app. Nothing about you or your games is sent. This does not exist in the Google Play version, which is updated through the store.</p>
 
   <h2>4. Ads and third-party services</h2>
   <p><strong>The game contains no ads, no analytics tools and no third-party services that collect data.</strong></p>
@@ -37,7 +37,7 @@
   <p>The web version is hosted on GitHub Pages, which may log technical visit data (such as the IP address) under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener noreferrer">GitHub's privacy statement</a>.</p>
 
   <h2>5. Android permissions</h2>
-  <p>The app only uses the <strong>vibration</strong> permission, for the game's haptic feedback.</p>
+  <p>The app uses the <strong>vibration</strong> permission, for the game's haptic feedback. The APK downloaded from GitHub also declares the permission to <strong>install apps</strong>, which is only used to install the update you accept (Android asks you to confirm it, and you can revoke the permission in its settings). The Google Play version does not declare it.</p>
 
   <h2>6. How to delete your data</h2>
   <ul>

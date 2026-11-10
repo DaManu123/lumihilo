@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { RELEASES_FEEDS, UPDATE_SOURCE } from '../config';
-import { UpdateInfo, pickLatest } from '../core/updates';
+import { UpdateInfo, apkUrl, downloadPercent, pickLatest } from '../core/updates';
 import { GameHaptics } from './HapticService';
 
 /**
@@ -29,6 +29,14 @@ export interface UpdateService {
   check(): Promise<UpdateCheck>;
   /** Abre la página de descarga de esa versión. */
   open(info: UpdateInfo): Promise<void>;
+  /** ¿Se puede descargar e instalar la actualización sin salir de la app? (Solo el APK de Android descargado de GitHub.) */
+  canInstallInApp(): Promise<boolean>;
+  /**
+   * Descarga el APK de esa versión y abre el instalador de Android (el jugador confirma). `onProgress` recibe el
+   * porcentaje (o null si aún no se sabe). Resultado: 'started' (se abrió el instalador), 'needs-permission' (se abrió el
+   * ajuste para permitir instalar desde Lumihilo; hay que volver a pulsar Actualizar) o 'failed'.
+   */
+  install(info: UpdateInfo, onProgress: (percent: number | null) => void): Promise<'started' | 'needs-permission' | 'failed'>;
 }
 
 export class NoUpdateService implements UpdateService {
@@ -37,6 +45,12 @@ export class NoUpdateService implements UpdateService {
     return { supported: false, latest: null };
   }
   async open(): Promise<void> {}
+  async canInstallInApp(): Promise<boolean> {
+    return false;
+  }
+  async install(): Promise<'started' | 'needs-permission' | 'failed'> {
+    return 'failed';
+  }
 }
 
 const TIMEOUT_MS = 7000;
@@ -73,6 +87,31 @@ export class GitHubUpdateService implements UpdateService {
       else window.open(info.url, '_blank', 'noopener');
     } catch {
       // si no se puede abrir, no pasa nada
+    }
+  }
+
+  async canInstallInApp(): Promise<boolean> {
+    if (Capacitor.getPlatform() !== 'android') return false;
+    try {
+      return (await GameHaptics.updateSupport()).supported === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async install(info: UpdateInfo, onProgress: (percent: number | null) => void): Promise<'started' | 'needs-permission' | 'failed'> {
+    const url = apkUrl(info.version);
+    if (!url) return 'failed';
+    let handle: { remove(): Promise<void> } | undefined;
+    try {
+      handle = await GameHaptics.addListener('updateProgress', (data) => onProgress(downloadPercent(data.received, data.total)));
+      await GameHaptics.downloadUpdate({ url, version: info.version });
+      onProgress(100);
+      return (await GameHaptics.installUpdate({ version: info.version })).status;
+    } catch {
+      return 'failed';
+    } finally {
+      await handle?.remove().catch(() => undefined);
     }
   }
 }

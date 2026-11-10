@@ -339,4 +339,69 @@ public class GameHapticsPlugin extends Plugin {
             call.reject("No se pudo abrir el navegador");
         }
     }
+
+    // ------------------------------------------------------------------------------------------
+    // Actualización dentro de la app (solo el APK de GitHub; ver AppUpdater)
+    // ------------------------------------------------------------------------------------------
+
+    /** ¿Esta compilación puede descargar e instalar la actualización sin salir de la app? (La de Play, no.) */
+    @PluginMethod
+    public void updateSupport(PluginCall call) {
+        JSObject result = new JSObject();
+        boolean supported = false;
+        try {
+            supported = AppUpdater.isSupported(getContext());
+        } catch (Throwable ignored) {
+            // sin soporte
+        }
+        result.put("supported", supported);
+        call.resolve(result);
+    }
+
+    /** Descarga el APK de una versión (avisa del avance con el evento "updateProgress"). */
+    @PluginMethod
+    public void downloadUpdate(final PluginCall call) {
+        final String url = call.getString("url");
+        final String version = call.getString("version");
+        if (!AppUpdater.isValidUrl(url) || !AppUpdater.isValidVersion(version) || !AppUpdater.isSupported(getContext())) {
+            call.reject("Dirección no permitida");
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    AppUpdater.download(getContext(), url, version, new AppUpdater.Progress() {
+                        @Override
+                        public void onProgress(long received, long total) {
+                            JSObject event = new JSObject();
+                            event.put("received", received);
+                            event.put("total", total);
+                            notifyListeners("updateProgress", event);
+                        }
+                    });
+                    call.resolve();
+                } catch (Throwable t) {
+                    call.reject("No se pudo descargar la actualización");
+                }
+            }
+        }, "lumihilo-update-download").start();
+    }
+
+    /** Abre el instalador con el APK ya descargado, o el ajuste para permitirlo ("needs-permission"). */
+    @PluginMethod
+    public void installUpdate(PluginCall call) {
+        try {
+            String version = call.getString("version");
+            if (!AppUpdater.isValidVersion(version) || !AppUpdater.isSupported(getContext())) {
+                call.reject("No permitido");
+                return;
+            }
+            JSObject result = new JSObject();
+            result.put("status", AppUpdater.install(getContext(), version));
+            call.resolve(result);
+        } catch (Throwable t) {
+            call.reject("No se pudo abrir el instalador");
+        }
+    }
 }
