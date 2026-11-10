@@ -1,0 +1,19 @@
+/* Política de privacidad · misma identidad que la página de presentación (Noche / Papel) */
+@font-face { font-family: 'Unbounded'; src: url('fonts/unbounded-latin-wght-normal.woff2') format('woff2'); font-weight: 200 900; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; src: url('fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2') format('woff2'); font-weight: 200 800; font-display: swap; }
+:root { color-scheme: dark light; --bg:#0b1026; --card:#151c3d; --text:#eceaf6; --muted:#9aa3cc; --accent:#ffb938; --line:#2a3366; }
+@media (prefers-color-scheme: light) { :root { --bg:#e8edf5; --card:#ffffff; --text:#14204a; --muted:#4a5578; --accent:#c23d05; --line:#c9d2e6; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 1.125rem/1.65 'Atkinson Hyperlegible Next', system-ui, sans-serif; }
+main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+h1, h2 { font-family: 'Unbounded', system-ui, sans-serif; letter-spacing: -0.02em; line-height: 1.15; }
+h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); margin: 0 0 0.6rem; }
+h2 { font-size: 1.2rem; font-weight: 600; margin: 2.4rem 0 0.6rem; }
+a { color: var(--accent); text-underline-offset: 0.2em; }
+a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.meta { color: var(--muted); margin: 0 0 1.6rem; font-size: 1rem; }
+.summary { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 0.8rem; padding: 1rem 1.2rem; margin: 0 0 1rem; }
+ul { padding-left: 1.3rem; }
+li { margin: 0.45rem 0; }
+code { background: var(--card); border: 1px solid var(--line); border-radius: 0.3rem; padding: 0.05rem 0.35rem; font-size: 0.95em; }
+footer { margin-top: 3rem; color: var(--muted); font-size: 1rem; }

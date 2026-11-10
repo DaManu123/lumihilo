@@ -1,169 +1,229 @@
 /**
- * Script de la Landing Page de Lumihilo
- * Funcionalidad front-end pura: modal de privacidad, navegación móvil,
- * copia de correo al portapapeles y animaciones de demostración visual.
- * 
- * NOTA DE SEGURIDAD: No contiene ni interactúa con la lógica interna del videojuego.
+ * Lumihilo · página de presentación (ES y EN).
+ * Front-end puro: tablero de demostración, botón de la beta, copiar correo. No toca el juego.
  */
 
 /**
  * Enlace del formulario privado para pedir acceso a la beta (Google Forms, respuestas solo visibles para el
- * propietario). Mientras esté vacío, el botón «Únete a la beta» usa el correo de contacto (mailto) como respaldo.
+ * propietario). Mientras esté vacío, el botón usa el correo de contacto (mailto) como respaldo.
  * Pega aquí la URL pública de rellenar el formulario (termina en /viewform), NUNCA la de la hoja de respuestas.
  */
 const BETA_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdui9rSLMR0abGc6i2YgCMF5x6RH1k4nl9bAdW5VUzfBc_MFA/viewform';
 
-document.addEventListener('DOMContentLoaded', () => {
-  // 0. Botón «Únete a la beta»: apunta al formulario si está configurado
-  const betaJoinBtn = document.getElementById('betaJoinBtn');
-  if (betaJoinBtn && /^https:\/\/(docs\.google\.com\/forms|forms\.gle)\//.test(BETA_FORM_URL)) {
-    betaJoinBtn.href = BETA_FORM_URL;
-    betaJoinBtn.target = '_blank';
-    betaJoinBtn.rel = 'noopener noreferrer';
-  }
+const LANG = document.documentElement.lang === 'en' ? 'en' : 'es';
 
-  // 1. Elementos del DOM
-  const currentYearSpan = document.getElementById('currentYear');
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-  const navLinks = document.getElementById('navLinks');
-  
-  // Modal de Política de Privacidad
-  const privacyModal = document.getElementById('privacyModal');
-  const openPrivacyNav = document.getElementById('openPrivacyNav');
-  const openPrivacyFooter = document.getElementById('openPrivacyFooter');
-  const closePrivacyBtn = document.getElementById('closePrivacyBtn');
-  const closePrivacyFooterBtn = document.getElementById('closePrivacyFooterBtn');
-  
-  // Botón Copiar Correo de Soporte
-  const copyEmailBtn = document.getElementById('copyEmailBtn');
-  const supportEmailLink = document.getElementById('supportEmailLink');
+const TEXT = {
+  es: {
+    cell: (r, c) => `Pieza de la fila ${r}, columna ${c}. Pulsa para girarla`,
+    start: 'Toca una pieza para girarla y conecta todo con la fuente rosa.',
+    progress: (n, total) => `<strong>${n} de ${total}</strong> piezas conectadas.`,
+    solved: '<strong>Todo conectado.</strong> Así se siente cada partida. Prueba otro tablero.',
+    copied: 'Copiado',
+    copy: 'Copiar',
+  },
+  en: {
+    cell: (r, c) => `Piece at row ${r}, column ${c}. Press to rotate it`,
+    start: 'Tap a piece to rotate it and connect everything to the pink source.',
+    progress: (n, total) => `<strong>${n} of ${total}</strong> pieces connected.`,
+    solved: '<strong>All connected.</strong> That is what every game feels like. Try another board.',
+    copied: 'Copied',
+    copy: 'Copy',
+  },
+}[LANG];
 
-  // Botón Trailer Demo
-  const playTrailerBtn = document.getElementById('playTrailerBtn');
+/* Aspectos del juego: mismos colores que el tema oscuro de cada uno (src/game/theme.ts) */
+const SKINS = {
+  filamento: null, // usa la paleta de la página (Noche o Papel)
+  cyberpunk: { bg: '#0a0612', glass: '#160c26', line: '#35224f', lit: '#00e5ff', core: '#e0fcff', src: '#ff2e93', off: '#6b5a99' },
+  matrix: { bg: '#020b05', glass: '#08170d', line: '#1c3a27', lit: '#3dff7a', core: '#e6ffee', src: '#ff4d4d', off: '#3f7d57' },
+  oceano: { bg: '#04131c', glass: '#0a2433', line: '#16384c', lit: '#35e0c4', core: '#e8fffa', src: '#ff7a59', off: '#3f7f9a' },
+  solar: { bg: '#1c0b0b', glass: '#2d1414', line: '#4a2323', lit: '#ffe45c', core: '#ffffff', src: '#ff4d2e', off: '#8c5a4c' },
+  aurora: { bg: '#060a1c', glass: '#0f1633', line: '#232d5c', lit: '#8affc1', core: '#f2fff9', src: '#c77dff', off: '#4f5a96' },
+};
 
-  // 2. Actualizar año en footer automáticamente
-  if (currentYearSpan) {
-    currentYearSpan.textContent = new Date().getFullYear();
-  }
+/* ---------- Tablero de demostración ---------- */
+const N = 4;
+const UP = 1, RIGHT = 2, DOWN = 4, LEFT = 8;
+const DIRS = [
+  { bit: UP, dr: -1, dc: 0, opp: DOWN, d: 'M50 50V0' },
+  { bit: RIGHT, dr: 0, dc: 1, opp: LEFT, d: 'M50 50H100' },
+  { bit: DOWN, dr: 1, dc: 0, opp: UP, d: 'M50 50V100' },
+  { bit: LEFT, dr: 0, dc: -1, opp: RIGHT, d: 'M50 50H0' },
+];
+const rotate = (mask, k) => {
+  let m = mask;
+  for (let i = 0; i < k % 4; i++) m = ((m << 1) | (m >> 3)) & 15;
+  return m;
+};
+const popcount = (m) => (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1);
 
-  // 3. Menú móvil interactivo
-  if (mobileMenuBtn && navLinks) {
-    mobileMenuBtn.addEventListener('click', () => {
-      navLinks.classList.toggle('is-active');
-      const isExpanded = navLinks.classList.contains('is-active');
-      mobileMenuBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-    });
-
-    // Cerrar menú al hacer clic en cualquier enlace
-    navLinks.querySelectorAll('a, button').forEach(link => {
-      link.addEventListener('click', () => {
-        navLinks.classList.remove('is-active');
-        mobileMenuBtn.setAttribute('aria-expanded', 'false');
+/** Árbol de expansión al azar (grado máximo 3): siempre tiene solución. */
+function makeLevel() {
+  for (;;) {
+    const mask = Array.from({ length: N * N }, () => 0);
+    const inTree = new Set();
+    const source = Math.floor(Math.random() * N * N);
+    inTree.add(source);
+    const frontier = [];
+    const addFrontier = (i) => {
+      const r = Math.floor(i / N), c = i % N;
+      DIRS.forEach((d, di) => {
+        const nr = r + d.dr, nc = c + d.dc;
+        if (nr >= 0 && nr < N && nc >= 0 && nc < N) frontier.push([i, nr * N + nc, di]);
       });
-    });
-  }
-
-  // 4. Control del Modal de Política de Privacidad
-  const openModal = () => {
-    if (!privacyModal) return;
-    privacyModal.classList.add('is-open');
-    privacyModal.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden'; // Evitar scroll de fondo
-  };
-
-  const closeModal = () => {
-    if (!privacyModal) return;
-    privacyModal.classList.remove('is-open');
-    privacyModal.setAttribute('aria-hidden', 'true');
-    document.body.style.overflow = '';
-  };
-
-  if (openPrivacyNav) openPrivacyNav.addEventListener('click', (e) => { e.preventDefault(); openModal(); });
-  if (openPrivacyFooter) openPrivacyFooter.addEventListener('click', (e) => { e.preventDefault(); openModal(); });
-  if (closePrivacyBtn) closePrivacyBtn.addEventListener('click', closeModal);
-  if (closePrivacyFooterBtn) closePrivacyFooterBtn.addEventListener('click', closeModal);
-
-  // Cerrar al hacer clic en el fondo oscuro
-  if (privacyModal) {
-    privacyModal.addEventListener('click', (e) => {
-      if (e.target === privacyModal) {
-        closeModal();
-      }
-    });
-  }
-
-  // Cerrar con tecla Escape
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && privacyModal && privacyModal.classList.contains('is-open')) {
-      closeModal();
+    };
+    addFrontier(source);
+    while (inTree.size < N * N && frontier.length) {
+      const [from, to, di] = frontier.splice(Math.floor(Math.random() * frontier.length), 1)[0];
+      if (inTree.has(to) || popcount(mask[from]) >= 3) continue;
+      mask[from] |= DIRS[di].bit;
+      mask[to] |= DIRS[di].opp;
+      inTree.add(to);
+      addFrontier(to);
     }
+    if (inTree.size === N * N && mask.every((m) => popcount(m) <= 3)) {
+      const turns = mask.map(() => Math.floor(Math.random() * 4));
+      const level = { mask, source, turns };
+      if (litCount(level).size < N * N) return level;
+    }
+  }
+}
+
+/** Piezas conectadas a la fuente según su giro actual, con su distancia. */
+function litCount(level) {
+  const cur = level.mask.map((m, i) => rotate(m, level.turns[i]));
+  const dist = new Map([[level.source, 0]]);
+  const queue = [level.source];
+  while (queue.length) {
+    const i = queue.shift();
+    const r = Math.floor(i / N), c = i % N;
+    for (const d of DIRS) {
+      if (!(cur[i] & d.bit)) continue;
+      const nr = r + d.dr, nc = c + d.dc;
+      if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
+      const j = nr * N + nc;
+      if (dist.has(j) || !(cur[j] & d.opp)) continue;
+      dist.set(j, dist.get(i) + 1);
+      queue.push(j);
+    }
+  }
+  return dist;
+}
+
+function pieceSvg(mask, isSource) {
+  const paths = DIRS.filter((d) => mask & d.bit).map((d) => d.d).join('');
+  return `<svg viewBox="0 0 100 100" aria-hidden="true"><g class="piece">
+    <path class="wire w-off" d="${paths}"/>
+    <path class="wire w-halo" d="${paths}"/>
+    <path class="wire w-on" d="${paths}"/>
+    <path class="wire w-core" d="${paths}"/>
+    ${isSource
+      ? '<circle class="src-ring" cx="50" cy="50" r="17"/><circle class="src-dot" cx="50" cy="50" r="9"/>'
+      : '<circle class="node-off" cx="50" cy="50" r="6"/><circle class="node-on" cx="50" cy="50" r="6"/>'}
+  </g></svg>`;
+}
+
+function setupBoard() {
+  const board = document.getElementById('board');
+  if (!board) return;
+  const status = document.getElementById('boardStatus');
+  const frame = document.getElementById('boardFrame');
+  let level = null;
+  let cells = [];
+
+  const paint = (animate) => {
+    const dist = litCount(level);
+    const solved = dist.size === N * N;
+    cells.forEach((cell, i) => {
+      cell.classList.toggle('lit', dist.has(i));
+      cell.style.setProperty('--d', dist.get(i) ?? 0);
+      cell.querySelector('.piece').style.transform = `rotate(${level.turns[i] * 90}deg)`;
+    });
+    if (solved) {
+      board.classList.remove('solved');
+      void board.offsetWidth; // reinicia la animación
+      board.classList.add('solved');
+      status.innerHTML = TEXT.solved;
+    } else {
+      board.classList.remove('solved');
+      status.innerHTML = animate && dist.size > 1 ? TEXT.progress(dist.size, N * N) : TEXT.start;
+    }
+  };
+
+  const build = () => {
+    level = makeLevel();
+    board.innerHTML = '';
+    cells = level.mask.map((m, i) => {
+      const li = document.createElement('li');
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'cell';
+      cell.setAttribute('aria-label', TEXT.cell(Math.floor(i / N) + 1, (i % N) + 1));
+      cell.innerHTML = pieceSvg(m, i === level.source);
+      cell.addEventListener('click', () => {
+        level.turns[i] += 1;
+        paint(true);
+      });
+      li.appendChild(cell);
+      board.appendChild(li);
+      return cell;
+    });
+    paint(false);
+  };
+
+  document.getElementById('newBoard')?.addEventListener('click', build);
+
+  // Selector de aspecto: cambia solo los colores del tablero
+  const apply = (name) => {
+    const skin = SKINS[name];
+    const set = (k, v) => (v == null ? frame.style.removeProperty(k) : frame.style.setProperty(k, v));
+    frame.classList.toggle('is-skinned', !!skin);
+    set('--board-bg', skin?.bg);
+    set('--cell-bg', skin?.glass);
+    set('--cell-line', skin?.line);
+    set('--lit', skin?.lit);
+    set('--core', skin?.core);
+    set('--src', skin?.src);
+    set('--off', skin?.off);
+  };
+  document.querySelectorAll('input[name="skin"]').forEach((input) => {
+    input.addEventListener('change', () => apply(input.value));
   });
 
-  // Abrir modal automáticamente si la URL contiene #privacy o #politica
+  build();
+}
+
+/* ---------- Resto de la página ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+  // Enlaces antiguos a la ventana de privacidad
   if (window.location.hash === '#privacy' || window.location.hash === '#politica') {
-    openModal();
+    window.location.replace(LANG === 'en' ? 'privacy.html' : 'privacidad.html');
+    return;
   }
 
-  // 5. Copiar correo al portapapeles con retroalimentación visual
-  if (copyEmailBtn && supportEmailLink) {
-    copyEmailBtn.addEventListener('click', async () => {
-      const email = supportEmailLink.textContent.trim();
-      const originalText = copyEmailBtn.querySelector('.copy-text')?.textContent || (document.documentElement.lang === 'en' ? 'Copy' : 'Copiar');
+  const year = document.getElementById('currentYear');
+  if (year) year.textContent = new Date().getFullYear();
 
+  const join = document.getElementById('betaJoinBtn');
+  if (join && /^https:\/\/(docs\.google\.com\/forms|forms\.gle)\//.test(BETA_FORM_URL)) {
+    join.href = BETA_FORM_URL;
+    join.target = '_blank';
+    join.rel = 'noopener noreferrer';
+  }
+
+  const copyBtn = document.getElementById('copyEmailBtn');
+  const mail = document.getElementById('supportEmailLink');
+  if (copyBtn && mail) {
+    copyBtn.addEventListener('click', async () => {
       try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(email);
-        } else {
-          // Fallback clásico para navegadores antiguos
-          const textArea = document.createElement('textarea');
-          textArea.value = email;
-          textArea.style.position = 'fixed';
-          textArea.style.left = '-999999px';
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          document.execCommand('copy');
-          textArea.remove();
-        }
-
-        // Feedback visual
-        copyEmailBtn.style.background = '#38f9d7';
-        copyEmailBtn.style.color = '#0a0e17';
-        copyEmailBtn.querySelector('.copy-text').textContent = document.documentElement.lang === 'en' ? 'Copied!' : '¡Copiado!';
-
-        setTimeout(() => {
-          copyEmailBtn.style.background = '';
-          copyEmailBtn.style.color = '';
-          copyEmailBtn.querySelector('.copy-text').textContent = originalText;
-        }, 2200);
+        await navigator.clipboard.writeText(mail.textContent.trim());
+        copyBtn.textContent = TEXT.copied;
+        setTimeout(() => (copyBtn.textContent = TEXT.copy), 2200);
       } catch (err) {
-        console.warn('Error al copiar correo:', err);
+        console.warn('No se pudo copiar el correo', err);
       }
     });
   }
 
-  // 6. Animación estética de interacción en la vista previa del trailer
-  if (playTrailerBtn) {
-    playTrailerBtn.addEventListener('click', () => {
-      const overlay = playTrailerBtn.closest('.media-placeholder-overlay');
-      if (overlay) {
-        const caption = overlay.querySelector('.placeholder-caption');
-        if (caption) {
-          caption.textContent = 'Tráiler oficial en producción para la Google Play Store';
-          caption.style.color = '#00f0ff';
-        }
-      }
-    });
-  }
-
-  // 7. Micro-animación visual en las celdas decorativas del Hero
-  const demoCells = document.querySelectorAll('.demo-cell:not(.core-source)');
-  demoCells.forEach((cell, idx) => {
-    cell.addEventListener('click', () => {
-      const currentRotation = cell.dataset.rotation ? parseInt(cell.dataset.rotation, 10) : 0;
-      const nextRotation = currentRotation + 90;
-      cell.dataset.rotation = nextRotation.toString();
-      cell.style.transform = `rotate(${nextRotation}deg)`;
-    });
-  });
+  setupBoard();
 });
