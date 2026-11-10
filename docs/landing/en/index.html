@@ -1,178 +1,156 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Lumihilo is a minimalist light-circuit puzzle that adapts to how you play. Play in your browser or download the beta." />
-  <meta name="theme-color" content="#0a0e17" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lumihilo · Light puzzles for Android, web and desktop</title>
+  <meta name="description" content="Lumihilo brings together three light puzzles: Circuits, Lights and Threads. Games under a minute, no accounts and no ads. Play in your browser or join the Android beta." />
   <link rel="alternate" hreflang="es" href="../" />
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="Lumihilo | Minimalist circuit puzzle" />
-  <meta property="og:description" content="The puzzle that learns from you. Connect glowing circuits that adapt to your pace." />
-  <title>Lumihilo · Minimalist light circuit</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+  <meta property="og:title" content="Lumihilo · Light puzzles" />
+  <meta property="og:description" content="Connect circuits, light up boards and join pairs of dots with a thread of light." />
+  <meta property="og:image" content="https://damanu123.github.io/lumihilo/img/portada.png" />
+  <meta name="theme-color" content="#0b1026" />
+  <link rel="preload" href="../fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="../styles.css" />
 </head>
 <body>
-  <div class="circuit-bg" aria-hidden="true">
-    <div class="circuit-glow glow-1"></div>
-    <div class="circuit-glow glow-2"></div>
-    <div class="grid-overlay"></div>
-  </div>
-
-  <header class="site-header">
-    <div class="nav-container">
-      <a href="#hero" class="brand-logo">
-        <span class="logo-symbol">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3" fill="#00f0ff" stroke="none" />
-            <path d="M12 2v7" /><path d="M12 15v7" /><path d="M2 12h7" /><path d="M15 12h7" />
-          </svg>
-        </span>
-        <span class="brand-name">Lumi<strong>hilo</strong></span>
-      </a>
-      <nav class="nav-links" id="navLinks">
-        <a href="#experience" class="nav-link">Experience</a>
-        <a href="#how" class="nav-link">How to play</a>
-        <a href="#beta" class="nav-link">Join the beta</a>
-        <a href="#support" class="nav-link">Support</a>
-        <a href="privacy.html" class="nav-link privacy-btn">Privacy</a>
-        <a href="../" class="nav-link" hreflang="es" lang="es">Español</a>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="../favicon.svg" alt="" width="32" height="32" />Lumihilo</a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#puzzles">Puzzles</a>
+        <a href="#pace">How it plays</a>
+        <a href="#beta">Beta</a>
+        <a href="#support">Contact</a>
+        <a href="../" hreflang="es" lang="es">Español</a>
       </nav>
-      <a href="../play/" class="cta-pill"><span class="pulse-dot"></span><span>Play now</span></a>
-      <button class="mobile-toggle" id="mobileMenuBtn" aria-label="Open navigation menu">
-        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
-      </button>
+      <a class="btn btn-main" href="../play/">Play</a>
     </div>
   </header>
 
   <main>
-    <section id="hero" class="hero-section">
-      <div class="hero-content">
-        <div class="badge-status"><span class="badge-icon">⚡</span><span>Beta for Android, Windows and Linux · Web version available</span></div>
-        <h1 class="hero-title">The light puzzle that <span class="gradient-text">learns your pace</span>.</h1>
-        <p class="hero-subtitle">
-          A minimalist, calm visual experience where every rotation channels the current. No stressful timers, no mandatory accounts, built to flow at your own level.
-        </p>
-        <div class="hero-actions">
-          <a href="../play/" class="btn btn-primary">
-            <span>Play in your browser</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </a>
-          <a href="https://github.com/DaManu123/lumihilo/releases/latest" class="btn btn-secondary" rel="noopener"><span>Download the beta (Android, Windows, Linux)</span></a>
-          <a href="#how" class="btn btn-secondary"><span>See how it works</span></a>
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-copy">
+          <h1>A light puzzle that adapts to how you play</h1>
+          <p class="lead">Rotate pieces, light up boards and join threads. Games under a minute, no accounts and no ads.</p>
+          <div class="actions">
+            <a class="btn btn-main" href="../play/">Play in your browser</a>
+            <a class="btn btn-ghost" href="#beta">Join the Android beta</a>
+          </div>
+          <p class="fine">There is also a Windows and Linux version: <a href="https://github.com/DaManu123/lumihilo/releases/latest" rel="noopener">download the latest beta</a>.</p>
+        </div>
+
+        <div class="play">
+          <div class="board-frame" id="boardFrame">
+            <ol class="board" id="board" aria-label="Demo board"></ol>
+          </div>
+          <p class="status" id="boardStatus" role="status" aria-live="polite"></p>
+          <div class="controls">
+            <button class="link-btn" type="button" id="newBoard">Another board</button>
+            <fieldset class="skins">
+              <legend>Board skin</legend>
+              <label class="skin" title="Filament"><input type="radio" name="skin" value="filamento" checked aria-label="Filament" /><span style="--a:#ffb938;--b:#ff6f91"></span></label>
+              <label class="skin" title="Cyberpunk"><input type="radio" name="skin" value="cyberpunk" aria-label="Cyberpunk" /><span style="--a:#00e5ff;--b:#ff2e93"></span></label>
+              <label class="skin" title="Matrix"><input type="radio" name="skin" value="matrix" aria-label="Matrix" /><span style="--a:#3dff7a;--b:#020b05"></span></label>
+              <label class="skin" title="Ocean"><input type="radio" name="skin" value="oceano" aria-label="Ocean" /><span style="--a:#35e0c4;--b:#0a2433"></span></label>
+              <label class="skin" title="Solar"><input type="radio" name="skin" value="solar" aria-label="Solar" /><span style="--a:#ffe45c;--b:#ff4d2e"></span></label>
+              <label class="skin" title="Aurora"><input type="radio" name="skin" value="aurora" aria-label="Aurora" /><span style="--a:#8affc1;--b:#c77dff"></span></label>
+            </fieldset>
+          </div>
         </div>
       </div>
     </section>
 
-    <section id="experience" class="section">
-      <div class="section-header">
-        <span class="section-tag">Experience</span>
-        <h2 class="section-title">Designed to adapt to you, not the other way around</h2>
-        <p class="section-description">A smooth, intuitive learning curve without artificial frustration or getting stuck.</p>
-      </div>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #00f0ff;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-          </div>
-          <h3>Invisible adaptive difficulty</h3>
-          <p>The game keeps tuning the challenge to how you play. If you want to relax, the puzzle keeps pace; if you want more of a challenge, the board answers right away.</p>
-          <div class="card-badge">Zero frustration</div>
+    <section class="section" id="puzzles">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Three puzzles, one light</h2>
+          <p class="lead">Each has its own level, records and daily challenge.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #ff007f;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
-          </div>
-          <h3>Short games, no pressure</h3>
-          <p>Quick 30 to 90 second games for any moment of the day. No punishing countdowns and no lives to lose: play and unwind at your own pace.</p>
-          <div class="card-badge">60-second sessions</div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #38f9d7;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-          </div>
-          <h3>Light, dark and high contrast</h3>
-          <p>Switch between the original dark neon style and a light theme, add high contrast, energy marks and adjustable animation speed. Available in English and Spanish.</p>
-          <div class="card-badge">Accessible</div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #a855f7;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </div>
-          <h3>Privacy and local storage</h3>
-          <p>No sign-up, no ads and no tracking in the game. Your progress stays only on your own device.</p>
-          <div class="card-badge">No accounts</div>
+        <div class="shots">
+          <figure class="shot">
+            <div class="phone"><img src="../img/circuitos.jpg" width="540" height="1080" loading="lazy" alt="Screenshot of Circuits: a board of wires with a power source and several segments lit in amber" /></div>
+            <figcaption>
+              <h3>Circuits</h3>
+              <p>Rotate the pieces until the whole circuit is connected to the source.</p>
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="phone"><img src="../img/luces.jpg" width="540" height="1080" loading="lazy" alt="Screenshot of Lights: a grid of cells, some lit in amber and others off" /></div>
+            <figcaption>
+              <h3>Lights</h3>
+              <p>Each tap flips a cell and its four neighbors. Light them all.</p>
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="phone"><img src="../img/hilos.jpg" width="540" height="1080" loading="lazy" alt="Screenshot of Threads: pairs of colored dots joined by threads of light on a board" /></div>
+            <figcaption>
+              <h3>Threads</h3>
+              <p>Drag your finger to join each pair of dots without the threads overlapping.</p>
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
 
-    <section id="how" class="section mechanics-section">
-      <div class="section-header">
-        <span class="section-tag">How to play</span>
-        <h2 class="section-title">Simple rules, endless possibilities</h2>
-        <p class="section-description">Learn it in 5 seconds. Tap, rotate and watch the light spread.</p>
-      </div>
-      <div class="steps-wrapper">
-        <div class="step-item"><div class="step-number">01</div><div class="step-info"><h4>Find the source</h4><p>The glowing core sends energy looking for a path through the whole circuit.</p></div></div>
-        <div class="step-divider"><span class="pulse-line"></span></div>
-        <div class="step-item"><div class="step-number">02</div><div class="step-info"><h4>Rotate the pieces</h4><p>One tap turns a piece 90°. If you overshoot, use <strong>Undo</strong> to go back instantly.</p></div></div>
-        <div class="step-divider"><span class="pulse-line"></span></div>
-        <div class="step-item"><div class="step-number">03</div><div class="step-info"><h4>Complete the circuit</h4><p>When every piece lights up, the circuit is complete and the puzzle ends with a satisfying glow.</p></div></div>
+    <section class="section" id="pace">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>It adapts to you, not to your age</h2>
+        </div>
+        <dl class="facts">
+          <div><dt>Difficulty that follows you</dt><dd>Each puzzle goes up or down depending on how you play. Never boring, never stuck.</dd></div>
+          <div><dt>30 to 90 second games</dt><dd>No lives to lose and no countdown to stress you.</dd></div>
+          <div><dt>A daily challenge</dt><dd>The same puzzle for everyone, every day, for each type of puzzle.</dd></div>
+          <div><dt>Six skins</dt><dd>Filament, plus five you unlock with the Sparks you earn by playing. Try them above, on the board.</dd></div>
+          <div><dt>Accessible</dt><dd>Light and dark themes, high contrast, adjustable animations and large text. In English and Spanish.</dd></div>
+          <div><dt>Private</dt><dd>No accounts, no ads and no analytics. Your progress stays on your device.</dd></div>
+        </dl>
       </div>
     </section>
 
-    <section id="beta" class="section beta-section">
-      <div class="support-card">
-        <div class="support-content">
-          <span class="section-tag">Closed test on Google Play</span>
-          <h2 class="support-title">Join the beta</h2>
-          <p class="support-text">
-            I am gathering the first people to try Lumihilo on Android through Google Play. Send me the email of your <strong>Google account</strong> (the one you use on the Play Store) and I will add you to the testers list.
-          </p>
-          <ol class="beta-steps">
-            <li><strong>Ask for access</strong> with the button below and give the email of your Google account.</li>
-            <li><strong>I add you</strong> to the Play Console testers list (it can take a couple of days).</li>
-            <li><strong>Install</strong> the game from the Play link you will receive and tell me how it goes.</li>
+    <section class="section" id="beta">
+      <div class="wrap">
+        <div class="beta">
+          <h2>Join the Android beta</h2>
+          <p class="lead">I am gathering the first people to try Lumihilo through Google Play. I need the email of your Google account, the one you use on the Play Store.</p>
+          <ol>
+            <li>Ask for access with the button and give the email of your Google account.</li>
+            <li>I add you to the Play Console testers list. It can take a couple of days.</li>
+            <li>Install the game from the Play link you will receive and tell me how it goes.</li>
           </ol>
-          <div class="beta-actions">
-            <a href="mailto:myprimemg@gmail.com?subject=I%20want%20to%20join%20the%20Lumihilo%20beta&amp;body=My%20Google%20Play%20email%20is%3A%20" class="btn btn-primary" id="betaJoinBtn" rel="noopener"><span>Ask for beta access</span></a>
+          <div class="actions">
+            <a class="btn btn-main" id="betaJoinBtn" href="mailto:myprimemg@gmail.com?subject=I%20want%20to%20join%20the%20Lumihilo%20beta&amp;body=My%20Google%20Play%20email%20is%3A%20" rel="noopener">Ask for beta access</a>
           </div>
-          <p class="beta-privacy">
-            <strong>Your email, protected:</strong> I only ask for the address of your Google account, only to add you to the test. Only I can see it; it is not published, sold or shared, and I delete it when the beta ends (or sooner, if you ask). Details in the <a href="privacy.html">privacy policy</a>.
-          </p>
+          <p class="note"><strong>Your email, protected.</strong> I only ask for the address of your Google account, only to add you to the test. Only I can see it; it is not published, sold or shared. I delete it when the beta ends, or sooner if you ask. Details are in the <a href="privacy.html">privacy policy</a>.</p>
         </div>
       </div>
     </section>
 
-    <section id="support" class="section support-section">
-      <div class="support-card">
-        <div class="support-content">
-          <span class="section-tag">Support</span>
-          <h2 class="support-title">Questions, feedback or found a bug?</h2>
-          <p class="support-text">As an independent developer, every opinion helps polish the game. Contact me directly:</p>
-          <div class="contact-box">
-            <div class="contact-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            </div>
-            <div class="contact-details">
-              <span class="contact-label">Email for players and testers</span>
-              <a href="mailto:myprimemg@gmail.com" class="contact-email" id="supportEmailLink">myprimemg@gmail.com</a>
-            </div>
-            <button class="copy-email-btn" id="copyEmailBtn" aria-label="Copy email address" title="Copy email"><span class="copy-text">Copy</span></button>
-          </div>
+    <section class="section" id="support">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>A question or a bug?</h2>
+          <p class="lead">One person makes Lumihilo and every opinion helps. Write to me and I will answer myself.</p>
+        </div>
+        <div class="contact">
+          <a class="mail" id="supportEmailLink" href="mailto:myprimemg@gmail.com">myprimemg@gmail.com</a>
+          <button class="copy" id="copyEmailBtn" type="button">Copy</button>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="footer-bottom">
-      <div class="bottom-container">
-        <p>&copy; <span id="currentYear">2026</span> Lumihilo. Independently developed. All rights reserved. · <a href="privacy.html">Privacy policy</a> · <a href="../" hreflang="es" lang="es">Español</a></p>
-      </div>
+  <footer class="foot">
+    <div class="wrap">
+      <p>© <span id="currentYear">2026</span> Lumihilo. Independently developed.</p>
+      <nav aria-label="Footer">
+        <a href="privacy.html">Privacy policy</a>
+        <a href="https://github.com/DaManu123/lumihilo" rel="noopener">Code on GitHub</a>
+        <a href="../" hreflang="es" lang="es">Español</a>
+      </nav>
     </div>
   </footer>
 
