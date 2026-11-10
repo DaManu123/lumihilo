@@ -4,6 +4,13 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- **Botón «Volver» dentro del juego:** una flecha con el texto «Volver», arriba a la izquierda (donde estaba el título), que regresa al menú. El segmento de la barra que decía «Menú» vuelve a mostrar el modo («Modo»; tocarlo también abre el menú, donde se cambia). El botón del reto diario que decía «Volver al juego» ahora dice «Salir del reto».
+- **Madrugada en el saludo del menú** (1 a 4 h): mensajes que animan a descansar sin prohibir jugar («Es un poco tarde. Puedes jugar, pero lo mejor sería que descansaras por tu salud»), con 8 variantes.
+
+### Cambiado
+- **Saludos del menú:** los de mañana, tarde y noche empiezan siempre con «Buenos días», «Buenas tardes» o «Buenas noches», con 8 mensajes de ánimo y buena vibra por franja (ES/EN). No se repite el mismo dos veces seguidas. La franja de noche va de 19 a 0 h.
+
 ## [0.2.0-beta.11] - 2026-11-10
 
 ### Añadido

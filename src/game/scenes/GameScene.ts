@@ -371,7 +371,7 @@ export class GameScene extends Phaser.Scene {
     this.scheduleUpdateCheck();
     // La app siempre abre en el menú principal; el puzzle (y su tutorial) se abre al elegirlo
     this.inMenu = true;
-    this.menuGreeting = pickGreeting(new Date().getHours());
+    this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
     this.setGameVisible(false);
     this.buildMenu();
     // Partida a medias: se guarda al salir a segundo plano o cerrar la app (la app puede cerrarse sin avisar)
@@ -580,16 +580,22 @@ export class GameScene extends Phaser.Scene {
 
   private createHeader(): void {
     const h = this.headerContainer;
-    const { titlePos, statsBtn } = this.hud;
+    const { backBtn, statsBtn } = this.hud;
 
-    // Fila 1: título a la izquierda; Chispas y estadísticas a la derecha
-    const title = this.uiText(titlePos.x, titlePos.y, APP_NAME, { size: FONT.title, display: true });
+    // Fila 1: «Volver» al menú a la izquierda; Chispas y estadísticas a la derecha
+    const backIcon = this.add.graphics();
+    const backLeft = backBtn.x - backBtn.w / 2;
+    drawIcon(backIcon, 'back', backLeft + 52, backBtn.y, 40, THEME.primary);
+    const backLabel = this.uiText(backLeft + 92, backBtn.y, t('Volver'), { size: FONT.button, weight: '700' });
 
     const statsIcon = this.add.graphics();
     drawIcon(statsIcon, 'stats', statsBtn.x, statsBtn.y, 42, THEME.primary);
     h.add([
       this.glassPanel(statsBtn, 24),
-      title,
+      this.glassPanel(backBtn, 24),
+      backIcon,
+      backLabel,
+      this.hitZone(backBtn, () => this.goToMenu()),
       statsIcon,
       this.hitZone(statsBtn, () => this.showStatsModal()),
     ]);
@@ -658,11 +664,11 @@ export class GameScene extends Phaser.Scene {
     const lastDaily = lastDailyOf(this.progress, this.puzzle);
     const dailyDone = lastDaily === dateKey(new Date());
 
-    this.setSegment(this.modeSeg, { label: t('Menú'), kind: 'menu', sub: this.modeLabel(this.profile.mode) });
+    this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: t('Modo') });
     this.setSegment(
       this.dailySeg,
       this.isDaily
-        ? { label: t('Volver'), kind: 'home', sub: t('al juego') }
+        ? { label: t('Salir'), kind: 'home', sub: t('del reto') }
         : { label: t('Diario'), kind: 'calendar', sub: dailyDone ? t('hecho hoy') : t('reto de hoy') }
     );
     this.setSegment(this.themeSeg, {
@@ -2236,7 +2242,7 @@ export class GameScene extends Phaser.Scene {
     this.flowDrag = null;
     this.persistGame();
     this.inMenu = true;
-    this.menuGreeting = pickGreeting(new Date().getHours());
+    this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
     this.setGameVisible(false);
     this.buildMenu();
   }

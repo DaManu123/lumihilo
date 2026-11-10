@@ -219,7 +219,7 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
   g.pos = {
     mode: [136, 158], daily: [360, 158], theme: [584, 158],
     reset: [136, 378], undo: [360, 378], hint: [584, 378],
-    dir: [360, 502], stats: [650, 56],
+    dir: [360, 502], stats: [650, 56], back: [124, 56],
     tutorialOk: [360, H / 2 + 700 / 2 - 84],
     // Estadísticas (tarjeta de 900 px): solo los números y «Cerrar»
     statsClose: [360, H / 2 + 900 / 2 - 84],

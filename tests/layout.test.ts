@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { APP_NAME } from '../src/config';
 import {
   DESIGN_WIDTH,
   MIN_GAME_HEIGHT,
@@ -46,6 +45,7 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
   describe('computeHudLayout', () => {
     const hud = computeHudLayout(DESIGN_WIDTH);
     const buttons: Record<string, Rect> = {
+      volver: hud.backBtn,
       estadisticas: hud.statsBtn,
       modo: hud.modeSegments[0],
       diario: hud.modeSegments[1],
@@ -83,12 +83,15 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
       }
     });
 
-    it('el título no choca con el marcador de Chispas aunque el saldo sea grande', () => {
-      // Medido en navegador: Unbounded a 28 px ocupa ≈ 0,68 em por carácter; se usa 0,75 por margen
-      const titleRight = hud.titlePos.x + APP_NAME.length * FONT.title * 0.75;
+    it('el botón Volver no choca con el marcador de Chispas aunque el saldo sea grande', () => {
       // Saldo abreviado (p. ej. "99k") + icono de chispa + separaciones
       const sparksBlock = 3 * FONT.stats * 0.9 + 26 + 16;
-      expect(titleRight).toBeLessThan(hud.sparksRight.x - sparksBlock);
+      expect(right(hud.backBtn)).toBeLessThan(hud.sparksRight.x - sparksBlock);
+    });
+
+    it('el texto «Volver» cabe dentro de su botón', () => {
+      // Icono (52 px desde el borde) + separación + 6 letras a ≈ 0,6 em
+      expect(92 + 6 * FONT.button * 0.6).toBeLessThan(hud.backBtn.w);
     });
 
     it('el nombre del nivel, su etiqueta de tamaño y el cronómetro caben en la misma fila', () => {
