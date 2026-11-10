@@ -33,22 +33,22 @@ describe('Luces: dificultad', () => {
   it('el tamaño y el desorden crecen con el nivel de habilidad', () => {
     let last = lightsParamsForTier(1);
     expect(last.size).toBe(3);
-    for (let tier = 2; tier <= 8; tier++) {
+    for (let tier = 2; tier <= 10; tier++) {
       const p = lightsParamsForTier(tier);
       expect(p.size).toBeGreaterThanOrEqual(last.size);
       expect(p.scrambles).toBeGreaterThanOrEqual(last.scrambles);
       expect(p.scrambles).toBeLessThan(p.size * p.size);
       last = p;
     }
-    expect(last.size).toBe(6);
-    expect(lightsParamsForTier(99)).toEqual(lightsParamsForTier(8));
+    expect(last.size).toBe(7);
+    expect(lightsParamsForTier(99)).toEqual(lightsParamsForTier(10));
     expect(lightsParamsForTier(-3)).toEqual(lightsParamsForTier(1));
   });
 });
 
 describe('Luces: generador y solver', () => {
   it('todo nivel generado tiene solución, no nace resuelto y su mínimo es correcto (todos los niveles de habilidad)', () => {
-    for (let tier = 1; tier <= 8; tier++) {
+    for (let tier = 1; tier <= 10; tier++) {
       const params = lightsParamsForTier(tier);
       for (let seed = 1; seed <= 150; seed++) {
         const level = generateLights(params, seed * 7919);
@@ -126,15 +126,15 @@ describe('Luces: reto diario', () => {
 });
 
 describe('Luces: piedras (casillas bloqueadas)', () => {
-  it('aparecen desde el nivel de habilidad 3 y su número crece sin pasar de 4', () => {
+  it('aparecen desde el nivel de habilidad 3 y su número crece sin pasar de 5', () => {
     expect(lightsParamsForTier(1).blocked).toBe(0);
     expect(lightsParamsForTier(2).blocked).toBe(0);
     expect(lightsParamsForTier(3).blocked).toBe(1);
     let last = 0;
-    for (let tier = 1; tier <= 8; tier++) {
+    for (let tier = 1; tier <= 10; tier++) {
       const b = lightsParamsForTier(tier).blocked;
       expect(b).toBeGreaterThanOrEqual(last);
-      expect(b).toBeLessThanOrEqual(4);
+      expect(b).toBeLessThanOrEqual(5);
       last = b;
     }
   });
@@ -154,7 +154,7 @@ describe('Luces: piedras (casillas bloqueadas)', () => {
   });
 
   it('todo nivel con piedras tiene el número pedido, es resoluble y su mínimo es correcto', () => {
-    for (let tier = 3; tier <= 8; tier++) {
+    for (let tier = 3; tier <= 10; tier++) {
       const params = lightsParamsForTier(tier);
       for (let seed = 1; seed <= 150; seed++) {
         const level = generateLights(params, seed * 104729);
@@ -177,5 +177,26 @@ describe('Luces: piedras (casillas bloqueadas)', () => {
   it('los niveles sin piedras no cambian respecto a antes de añadirlas', () => {
     const level = generateLights(lightsParamsForTier(2), 42);
     expect(level.blocked.flat().some(Boolean)).toBe(false);
+  });
+});
+
+describe('Luces: dificultad real (mínimo de toques)', () => {
+  const average = (tier: number) => {
+    const params = lightsParamsForTier(tier);
+    let total = 0;
+    for (let seed = 1; seed <= 30; seed++) total += generateLights(params, seed * 104729).minTaps;
+    return total / 30;
+  };
+
+  it('el mínimo de toques medio crece con el nivel de habilidad y llega a más de 15', () => {
+    let last = 0;
+    for (let tier = 1; tier <= 10; tier++) {
+      const avg = average(tier);
+      // Entre dos peldaños vecinos puede haber ruido de azar; en conjunto no baja más de un toque
+      expect(avg, `peldaño ${tier}`).toBeGreaterThanOrEqual(last - 1);
+      last = avg;
+    }
+    expect(average(10)).toBeGreaterThanOrEqual(15);
+    expect(average(10)).toBeGreaterThan(average(4) * 1.8);
   });
 });

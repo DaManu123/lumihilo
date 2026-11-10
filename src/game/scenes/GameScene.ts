@@ -13,6 +13,7 @@ import {
   GameMode,
   getLevelParamsForProfile,
   evaluateAndAdapt,
+  effectiveTier,
   PerformanceEvaluation,
 } from '../../core/adaptive';
 import {
@@ -236,7 +237,14 @@ interface CellLook {
 }
 
 export class GameScene extends Phaser.Scene {
-  private profile!: AdaptiveProfile;
+  /** Perfil adaptativo de cada puzzle: la dificultad de uno no depende de lo que se juegue en los otros. */
+  private profiles!: Record<PuzzleType, AdaptiveProfile>;
+  private get profile(): AdaptiveProfile {
+    return this.profiles[this.puzzle];
+  }
+  private set profile(value: AdaptiveProfile) {
+    this.profiles[this.puzzle] = value;
+  }
   private progress!: PlayerProgress;
   private settings!: UserSettings;
   private currentLevelIndex = 1;
@@ -305,7 +313,7 @@ export class GameScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
 
     // Cargar perfil, progreso y configuraciones persistentes
-    this.profile = storage.loadProfile();
+    this.profiles = { circuits: storage.loadProfile('circuits'), lights: storage.loadProfile('lights'), flow: storage.loadProfile('flow') };
     this.progress = storage.loadProgress();
     this.settings = storage.loadSettings();
     if (!isLanguageSetting(this.settings.language)) this.settings.language = 'auto';
@@ -1480,8 +1488,8 @@ export class GameScene extends Phaser.Scene {
   private showStatsModal(): void {
     const today = dateKey(new Date());
     const { stats, streak } = this.progress;
-    const tier = this.profile.currentTier;
-    const best = stats.bestTimeByTier[String(tier)];
+    const tier = effectiveTier(this.profile);
+    const best = stats.bestTimeByTier[recordKeyFor(this.puzzle, tier)];
     const shownStreak = currentStreak(streak, today);
 
     const days = (n: number) => t(n === 1 ? '{0} día' : '{0} días', n);
@@ -1999,7 +2007,7 @@ export class GameScene extends Phaser.Scene {
   /** Carga un nivel de Luces: el tablero de luces y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
   private loadLightsLevel(levelIndex: number): void {
     // El reto diario no depende del jugador: misma dificultad y semilla para todos ese día
-    const params = lightsParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier);
+    const params = lightsParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
     const level: LightsLevel = generateLights(
       params,
       this.isDaily ? dailyLightsSeed(this.dailyKey) : levelSeed((this.progress.seedBase ^ 0x9e3779b9) >>> 0, levelIndex)
@@ -2030,7 +2038,7 @@ export class GameScene extends Phaser.Scene {
   /** Carga un nivel de Hilos: los hilos y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
   private loadFlowLevel(levelIndex: number): void {
     // El reto diario no depende del jugador: misma dificultad y semilla para todos ese día
-    const params = flowParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier);
+    const params = flowParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
     const level = generateFlow(
       params,
       this.isDaily ? dailyFlowSeed(this.dailyKey) : levelSeed((this.progress.seedBase ^ 0x7f4a7c15) >>> 0, levelIndex)
@@ -2080,12 +2088,15 @@ export class GameScene extends Phaser.Scene {
     const currentIndex = modes.indexOf(this.profile.mode);
     const nextMode = modes[(currentIndex + 1) % modes.length];
 
-    this.profile.mode = nextMode;
-    if (nextMode === 'relaxed') this.profile.currentTier = 1;
-    if (nextMode === 'normal') this.profile.currentTier = Math.max(2, Math.min(this.profile.currentTier, 6));
-    if (nextMode === 'challenge') this.profile.currentTier = Math.max(5, this.profile.currentTier);
-
-    storage.saveProfile(this.profile);
+    // El modo es del jugador, no de un puzzle: se cambia en los tres perfiles (cada uno conserva su peldaño)
+    for (const puzzle of PUZZLES) {
+      const profile = this.profiles[puzzle];
+      profile.mode = nextMode;
+      if (nextMode === 'relaxed') profile.currentTier = 1;
+      if (nextMode === 'normal') profile.currentTier = Math.max(2, Math.min(profile.currentTier, 6));
+      if (nextMode === 'challenge') profile.currentTier = Math.max(5, profile.currentTier);
+      storage.saveProfile(profile, puzzle);
+    }
 
     // Cambiar de modo reinicia la progresión de niveles (y sale del reto diario)
     this.isDaily = false;
@@ -3154,7 +3165,7 @@ export class GameScene extends Phaser.Scene {
 
     const today = dateKey(new Date());
     const minTaps = this.currentLevelData.minTaps;
-    const playedTier = this.isDaily ? dailyTier(this.dailyKey) : this.profile.currentTier;
+    const playedTier = this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile);
     const recordKey = recordKeyFor(this.puzzle, playedTier);
 
     // Evaluar desempeño; el reto diario NO altera el perfil adaptativo (es igual para todos)
@@ -3166,7 +3177,7 @@ export class GameScene extends Phaser.Scene {
     });
     if (!this.isDaily) {
       this.profile = updatedProfile;
-      storage.saveProfile(this.profile);
+      storage.saveProfile(this.profile, this.puzzle);
     }
 
     // Recompensa de Chispas: el reto diario paga doble la primera vez de cada día y nada al repetirlo

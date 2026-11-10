@@ -34,7 +34,7 @@ Piezas clave:
 npm ci                    # instalar (si node_modules viene de Windows y rompe: rm -rf node_modules && npm ci)
 npm run dev               # desarrollo (Vite, puerto 3000)
 npm run typecheck         # tsc --noEmit (strict, noUnusedLocals)
-npm test                  # unitarias (Vitest): 431 pruebas
+npm test                  # unitarias (Vitest): 444 pruebas
 npm run build             # tsc + vite build → dist/
 npm run build:play        # build con UPDATE_SOURCE=play
 npm run cap:sync          # build + cap sync android (necesario al cambiar plugins)
@@ -64,6 +64,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 - **appId definitivo `com.damanu.lumihilo`** desde la beta.7 (las betas 1–6 usaban otro; el progreso no se traslada). No cambiable tras publicar.
 - Segundo puzzle = Luces (eligió el usuario entre 3 opciones); tercero = Hilos (eligió entre Hilos/Espejos/Mareas; descartados Espejos y Mareas, quedan como ideas).
 - Hilos: nivel = camino hamiltoniano aleatorio («backbite») cortado en tramos de ≥3 casillas; ganar = unir parejas (sin obligar a llenar → más accesible). Un toque sobre un hilo unido no lo borra (el trazo es «perezoso»: no cambia nada hasta que el dedo se mueve).
+- Dificultad (parte 4 del plan beta.9, sin publicar): **un perfil adaptativo por puzzle** (`profile_adaptive` = Circuitos, `profile_adaptive_lights`, `profile_adaptive_flow`; los que no existen heredan modo y peldaño del de Circuitos). Tablas propias de 10 peldaños en `adaptive.ts` (Circuitos), `lights.ts` (hasta 7×7, ~27 toques mínimos en el 10, antes ~13) y `flow.ts` (hasta 8×8 y 8 hilos; el 9 y el 10 son iguales porque solo hay 8 colores). Sube con 3 victorias seguidas (antes 5) y una victoria dominante tras otra salta 2 peldaños. `effectiveTier()` aplica el modo (Relajado ≤3, Reto ≥5) también a Luces e Hilos.
 - Luces: Gaussian GF(2) para mínimo de toques y pista; las piedras se excluyen del sistema.
 - Economía modelada por ritmo de juego en `tests/economy.test.ts` (perfiles 52/153/437 Chispas al día) y documentada en `docs/10-economia-chispas.md`; Aurora a 1000 obligó a relajar límites (habitual ≤ 21 días, ocasional ≤ 56).
 - Aviso de versión: cada apertura completa de la app mientras haya una más nueva (antes una vez por versión; no apareció en el teléfono del usuario con la API de GitHub, por eso `releases.json` + botón «Buscar actualizaciones»). El usuario ha probado las betas posteriores sin reportar fallos en el aviso, pero conviene confirmarlo explícitamente con la beta.8.

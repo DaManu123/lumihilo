@@ -17,22 +17,22 @@ describe('Hilos: dificultad', () => {
   it('el tamaño y el número de hilos crecen con el nivel de habilidad', () => {
     let last = flowParamsForTier(1);
     expect(last.size).toBe(4);
-    for (let tier = 2; tier <= 8; tier++) {
+    for (let tier = 2; tier <= 10; tier++) {
       const p = flowParamsForTier(tier);
       expect(p.size).toBeGreaterThanOrEqual(last.size);
       expect(p.pairs).toBeGreaterThanOrEqual(last.pairs);
-      expect(p.pairs).toBeLessThanOrEqual(p.size);
+      expect(p.pairs).toBeLessThanOrEqual(8); // ocho colores y símbolos distintos
       last = p;
     }
-    expect(last.size).toBe(7);
-    expect(flowParamsForTier(99)).toEqual(flowParamsForTier(8));
+    expect(last.size).toBe(8);
+    expect(flowParamsForTier(99)).toEqual(flowParamsForTier(10));
     expect(flowParamsForTier(-4)).toEqual(flowParamsForTier(1));
   });
 });
 
 describe('Hilos: generador', () => {
   it('todo nivel recorre el tablero entero con trazados contiguos y sin solaparse, y se resuelve con su solución', () => {
-    for (let tier = 1; tier <= 8; tier++) {
+    for (let tier = 1; tier <= 10; tier++) {
       const params = flowParamsForTier(tier);
       for (let seed = 1; seed <= 60; seed++) {
         const level = generateFlow(params, seed * 7919);
@@ -60,7 +60,7 @@ describe('Hilos: generador', () => {
         expect(isFlowSolved(state, level), `${label}: la solución no resuelve`).toBe(true);
       }
     }
-  });
+  }, 30000); // 10 peldaños × 60 niveles, con muchas comprobaciones cada uno
 
   it('es determinista y semillas distintas dan niveles distintos', () => {
     const params = flowParamsForTier(5);

@@ -10,7 +10,7 @@ const distance = (a: number, b: number) => Math.hypot(...channels(a).map((v, i) 
 
 describe('Colores de los hilos (src/game/flowColors.ts)', () => {
   it('hay un color por cada pareja del nivel más difícil', () => {
-    expect(FLOW_MAX_PAIRS).toBeGreaterThanOrEqual(flowParamsForTier(8).pairs);
+    expect(FLOW_MAX_PAIRS).toBeGreaterThanOrEqual(flowParamsForTier(10).pairs);
   });
 
   for (const skin of SKINS) {

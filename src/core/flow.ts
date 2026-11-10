@@ -42,12 +42,26 @@ export interface FlowState {
   paths: FlowCell[][];
 }
 
-/** Tamaño y número de hilos según el nivel de habilidad (1 a 8). */
+/**
+ * Tamaño y número de hilos según el nivel de habilidad (1 a 10). Hay ocho colores y símbolos distintos, así que no
+ * pasa de ocho hilos; a partir de ahí lo difícil es el tablero (8×8) y que los hilos largos se estorben entre sí.
+ */
+const FLOW_TIERS: ReadonlyArray<FlowParams> = [
+  { size: 4, pairs: 3 },
+  { size: 5, pairs: 4 },
+  { size: 5, pairs: 5 },
+  { size: 6, pairs: 5 },
+  { size: 6, pairs: 6 },
+  { size: 6, pairs: 7 },
+  { size: 7, pairs: 7 },
+  { size: 7, pairs: 8 },
+  { size: 8, pairs: 8 },
+  { size: 8, pairs: 8 },
+];
+
 export function flowParamsForTier(tier: number): FlowParams {
-  const t = Math.max(1, Math.min(8, Math.floor(tier)));
-  const size = t <= 2 ? 4 : t <= 4 ? 5 : t <= 6 ? 6 : 7;
-  const pairs = [3, 4, 4, 5, 5, 6, 6, 7][t - 1];
-  return { size, pairs };
+  const t = Math.max(1, Math.min(FLOW_TIERS.length, Math.floor(tier)));
+  return { ...FLOW_TIERS[t - 1] };
 }
 
 export const sameCell = (a: FlowCell, b: FlowCell): boolean => a.row === b.row && a.col === b.col;
