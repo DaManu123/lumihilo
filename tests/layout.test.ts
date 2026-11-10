@@ -10,6 +10,7 @@ import {
   computeGameHeight,
   computeHudLayout,
   computeBoardGeometry,
+  computeMenuLayout,
 } from '../src/game/layout';
 
 /** Un teléfono típico tiene ~390 dp de ancho útil; el lienzo se reduce a esa escala. */
@@ -153,6 +154,46 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
       const small = computeBoardGeometry(DESIGN_WIDTH, MIN_GAME_HEIGHT, 7, 7, hud.boardTop);
       const tall = computeBoardGeometry(DESIGN_WIDTH, MAX_GAME_HEIGHT, 7, 7, hud.boardTop);
       expect(tall.cellSize).toBeGreaterThanOrEqual(small.cellSize);
+    });
+  });
+
+  describe('computeMenuLayout', () => {
+    const heights = [MIN_GAME_HEIGHT, 1400, MAX_GAME_HEIGHT];
+    const boxes = (m: ReturnType<typeof computeMenuLayout>) => [...m.cards, ...m.modes, ...m.tools];
+
+    it('todo cabe en el lienzo en cualquier alto', () => {
+      for (const h of heights) {
+        for (const r of boxes(computeMenuLayout(DESIGN_WIDTH, h))) {
+          expect(r.x - r.w / 2).toBeGreaterThanOrEqual(0);
+          expect(r.x + r.w / 2).toBeLessThanOrEqual(DESIGN_WIDTH);
+          expect(r.y - r.h / 2).toBeGreaterThanOrEqual(0);
+          expect(r.y + r.h / 2).toBeLessThanOrEqual(h);
+        }
+      }
+    });
+
+    it('los bloques van en orden y no se pisan: nombre, tarjetas, modos, accesos y saludo', () => {
+      for (const h of heights) {
+        const m = computeMenuLayout(DESIGN_WIDTH, h);
+        const top = (r: { y: number; h: number }) => r.y - r.h / 2;
+        const bottom = (r: { y: number; h: number }) => r.y + r.h / 2;
+        expect(m.sparksY).toBeGreaterThan(m.titleY);
+        expect(top(m.cards[0])).toBeGreaterThan(m.sparksY + 20);
+        expect(top(m.cards[1])).toBeGreaterThanOrEqual(bottom(m.cards[0]));
+        expect(top(m.cards[2])).toBeGreaterThanOrEqual(bottom(m.cards[1]));
+        expect(m.modeLabelY).toBeGreaterThan(bottom(m.cards[2]) + 14);
+        expect(top(m.modes[0])).toBeGreaterThan(m.modeLabelY + 14);
+        expect(top(m.tools[0])).toBeGreaterThanOrEqual(bottom(m.modes[0]));
+        expect(m.greetingY).toBeGreaterThan(bottom(m.tools[0]) + 30);
+        expect(m.greetingY + 40).toBeLessThanOrEqual(h);
+      }
+    });
+
+    it('los botones y tarjetas superan el tamaño táctil (48 dp ≈ 88 px lógicos) y los tres botones son iguales', () => {
+      const m = computeMenuLayout();
+      for (const r of boxes(m)) expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(88);
+      expect(new Set(m.modes.map((r) => r.w)).size).toBe(1);
+      expect(m.modes[1].x).toBe(DESIGN_WIDTH / 2);
     });
   });
 });

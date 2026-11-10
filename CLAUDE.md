@@ -1,12 +1,12 @@
 # CLAUDE.md — Lumihilo
 
-Guía para retomar el trabajo. Todo lo de aquí se comprobó contra el repositorio el 2026-11-10 (versión **0.2.0-beta.9**). El usuario escribe en español: responde y documenta en español.
+Guía para retomar el trabajo. Todo lo de aquí se comprobó contra el repositorio el 2026-11-10 (versión **0.2.0-beta.11**). El usuario escribe en español: responde y documenta en español.
 
 ## 1. Descripción
 **Lumihilo** (antes «Puzzle Adaptativo»; significado del nombre en `docs/09-nombre.md`) es un juego de puzzle casual para **Android, web y escritorio (Windows/Linux)**. Cada nivel se genera por algoritmo (siempre resoluble) y la dificultad se adapta al nivel real del jugador, no a su edad. Audiencia: **13+**, partidas de 30–90 s. Hay **3 puzzles**:
 - **Circuitos** (el original): girar piezas hasta conectar todo a la fuente.
 - **Luces**: tocar una casilla cambia su luz y la de sus 4 vecinas; encender todo. Con **piedras** (casillas bloqueadas) desde habilidad 3.
-- **Hilos**: arrastrar para unir parejas de puntos del mismo color sin que se solapen hilos (cortar el de otro lo borra por ahí). Ganar = unir todas las parejas **y no dejar ninguna casilla vacía, en todos los modos** (desde la beta.9 en Normal/Reto/diario; en Relajado también, sin publicar).
+- **Hilos**: arrastrar para unir parejas de puntos del mismo color sin que se solapen hilos (cortar el de otro lo borra por ahí). Ganar = unir todas las parejas **y no dejar ninguna casilla vacía, en todos los modos** (desde la beta.9 en Normal/Reto/diario y desde la beta.10 también en Relajado).
 
 Economía: moneda **Chispas** (ganar niveles; pistas cuestan 10; tienda de **6 aspectos**: Filamento gratis, Cyberpunk 150, Matrix 350, Océano 550, Solar 800, Aurora 1000). Cada aspecto equipado da un bonus de Chispas por nivel: +5/10/15/20/25 % (Cyberpunk…Aurora; sin publicar, beta.9). Cada puzzle tiene nivel, récords y **reto diario** propios. Localización ES/EN.
 
@@ -26,7 +26,8 @@ Piezas clave:
 - `GameScene` ramifica por `this.puzzle` (`'circuits' | 'lights' | 'flow'`): carga (`loadLevel`→`loadLightsLevel`/`loadFlowLevel`), dibujo (`drawCell`), pista (`useHint`→`useLightsHint`/`useFlowHint`), deshacer, victoria (`evaluateVictory`), panel de progreso (`renderDirectionButton`), tutorial por puzzle. Hilos se juega arrastrando: un `zone` único en el tablero + `pointermove/up` de escena (`flowPointerDown/Move/Up`).
 - Daily: `isDaily` es independiente del puzzle; semillas `dailySeed`/`dailyLightsSeed`/`dailyFlowSeed` y fecha de «hecho hoy» por puzzle (`lastDailyOf`, `levelOf`, `withLevel` en `progress.ts`).
 - Música: pista según puzzle en `WebMusicPlayer.track` (Circuitos = estilo elegido Swing/Ambiental; Luces = «cristal» caja de música; Hilos = «hilo» cuerda pulsada). Todo en escala pentatónica.
-- Actualizar dentro de la app (sin publicar): en el **APK de GitHub** (variante Gradle `github`, que declara `REQUEST_INSTALL_PACKAGES`) el botón «Actualizar» descarga `Lumihilo-<v>-android.apk` de la Release oficial (`apkUrl` en `updates.ts`) con `GameHaptics.downloadUpdate` (`AppUpdater.java`: solo URLs de la Release del repo, comprueba paquete y versión del APK, muestra avance con el evento `updateProgress`) y abre el instalador con `installUpdate` (FileProvider; si falta «instalar apps desconocidas» abre ese ajuste y devuelve `needs-permission`). El **AAB de Play (variante `play`) NO declara ese permiso** (Play lo restringe): el flujo falla si aparece en el AAB. Escritorio y web siguen abriendo la página de la Release.
+- **Menú principal** (publicado en la beta.11): la app siempre abre en él (`buildMenu`, `goToMenu`, `playPuzzle` en `GameScene`; diseño en `computeMenuLayout`, `layout.ts`). Tarjetas de los 3 puzzles, selector de modo (`setGameMode`, reinicia el nivel de los tres), accesos a Estadísticas/Aspectos/Ajustes y saludo según la hora (`core/greeting.ts`). El menú es una capa de profundidad 90 sobre el juego (que se oculta con `setGameVisible`): las tarjetas modales (≥ 100) y el aviso de actualización quedan encima. En juego, el segmento izquierdo de la barra es «Menú». **Cada puzzle conserva su partida** (`core/savedGames.ts`, clave `saved_games`): `persistGame` guarda una «foto» (giros/luces/hilos, toques, tiempo, deshacer) al ir al menú, cada 10 s, al ocultarse la app y al ganar o reiniciar la borra; `loadPuzzleState`/`applySavedGame` la retoman solo si el nivel regenerado coincide (semilla, tamaño, mínimo de toques, reto diario del mismo día). Cambiar de modo las descarta.
+- Actualizar dentro de la app (publicado en la beta.10): en el **APK de GitHub** (variante Gradle `github`, que declara `REQUEST_INSTALL_PACKAGES`) el botón «Actualizar» descarga `Lumihilo-<v>-android.apk` de la Release oficial (`apkUrl` en `updates.ts`) con `GameHaptics.downloadUpdate` (`AppUpdater.java`: solo URLs de la Release del repo, comprueba paquete y versión del APK, muestra avance con el evento `updateProgress`) y abre el instalador con `installUpdate` (FileProvider; si falta «instalar apps desconocidas» abre ese ajuste y devuelve `needs-permission`). El **AAB de Play (variante `play`) NO declara ese permiso** (Play lo restringe): el flujo falla si aparece en el AAB. Escritorio y web siguen abriendo la página de la Release.
 - Actualizaciones: `UPDATE_SOURCE` (`'github'|'play'`) se decide **al compilar** (`UPDATE_SOURCE=play`, `npm run build:play`). `releases.json` en Pages (lo regenera `pages.yml`) con la API de GitHub de respaldo. Web nunca consulta.
 - Debug: `?debug` en la URL expone `window.__game` (lo usan los e2e); `?debug&update` habilita el aviso de versión en web.
 
@@ -35,15 +36,15 @@ Piezas clave:
 npm ci                    # instalar (si node_modules viene de Windows y rompe: rm -rf node_modules && npm ci)
 npm run dev               # desarrollo (Vite, puerto 3000)
 npm run typecheck         # tsc --noEmit (strict, noUnusedLocals)
-npm test                  # unitarias (Vitest): 455 pruebas
+npm test                  # unitarias (Vitest): 471 pruebas
 npm run build             # tsc + vite build → dist/
 npm run build:play        # build con UPDATE_SOURCE=play
 npm run cap:sync          # build + cap sync android (necesario al cambiar plugins)
-npm run test:e2e          # navegador (Playwright, ~9-16 min según la carga, 192 comprobaciones). Compila solo.
+npm run test:e2e          # navegador (Playwright, ~9-16 min según la carga, 224 comprobaciones). Compila solo.
 npm run test:audio        # mide volumen/pico en dBFS de música y efectos
 npm run test:perf         # CPU por fotograma (requiere ?debug)
 ```
-- e2e: los 21 escenarios de `e2e/game.mjs` son independientes y corren **3 a la vez, cada uno con su propio Chromium** (`E2E_JOBS=1` los pone en serie, ~33 min; `E2E_ONLY=18,19` corre solo esos; `--no-build` salta la compilación). Con 4 o más a la vez, o con un solo navegador compartido, el WebGL por software se atasca y salen timeouts. Chromium arranca con SwiftShader explícito (el doble de rápido) y `openGame` usa escala 1 (`scale: 2` solo en `store.mjs`). Cada escenario imprime su salida entera con su duración al terminar. Al añadir uno: va en `sections.push([...])`, sin estado compartido con otros, y esperas por condición en vez de tiempos fijos (con carga todo tarda más).
+- e2e: los 22 escenarios de `e2e/game.mjs` son independientes y corren **3 a la vez, cada uno con su propio Chromium** (`E2E_JOBS=1` los pone en serie, ~33 min; `E2E_ONLY=18,19` corre solo esos; `--no-build` salta la compilación). Con 4 o más a la vez, o con un solo navegador compartido, el WebGL por software se atasca y salen timeouts. Chromium arranca con SwiftShader explícito (el doble de rápido) y `openGame` usa escala 1 (`scale: 2` solo en `store.mjs`). Cada escenario imprime su salida entera con su duración al terminar. `openGame` (`e2e/lib.mjs`) entra solo al puzzle guardado tocando su tarjeta del menú (la app siempre abre en el menú; `menu: true` lo evita); `g.openMenu()`, `g.enter(puzzle)`, `g.playPuzzle(puzzle)`, `g.openSettings()` y `g.openSkins()` navegan por él, y `g.reload()` vuelve a entrar. Al añadir uno: va en `sections.push([...])`, sin estado compartido con otros, y esperas por condición en vez de tiempos fijos (con carga todo tarda más).
 - e2e: el puerto **4173 debe estar libre**; no lanzar dos pasadas a la vez ni `npm run build` mientras corre una (cambia `dist/`). Lanzarlas en segundo plano y esperar el aviso. Resultado: línea `Resumen: N/N comprobaciones correctas`.
 - Capturas de la tienda: `npm run build && node e2e/store.mjs` → `docs/store/capturas/`. Aspecto de un skin: `node e2e/skins-look.mjs <carpeta>`.
 - Escritorio local: `npm run build`, luego `cd desktop && npm install && npm start`.
@@ -73,7 +74,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 - Clave de firma de las betas fuera del repo (`~/.puzzle-adaptativo-signing/`); Play usará Play App Signing con clave de subida propia (por crear).
 
 ## 6. Estado actual
-**Hecho y publicado** (betas 0.2.0-beta.1…8 en GitHub Releases; beta.8 = Hilos + música de cuerda): 3 puzzles, 6 aspectos, tienda de Chispas, retos diarios por puzzle, tutoriales animados de Luces y Hilos, aviso de actualización, ES/EN, store assets (10 capturas 1080×2160 + gráfico de funciones en `docs/store/`), política de privacidad (es/en), flujo de Release con AAB `'play'`. Pruebas: 431 unitarias, 181 e2e, audio y rendimiento OK.
+**Hecho y publicado** (betas 0.2.0-beta.1…11 en GitHub Releases; beta.8 = Hilos + música de cuerda; beta.9 = Hilos llena todo, dificultad por puzzle, bonus de aspectos; beta.10 = actualizar dentro de la app y Hilos llena todo en todos los modos; beta.11 = menú principal y partidas guardadas por puzzle): 3 puzzles, 6 aspectos, tienda de Chispas, retos diarios por puzzle, tutoriales animados de Luces y Hilos, aviso de actualización, ES/EN, store assets (10 capturas 1080×2160 + gráfico de funciones en `docs/store/`), política de privacidad (es/en), flujo de Release con AAB `'play'`. Pruebas: 431 unitarias, 181 e2e, audio y rendimiento OK.
 **Probado por el usuario en teléfono (POCO F6, Samsung A05) hasta la beta.7**; la **beta.8 (Hilos) aún no se ha probado con un dedo real**.
 **Descartado**: iOS, anuncios/cuentas por ahora, Espejos/Mareas como tercer puzzle.
 

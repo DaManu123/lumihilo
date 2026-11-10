@@ -110,6 +110,45 @@ export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
   };
 }
 
+export interface MenuLayout {
+  titleY: number;
+  sparksY: number;
+  /** Una tarjeta por puzzle, de arriba abajo. */
+  cards: [Rect, Rect, Rect];
+  modeLabelY: number;
+  /** Relajado, Normal y Reto. */
+  modes: [Rect, Rect, Rect];
+  /** Estadísticas, Aspectos y Ajustes. */
+  tools: [Rect, Rect, Rect];
+  greetingY: number;
+}
+
+/**
+ * Diseño del menú principal: el nombre arriba, las tarjetas de los puzzles centradas en el espacio que sobra, los modos
+ * en medio de la pantalla, los accesos (estadísticas, aspectos y ajustes) y, hasta abajo, el mensaje de bienvenida.
+ * Todo lo de abajo se ancla al borde inferior, así que en pantallas altas solo crece el aire entre bloques.
+ */
+export function computeMenuLayout(width: number = DESIGN_WIDTH, height: number = MIN_GAME_HEIGHT): MenuLayout {
+  const barW = width - 2 * MARGIN;
+  const gap = 12;
+  const btnW = (barW - 2 * gap) / 3;
+  const row = (y: number): [Rect, Rect, Rect] =>
+    [0, 1, 2].map((i) => ({ x: width / 2 + (i - 1) * (btnW + gap), y, w: btnW, h: BUTTON_H })) as [Rect, Rect, Rect];
+  const cardH = 172;
+  const pitch = 192;
+  const center = (height - 200) / 2;
+  const cards = [-1, 0, 1].map((i) => ({ x: width / 2, y: center + i * pitch, w: barW, h: cardH })) as [Rect, Rect, Rect];
+  return {
+    titleY: 104,
+    sparksY: 190,
+    cards,
+    modeLabelY: height - 420,
+    modes: row(height - 350),
+    tools: row(height - 220),
+    greetingY: height - 96,
+  };
+}
+
 export interface BoardGeometry {
   /** Lado de cada celda incluyendo el espacio entre celdas. */
   cellSize: number;

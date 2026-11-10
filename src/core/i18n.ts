@@ -28,6 +28,31 @@ export function resolveLanguage(setting: LanguageSetting, deviceLanguage: string
 }
 
 export const EN: Record<string, string> = {
+  // Menú principal
+  'Menú': 'Menu',
+  'Gira y conecta todo': 'Rotate and connect it all',
+  'Enciende todas las luces': 'Turn on every light',
+  'Une parejas y llena todo': 'Join pairs and fill it all',
+  'Partida en curso': 'Game in progress',
+  'Continuar': 'Continue',
+  'Jugar': 'Play',
+  'Diario hecho': 'Daily done',
+  'Diario disponible': 'Daily available',
+  'Buenos días. Un hilo de luz para empezar.': 'Good morning. A thread of light to start with.',
+  'Buen día. ¿Conectamos algo antes del desayuno?': 'Good day. Shall we connect something before breakfast?',
+  'Amanece: buen momento para encender unas luces.': 'Dawn is here: a good time to switch some lights on.',
+  'Buenos días. Un puzzle corto y a por el día.': 'Good morning. One quick puzzle and on with the day.',
+  'Arranca la mañana con un tablero fresco.': 'Start the morning with a fresh board.',
+  'Buenas tardes. Un descanso con hilos y luces.': 'Good afternoon. A break with threads and lights.',
+  'Buena tarde para resolver un puzzle.': 'A good afternoon to solve a puzzle.',
+  'Tómate un rato para ti: un tablero y listo.': 'Take a moment for yourself: one board and done.',
+  'Buenas tardes. ¿Te animas con el reto de hoy?': "Good afternoon. Up for today's challenge?",
+  'A media jornada, nada como una pausa luminosa.': 'Halfway through the day, nothing beats a bright pause.',
+  'Buenas noches. Que todo quede conectado.': 'Good evening. May everything stay connected.',
+  'Noche tranquila, puzzle tranquilo.': 'Quiet night, quiet puzzle.',
+  'Antes de dormir, una luz más.': 'One more light before bed.',
+  'Buenas noches. Un tablero y a descansar.': 'Good evening. One board and off to rest.',
+  'La noche es buena para enhebrar hilos.': 'The night is good for threading.',
   // Barra superior y controles
   'Reto diario': 'Daily challenge',
   'Nivel {0}': 'Level {0}',

@@ -8,6 +8,7 @@ import type { AnimationSpeed } from '../core/accessibility';
 import type { LanguageSetting } from '../core/i18n';
 import { DEFAULT_SKIN, SkinId } from '../core/skins';
 import type { PuzzleType } from '../core/puzzles';
+import { SavedGames, sanitizeSavedGames } from '../core/savedGames';
 
 /** Sentido en que giran las piezas al tocarlas: horario (cw) o antihorario (ccw). */
 export type RotationDirection = 'cw' | 'ccw';
@@ -252,6 +253,22 @@ export class HybridStorageService implements StorageService {
 
   saveProgress(progress: PlayerProgress): void {
     this.set('player_progress', JSON.stringify(progress));
+  }
+
+  /** Partidas en curso de cada puzzle (ver `core/savedGames.ts`). */
+  loadSavedGames(): SavedGames {
+    const raw = this.get('saved_games');
+    if (!raw) return {};
+    try {
+      return sanitizeSavedGames(JSON.parse(raw));
+    } catch {
+      return {};
+    }
+  }
+
+  saveSavedGames(games: SavedGames): void {
+    if (Object.keys(games).length === 0) this.remove('saved_games');
+    else this.set('saved_games', JSON.stringify(games));
   }
 
   loadSettings(): UserSettings {

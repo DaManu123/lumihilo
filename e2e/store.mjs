@@ -91,8 +91,7 @@ try {
   await g.shot('06-cyberpunk'); await g.close();
 
   g = await open(progress(14, 'dark', 'oceano'), 'tienda');
-  await g.tap(...g.pos.stats, 600);
-  await g.tap(...g.pos.statsSkins, 700);
+  await g.openSkins(700);
   await g.shot('07-aspectos'); await g.close();
 
   g = await open(progress(14, 'dark', 'aurora'), 'aurora');

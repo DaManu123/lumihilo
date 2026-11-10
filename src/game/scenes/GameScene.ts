@@ -120,12 +120,15 @@ import {
   BoardGeometry,
   computeHudLayout,
   computeBoardGeometry,
+  computeMenuLayout,
 } from '../layout';
 import { storage, feedback, UserSettings, RotationDirection, createUpdateService, UpdateService } from '../../services';
 import { APP_VERSION } from '../../config';
 import { UpdateInfo, isUpdateAvailable } from '../../core/updates';
 import { parseLastCheck, retryDelay, serializeLastCheck, shouldRecheck } from '../../core/updateRetry';
 import { APP_NAME } from '../../config';
+import { pickGreeting } from '../../core/greeting';
+import { SavedGame, SavedGames, MAX_SAVED_FLOW_UNDO, hasProgress, matchesLevel } from '../../core/savedGames';
 
 interface CellView {
   container: Phaser.GameObjects.Container;
@@ -283,6 +286,8 @@ export class GameScene extends Phaser.Scene {
   private flowMissingPulse?: Phaser.Tweens.Tween;
   private lastLightsTap: { row: number; col: number } | null = null;
   private dailyKey = '';
+  /** Partidas a medias de cada puzzle (ver `core/savedGames.ts`). */
+  private savedGames: SavedGames = {};
 
   // Contenedores de UI
   private headerContainer!: Phaser.GameObjects.Container;
@@ -328,7 +333,7 @@ export class GameScene extends Phaser.Scene {
     setActiveTheme(this.settings.theme, this.settings.highContrast === true, this.settings.skin);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.puzzle = isPuzzleType(this.settings.puzzle) ? this.settings.puzzle : 'circuits';
-    this.currentLevelIndex = this.puzzleLevel();
+    this.savedGames = storage.loadSavedGames();
     // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
     if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
     if (!isHapticMode(this.settings.hapticsMode)) this.settings.hapticsMode = 'all';
@@ -359,14 +364,27 @@ export class GameScene extends Phaser.Scene {
     this.controlsContainer = this.add.container(0, 0);
 
     // El nivel debe existir antes de construir la interfaz (el HUD lee sus datos)
-    this.loadLevel(this.currentLevelIndex);
+    this.loadPuzzleState(this.puzzle);
     this.buildUi();
     this.buildBoard();
     this.updateFlowVisuals();
-    this.checkAndShowTutorial();
     this.scheduleUpdateCheck();
-    this.maybeShowLightsTutorial();
-    this.maybeShowFlowTutorial();
+    // La app siempre abre en el menú principal; el puzzle (y su tutorial) se abre al elegirlo
+    this.inMenu = true;
+    this.menuGreeting = pickGreeting(new Date().getHours());
+    this.setGameVisible(false);
+    this.buildMenu();
+    // Partida a medias: se guarda al salir a segundo plano o cerrar la app (la app puede cerrarse sin avisar)
+    const saveNow = () => this.persistGame();
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') saveNow();
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', saveNow);
+    this.events.once('shutdown', () => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', saveNow);
+    });
     // Hilos se juega arrastrando: el movimiento y el soltar se siguen en toda la pantalla (el dedo puede salirse del tablero)
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.flowPointerMove(pointer));
     this.input.on('pointerup', () => this.flowPointerUp());
@@ -377,9 +395,10 @@ export class GameScene extends Phaser.Scene {
       delay: 1000,
       loop: true,
       callback: () => {
-        if (!this.isWon) {
+        if (!this.isWon && !this.inMenu) {
           this.elapsedTime++;
           this.updateHud();
+          if (this.elapsedTime % 10 === 0) this.persistGame();
         }
       },
     });
@@ -452,6 +471,8 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
     this.updateUndoButtonState();
     this.updateHintButtonState();
+    // Cambios de tema, idioma o aspecto: el menú, si está abierto, se rehace con la nueva paleta
+    if (this.inMenu) this.buildMenu();
   }
 
   private uiText(x: number, y: number, text: string, opts: TextOptions = {}): Phaser.GameObjects.Text {
@@ -637,7 +658,7 @@ export class GameScene extends Phaser.Scene {
     const lastDaily = lastDailyOf(this.progress, this.puzzle);
     const dailyDone = lastDaily === dateKey(new Date());
 
-    this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: t('Modo') });
+    this.setSegment(this.modeSeg, { label: t('Menú'), kind: 'menu', sub: this.modeLabel(this.profile.mode) });
     this.setSegment(
       this.dailySeg,
       this.isDaily
@@ -660,7 +681,7 @@ export class GameScene extends Phaser.Scene {
 
     // Barra de modo / reto diario / tema
     const [mode, daily, theme] = this.createSegmentedBar(c, this.hud.modeBar, this.hud.modeSegments, [
-      () => this.cycleGameMode(),
+      () => this.goToMenu(),
       () => this.toggleDaily(),
       // Se difiere para no destruir el botón mientras se procesa su propio toque
       () => this.time.delayedCall(0, () => this.toggleTheme()),
@@ -1381,7 +1402,7 @@ export class GameScene extends Phaser.Scene {
   /** Primera vez que se juega Luces: muestra el mini tutorial (una sola vez; se vuelve a ver tocando el panel de luces). */
   private maybeShowLightsTutorial(): void {
     if (this.puzzle !== 'lights' || this.isDaily) return;
-    if (!this.settings.hasSeenTutorial || this.settings.hasSeenLightsTip) return;
+    if (this.settings.hasSeenLightsTip) return;
     if (this.overlayOpen()) return;
     this.showLightsTutorial();
   }
@@ -1512,7 +1533,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkAndShowTutorial(): void {
-    if (this.settings.hasSeenTutorial) return;
+    if (this.puzzle !== 'circuits' || this.settings.hasSeenTutorial) return;
 
     const cardH = 700;
     const { overlay, w } = this.createCard(cardH, 100);
@@ -1566,13 +1587,14 @@ export class GameScene extends Phaser.Scene {
       [t('Niveles resueltos'), String(stats.levelsSolved)],
       [t('Sin pistas y sin fallos'), String(stats.perfectSolves)],
       [t('Retos diarios'), String(stats.dailyCompleted)],
+      [t('Puzzle'), t(PUZZLE_LABELS[this.puzzle])],
       [t('Mejor tiempo (habilidad {0})', tier), best !== undefined ? this.formatTime(best) : '—'],
       [t('Nivel de habilidad'), String(tier)],
       [t('Puntuación'), String(this.profile.rating)],
     ];
 
     const rowH = 58;
-    const cardH = 150 + rows.length * rowH + 190 + 150;
+    const cardH = 150 + rows.length * rowH + 40 + 130;
     const { overlay, w } = this.createCard(cardH, 200);
     overlay.add(this.uiText(0, -cardH / 2 + 70, t('Estadísticas'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
@@ -1582,46 +1604,7 @@ export class GameScene extends Phaser.Scene {
       y += rowH;
     });
 
-    // Puzzle al que se juega
-    this.addChoiceRow(
-      overlay,
-      w,
-      y + 30,
-      t('Puzzle'),
-      PUZZLES.map((puzzle) => ({ value: puzzle, label: t(PUZZLE_LABELS[puzzle]) })),
-      this.puzzle,
-      (value) => {
-        overlay.destroy();
-        this.setPuzzle(value as PuzzleType);
-      }
-    );
-
-    // Tres botones: Ajustes y Aspectos (secundarios) y Cerrar (principal)
-    const gap = 14;
-    const btnW = (w - 88 - 2 * gap) / 3;
-    const btnY = cardH / 2 - 84;
-    const slot = (i: number) => (i - 1) * (btnW + gap);
-    this.addCardButton(
-      overlay,
-      { x: slot(0), y: btnY, w: btnW, h: 100 },
-      t('Ajustes'),
-      () => {
-        overlay.destroy();
-        this.showSettingsModal();
-      },
-      false
-    );
-    this.addCardButton(
-      overlay,
-      { x: slot(1), y: btnY, w: btnW, h: 100 },
-      t('Aspectos'),
-      () => {
-        overlay.destroy();
-        this.showSkinsModal();
-      },
-      false
-    );
-    this.addCardButton(overlay, { x: slot(2), y: btnY, w: btnW, h: 100 }, t('Cerrar'), () => overlay.destroy(), true);
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Cerrar'), () => overlay.destroy(), true);
   }
 
   /**
@@ -2139,6 +2122,249 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Partidas a medias
+  // ---------------------------------------------------------------------------
+
+  private lastSavedJson = '';
+
+  /** «Foto» de la partida en curso, o null si no hay nada que guardar (sin jugadas, ganada o en el menú sin tablero). */
+  private snapshotGame(): SavedGame | null {
+    if (this.isWon || (this.tapCount === 0 && this.hintsUsed === 0)) return null;
+    const { width, height } = this.currentParams;
+    const game: SavedGame = {
+      level: this.currentLevelIndex,
+      daily: this.isDaily,
+      dailyKey: this.isDaily ? this.dailyKey : '',
+      seed: this.currentLevelData.seed,
+      width,
+      height,
+      minTaps: this.currentLevelData.minTaps,
+      elapsed: this.elapsedTime,
+      taps: this.tapCount,
+      hints: this.hintsUsed,
+      moves: this.moveHistory.slice(-400).map((m) => [m.row, m.col, m.step] as [number, number, number]),
+    };
+    if (this.puzzle === 'circuits') {
+      game.rotations = this.board.grid.flat().map((cell) => cell.rotation);
+    } else if (this.puzzle === 'lights') {
+      game.lights = this.lightGrid.flat();
+      game.lastLightsTap = this.lastLightsTap ? [this.lastLightsTap.row, this.lastLightsTap.col] : null;
+    } else {
+      const keep = Math.min(MAX_SAVED_FLOW_UNDO, this.flowUndo.length);
+      game.paths = this.flowState.paths.map((path) => path.map((c) => ({ row: c.row, col: c.col })));
+      game.flowUndo = this.flowUndo.slice(this.flowUndo.length - keep).map((state) => state.paths.map((path) => path.map((c) => ({ row: c.row, col: c.col }))));
+      game.moves = game.moves.slice(game.moves.length - keep);
+    }
+    return game;
+  }
+
+  /** Guarda (o borra, si ya no hay partida) la partida a medias del puzzle activo. */
+  private persistGame(): void {
+    const snapshot = this.snapshotGame();
+    if (snapshot) this.savedGames[this.puzzle] = snapshot;
+    else delete this.savedGames[this.puzzle];
+    const json = JSON.stringify(this.savedGames);
+    if (json === this.lastSavedJson) return;
+    this.lastSavedJson = json;
+    storage.saveSavedGames(this.savedGames);
+  }
+
+  /** Devuelve el tablero recién cargado a como se dejó. False (sin tocar nada) si la partida no es de este nivel. */
+  private applySavedGame(saved: SavedGame): boolean {
+    const { width, height } = this.currentParams;
+    const sameLevel = matchesLevel(saved, {
+      level: this.currentLevelIndex,
+      daily: this.isDaily,
+      dailyKey: this.dailyKey,
+      seed: this.currentLevelData.seed,
+      width,
+      height,
+      minTaps: this.currentLevelData.minTaps,
+    });
+    if (!sameLevel) return false;
+    let moves = saved.moves.map(([row, col, step]) => ({ row, col, step }));
+
+    if (this.puzzle === 'circuits') {
+      const cells = this.board.grid.flat();
+      if (!saved.rotations || saved.rotations.length !== cells.length) return false;
+      cells.forEach((cell, i) => (cell.rotation = saved.rotations![i]));
+    } else if (this.puzzle === 'lights') {
+      if (!saved.lights || saved.lights.length !== width * height) return false;
+      const lights = saved.lights;
+      this.lightGrid = Array.from({ length: height }, (_, r) => lights.slice(r * width, (r + 1) * width));
+      this.lastLightsTap = saved.lastLightsTap ? { row: saved.lastLightsTap[0], col: saved.lastLightsTap[1] } : null;
+    } else {
+      const size = this.flowLevelData.params.size;
+      const pairs = this.flowLevelData.pairs.length;
+      const valid = (paths: FlowCell[][]) => paths.length === pairs && paths.every((p) => p.every((c) => c.row < size && c.col < size));
+      if (!saved.paths || !valid(saved.paths)) return false;
+      const copy = (paths: FlowCell[][]) => paths.map((path) => path.map((c) => ({ row: c.row, col: c.col })));
+      this.flowState = { paths: copy(saved.paths) };
+      const undo = saved.flowUndo ?? [];
+      if (undo.every(valid) && undo.length === moves.length) this.flowUndo = undo.map((state) => ({ paths: copy(state) }));
+      else {
+        this.flowUndo = [];
+        moves = [];
+      }
+    }
+    this.tapCount = saved.taps;
+    this.hintsUsed = saved.hints;
+    this.elapsedTime = saved.elapsed;
+    this.moveHistory = moves;
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Menú principal
+  // ---------------------------------------------------------------------------
+
+  private menuContainer?: Phaser.GameObjects.Container;
+  private inMenu = false;
+  private menuGreeting = '';
+
+  /** Muestra u oculta lo que hay del juego (encabezado, tablero y controles) detrás del menú. */
+  private setGameVisible(visible: boolean): void {
+    this.headerContainer.setVisible(visible);
+    this.boardContainer.setVisible(visible);
+    this.controlsContainer.setVisible(visible);
+  }
+
+  /** Sale de la partida al menú principal (la partida a medias se guarda). */
+  private goToMenu(): void {
+    if (this.inMenu || this.isWon) return;
+    this.flowDrag = null;
+    this.persistGame();
+    this.inMenu = true;
+    this.menuGreeting = pickGreeting(new Date().getHours());
+    this.setGameVisible(false);
+    this.buildMenu();
+  }
+
+  /** Entra a un puzzle desde el menú: retoma su partida a medias o empieza su nivel actual. */
+  private playPuzzle(puzzle: PuzzleType): void {
+    if (!this.inMenu) return;
+    this.inMenu = false;
+    this.menuContainer?.destroy(true);
+    this.menuContainer = undefined;
+    this.setGameVisible(true);
+    if (puzzle !== this.puzzle) {
+      this.loadPuzzleState(puzzle);
+      this.buildUi();
+      this.buildBoard();
+      this.updateFlowVisuals();
+    }
+    this.checkAndShowTutorial();
+    this.maybeShowLightsTutorial();
+    this.maybeShowFlowTutorial();
+  }
+
+  /** Botón del menú: con contorno, o relleno si es la opción elegida. */
+  private menuButton(c: Phaser.GameObjects.Container, rect: Rect, label: string, onTap: () => void, selected = false): void {
+    const g = this.add.graphics();
+    if (selected) {
+      g.fillStyle(THEME.primary, 1);
+      g.fillRoundedRect(rect.x - rect.w / 2, rect.y - rect.h / 2, rect.w, rect.h, 26);
+    } else {
+      g.fillStyle(THEME.surface, 1);
+      g.fillRoundedRect(rect.x - rect.w / 2, rect.y - rect.h / 2, rect.w, rect.h, 26);
+      g.lineStyle(2, THEME.cardBorder, 1);
+      g.strokeRoundedRect(rect.x - rect.w / 2, rect.y - rect.h / 2, rect.w, rect.h, 26);
+    }
+    const text = this.uiText(rect.x, rect.y, label, {
+      size: FONT.button,
+      weight: '700',
+      color: selected ? THEME.onPrimary : THEME.text,
+      originX: 0.5,
+    });
+    c.add([g, text, this.hitZone(rect, onTap)]);
+  }
+
+  /** Tarjeta de un puzzle: icono, nombre, qué se hace, por dónde va y si hay partida a medias. */
+  private menuCard(c: Phaser.GameObjects.Container, rect: Rect, puzzle: PuzzleType): void {
+    const saved = this.savedGames[puzzle];
+    const inProgress = !!saved && hasProgress(saved);
+    const left = rect.x - rect.w / 2;
+    const top = rect.y - rect.h / 2;
+    const panel = this.add.graphics();
+    panel.fillStyle(THEME.surface, 1);
+    panel.fillRoundedRect(left, top, rect.w, rect.h, 30);
+    panel.lineStyle(2, THEME.cardBorder, 1);
+    panel.strokeRoundedRect(left, top, rect.w, rect.h, 30);
+    const icon = this.add.graphics();
+    drawIcon(icon, puzzle, left + 84, rect.y, 68, THEME.primary, THEME.surface);
+
+    const descriptions: Record<PuzzleType, string> = {
+      circuits: t('Gira y conecta todo'),
+      lights: t('Enciende todas las luces'),
+      flow: t('Une parejas y llena todo'),
+    };
+    const dailyDone = lastDailyOf(this.progress, puzzle) === dateKey(new Date());
+    c.add([
+      panel,
+      icon,
+      this.uiText(left + 150, rect.y - 42, t(PUZZLE_LABELS[puzzle]), { size: 34, display: true }),
+      this.uiText(left + 150, rect.y - 2, descriptions[puzzle], { size: FONT.small, weight: '500', color: THEME.mutedText }),
+      this.uiText(left + 150, rect.y + 38, inProgress ? t('Partida en curso') : t('Nivel {0}', levelOf(this.progress, puzzle)), {
+        size: FONT.small,
+        weight: '700',
+        color: THEME.primaryCss,
+      }),
+      this.uiText(left + rect.w - 28, rect.y - 42, inProgress ? t('Continuar') : t('Jugar'), { size: FONT.button, weight: '700', originX: 1 }),
+      this.uiText(left + rect.w - 28, rect.y + 38, dailyDone ? t('Diario hecho') : t('Diario disponible'), {
+        size: FONT.small,
+        weight: '500',
+        color: THEME.mutedText,
+        originX: 1,
+      }),
+      this.hitZone(rect, () => this.playPuzzle(puzzle)),
+    ]);
+  }
+
+  /** (Re)dibuja el menú principal con la paleta, el idioma y los datos de ahora. */
+  private buildMenu(): void {
+    this.menuContainer?.destroy(true);
+    const { width, height } = this.cameras.main;
+    const layout = computeMenuLayout(width, height);
+    const c = this.add.container(0, 0).setDepth(90);
+    this.menuContainer = c;
+
+    c.add(this.uiText(width / 2, layout.titleY, APP_NAME, { size: 60, display: true, color: THEME.primaryCss, originX: 0.5 }));
+
+    const sparks = this.uiText(width / 2 + 18, layout.sparksY, formatSparks(this.progress.sparks), {
+      size: FONT.display,
+      display: true,
+      color: THEME.primaryCss,
+      originX: 0.5,
+    });
+    const sparksIcon = this.add.graphics();
+    drawIcon(sparksIcon, 'spark', width / 2 + 18 - sparks.width / 2 - 28, layout.sparksY, 34, THEME.primary);
+    c.add([sparksIcon, sparks]);
+
+    PUZZLES.forEach((puzzle, i) => this.menuCard(c, layout.cards[i], puzzle));
+
+    c.add(this.uiText(width / 2, layout.modeLabelY, t('Modo'), { size: FONT.small, weight: '600', color: THEME.mutedText, originX: 0.5 }));
+    const modes: GameMode[] = ['relaxed', 'normal', 'challenge'];
+    modes.forEach((mode, i) => {
+      this.menuButton(c, layout.modes[i], this.modeLabel(mode), () => this.setGameMode(mode), this.profile.mode === mode);
+    });
+
+    this.menuButton(c, layout.tools[0], t('Estadísticas'), () => this.showStatsModal());
+    this.menuButton(c, layout.tools[1], t('Aspectos'), () => this.showSkinsModal());
+    this.menuButton(c, layout.tools[2], t('Ajustes'), () => this.showSettingsModal());
+
+    c.add(
+      this.uiText(width / 2, layout.greetingY, t(this.menuGreeting), {
+        size: 26,
+        weight: '500',
+        color: THEME.mutedText,
+        align: 'center',
+        wrap: width - 2 * MARGIN - 40,
+        originX: 0.5,
+      })
+    );
+  }
+
   private startLevel(levelIndex: number): void {
     this.loadLevel(levelIndex);
 
@@ -2148,6 +2374,7 @@ export class GameScene extends Phaser.Scene {
       storage.saveProgress(this.progress);
     }
 
+    this.persistGame();
     this.updateHud();
     this.updateUndoButtonState();
     this.updateHintButtonState();
@@ -2155,12 +2382,9 @@ export class GameScene extends Phaser.Scene {
     this.updateFlowVisuals();
   }
 
-  private cycleGameMode(): void {
-    const modes: GameMode[] = ['relaxed', 'normal', 'challenge'];
-    const currentIndex = modes.indexOf(this.profile.mode);
-    const nextMode = modes[(currentIndex + 1) % modes.length];
-
-    // El modo es del jugador, no de un puzzle: se cambia en los tres perfiles (cada uno conserva su peldaño)
+  /** Cambia el modo de juego (desde el menú). Es del jugador, no de un puzzle: se cambia en los tres perfiles. */
+  private setGameMode(nextMode: GameMode): void {
+    if (nextMode === this.profile.mode) return;
     for (const puzzle of PUZZLES) {
       const profile = this.profiles[puzzle];
       profile.mode = nextMode;
@@ -2168,11 +2392,16 @@ export class GameScene extends Phaser.Scene {
       if (nextMode === 'normal') profile.currentTier = Math.max(2, Math.min(profile.currentTier, 6));
       if (nextMode === 'challenge') profile.currentTier = Math.max(5, profile.currentTier);
       storage.saveProfile(profile, puzzle);
+      // Cambiar de modo reinicia la progresión de niveles de cada puzzle
+      this.progress = withLevel(this.progress, puzzle, 1);
     }
-
-    // Cambiar de modo reinicia la progresión de niveles (y sale del reto diario)
+    storage.saveProgress(this.progress);
+    // Las partidas a medias eran de otra dificultad: ya no valen
+    this.savedGames = {};
+    storage.saveSavedGames(this.savedGames);
     this.isDaily = false;
     this.startLevel(1);
+    if (this.inMenu) this.buildMenu();
   }
 
   private toggleDaily(): void {
@@ -2187,17 +2416,34 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Cambia de puzzle: lo guarda, rehace la interfaz (el panel del giro cambia) y, si se pide, arranca su nivel actual. */
-  private setPuzzle(puzzle: PuzzleType, start = true): void {
+  /**
+   * Prepara el puzzle dado (sin tocar la interfaz): lo deja como puzzle activo y carga su partida a medias si la hay y
+   * sigue siendo del mismo nivel; si no, carga el nivel por el que va el jugador.
+   */
+  private loadPuzzleState(puzzle: PuzzleType): void {
     this.puzzle = puzzle;
-    this.settings.puzzle = puzzle;
-    storage.saveSettings(this.settings);
+    if (this.settings.puzzle !== puzzle) {
+      this.settings.puzzle = puzzle;
+      storage.saveSettings(this.settings);
+    }
     feedback.setPuzzle(puzzle);
-    this.isDaily = false;
-    this.buildUi();
-    if (start) this.startLevel(this.puzzleLevel());
-    if (start) this.maybeShowLightsTutorial();
-    if (start) this.maybeShowFlowTutorial();
+    this.flowDrag = null;
+    const saved = this.savedGames[puzzle];
+    // Una partida del reto diario solo se retoma el mismo día
+    const resumeDaily = !!saved && saved.daily && saved.dailyKey === dateKey(new Date());
+    this.isDaily = resumeDaily;
+    if (resumeDaily) this.dailyKey = saved!.dailyKey;
+    this.loadLevel(resumeDaily ? 1 : this.puzzleLevel());
+    if (saved && this.applySavedGame(saved)) return;
+    if (saved) {
+      // La partida guardada ya no corresponde a este nivel: se descarta
+      delete this.savedGames[puzzle];
+      storage.saveSavedGames(this.savedGames);
+      if (resumeDaily) {
+        this.isDaily = false;
+        this.loadLevel(this.puzzleLevel());
+      }
+    }
   }
 
   private toggleTheme(): void {
@@ -2906,7 +3152,7 @@ export class GameScene extends Phaser.Scene {
   /** Primera vez que se juega Hilos: muestra el mini tutorial (una sola vez; se vuelve a ver tocando el panel de hilos). */
   private maybeShowFlowTutorial(): void {
     if (this.puzzle !== 'flow' || this.isDaily) return;
-    if (!this.settings.hasSeenTutorial || this.settings.hasSeenFlowTip) return;
+    if (this.settings.hasSeenFlowTip) return;
     if (this.overlayOpen()) return;
     this.showFlowTutorial();
   }
@@ -3355,6 +3601,7 @@ export class GameScene extends Phaser.Scene {
     this.updateUndoButtonState();
     this.updateHintButtonState();
     if (this.timerEvent) this.timerEvent.paused = true;
+    this.persistGame(); // una partida ganada ya no se retoma
 
     const today = dateKey(new Date());
     const minTaps = this.currentLevelData.minTaps;

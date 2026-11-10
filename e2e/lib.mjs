@@ -98,7 +98,7 @@ export const RICH = {
  * Abre el juego en un contexto limpio. Devuelve utilidades para tocar el lienzo, leer el estado guardado
  * y contar lo que suena y vibra (se instrumentan AudioContext y navigator.vibrate antes de cargar).
  */
-export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null, scale = 1 } = {}) {
+export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null, scale = 1, menu = false } = {}) {
   const ctx = await (scenarioLog.getStore()?.browser ?? browser).newContext({
     viewport: { width, height },
     deviceScaleFactor: scale,
@@ -178,6 +178,8 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     if (mobile) await page.touchscreen.tap(p.x, p.y);
     else await page.mouse.click(p.x, p.y);
     await page.waitForTimeout(wait);
+    // Ajustes y Aspectos se abren desde el menú y al cerrarlos se vuelve a él: las pruebas siguen jugando, así que se reentra
+    if (g.menuOpen && g.pos && [g.pos.settingsDone, g.pos.skinsDone].some(([x, y]) => x === lx && y === ly)) await g.enter();
   };
   // Arrastra el ratón (o el dedo) por una lista de puntos del lienzo: pulsa en el primero, pasa por los demás y suelta
   g.drag = async (points, wait = 350, stepWait = 40) => {
@@ -200,7 +202,13 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     };
     return { progress: read('player_progress'), settings: read('user_settings'), profile: read('profile_adaptive') };
   });
-  g.reload = async () => { await page.reload(); await page.waitForSelector('canvas'); await page.waitForTimeout(1300); };
+  g.reload = async () => {
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(1300);
+    g.menuOpen = true; // la app siempre abre en el menú principal
+    if (!menu) await g.enter();
+  };
   g.audio = () => page.evaluate(() => ({ osc: window.__osc, vib: window.__vib, src: window.__src }));
   g.meter = () => page.evaluate(() => (window.__meter ? window.__meter() : null));
   g.shot = (name) => page.screenshot({ path: `${out}/${name}.png` });
@@ -213,9 +221,12 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     reset: [136, 378], undo: [360, 378], hint: [584, 378],
     dir: [360, 502], stats: [650, 56],
     tutorialOk: [360, H / 2 + 700 / 2 - 84],
-    // Estadísticas (tarjeta de 1012 px): selector de puzzle y "Ajustes", "Aspectos" y "Cerrar"
-    puzzleCircuits: [360 - 186.7, H / 2 + 290], puzzleLights: [360, H / 2 + 290], puzzleFlow: [360 + 186.7, H / 2 + 290],
-    statsSettings: [360 - 191.3, H / 2 + 1012 / 2 - 84], statsSkins: [360, H / 2 + 1012 / 2 - 84], statsClose: [360 + 191.3, H / 2 + 1012 / 2 - 84],
+    // Estadísticas (tarjeta de 900 px): solo los números y «Cerrar»
+    statsClose: [360, H / 2 + 900 / 2 - 84],
+    // Menú principal (ver computeMenuLayout): tarjetas de puzzles, modos y accesos
+    menuCard: (i) => [360, (H - 200) / 2 + (i - 1) * 192],
+    menuMode: (i) => [360 + (i - 1) * 228, H - 350],
+    menuStats: [132, H - 220], menuSkins: [360, H - 220], menuSettings: [588, H - 220],
     // Aspectos (tarjeta de 1220 px, filas de 130 px)
     skinRow: (i) => [360, H / 2 - 385 + 130 * i], skinsDone: [360, H / 2 + 526],
     // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
@@ -239,6 +250,26 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     modeAll: [136, H / 2 + 199], modeSystem: [248, H / 2 + 199], modeMotor: [360, H / 2 + 199], modeTouch: [472, H / 2 + 199], modeAlarm: [584, H / 2 + 199],
     hapticsTest: [360 - 144.5, H / 2 + 491], hapticsDone: [360 + 144.5, H / 2 + 491],
   };
+  // Menú principal: la app siempre abre en él. Salvo `menu: true`, se entra al puzzle guardado para jugar
+  const PUZZLE_ORDER = ['circuits', 'lights', 'flow'];
+  const savedPuzzle = () => page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('user_settings') ?? '{}')?.puzzle ?? 'circuits'; } catch { return 'circuits'; }
+  });
+  g.menuOpen = true;
+  g.openMenu = async (wait = 500) => {
+    if (g.menuOpen) return;
+    await g.tap(...g.pos.mode, wait);
+    g.menuOpen = true;
+  };
+  g.enter = async (puzzle, wait = 700) => {
+    const index = Math.max(0, PUZZLE_ORDER.indexOf(puzzle ?? (await savedPuzzle())));
+    g.menuOpen = false;
+    await g.tap(...g.pos.menuCard(index), wait);
+  };
+  g.playPuzzle = async (puzzle, wait = 900) => { await g.openMenu(); await g.enter(puzzle, wait); };
+  g.openSettings = async (wait = 500) => { await g.openMenu(); await g.tap(...g.pos.menuSettings, wait); };
+  g.openSkins = async (wait = 600) => { await g.openMenu(); await g.tap(...g.pos.menuSkins, wait); };
+  if (!menu) await g.enter();
   return g;
 }
 

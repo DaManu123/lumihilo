@@ -154,9 +154,10 @@ export async function runGameScenarios(out) {
   }]);
 
   sections.push(['10. Sonido, música, vibración y ajustes', async () => {
-    const g = await openGame({ label: 'sonido', seed: SEEN_TUTORIAL, out });
+    const g = await openGame({ label: 'sonido', seed: SEEN_TUTORIAL, out, menu: true });
     let a = await g.audio();
     check('no suena nada antes del primer toque (los navegadores exigen un gesto)', a.osc === 0);
+    await g.enter(); // el primer toque es el de la tarjeta del puzzle en el menú
 
     await g.tap(...g.pos.hint, 450);
     a = await g.audio();
@@ -174,8 +175,7 @@ export async function runGameScenarios(out) {
     const after = await g.audio();
     check('girar una casilla vibra', after.vib > before.vib, `${before.vib} → ${after.vib}`);
 
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.shot('e10-ajustes');
 
     await g.tap(...g.pos.setMusic, 400);
@@ -198,8 +198,7 @@ export async function runGameScenarios(out) {
     check('sin música ni efectos el juego es silencioso', quiet2.osc === quiet.osc, `${quiet.osc} → ${quiet2.osc}`);
 
     // Vibración: desactivarla bloquea la intensidad; al activarla se puede elegir
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.setHaptics, 400);
     s = await g.state();
     check('el interruptor de vibración la desactiva y lo guarda', s.settings?.hapticsEnabled === false);
@@ -237,8 +236,7 @@ export async function runGameScenarios(out) {
     const quiet = (await g.audio()).osc;
     await g.page.waitForTimeout(4000);
     check('con la música desactivada de antes no suena sola', (await g.audio()).osc === quiet);
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.setMusic, 400);
     await g.tap(...g.pos.settingsDone, 400);
     await g.page.waitForTimeout(4500);
@@ -269,8 +267,7 @@ export async function runGameScenarios(out) {
     let a = await g.audio();
     check('el estilo por defecto es swing: usa percusión (escobillas)', a.src > 0, `fuentes de ruido ${a.src}`);
 
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.shot('e12-ajustes-completos');
     let s = await g.state();
     check('los ajustes de música aún no se han tocado (usan los valores por defecto)', s.settings?.musicVolume === undefined || s.settings?.musicVolume === 100);
@@ -334,8 +331,7 @@ export async function runGameScenarios(out) {
     });
     check('el juego arranca con ajustes de música y vibración inválidos', !!(await g.page.$('canvas')));
     await g.tap(...g.pos.hint, 450);
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.volume(120), 300);
     const s = await g.state();
     check('y se recupera: la barra funciona con normalidad', s.settings?.musicVolume === 120, `guardado ${s.settings?.musicVolume}`);
@@ -344,8 +340,7 @@ export async function runGameScenarios(out) {
 
   sections.push(['14. Prueba y diagnóstico de la vibración', async () => {
     const g = await openGame({ label: 'diagnostico', seed: SEEN_TUTORIAL, out });
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.diagnose, 600);
     await g.shot('e14-diagnostico');
     check('el diagnóstico se abre en el navegador sin errores', !!(await g.page.$('canvas')));
@@ -377,8 +372,7 @@ export async function runGameScenarios(out) {
 
   sections.push(['15. Accesibilidad: alto contraste, marcas y velocidad de animación', async () => {
     const g = await openGame({ label: 'accesibilidad', seed: { user_settings: { hasSeenTutorial: true, animationSpeed: 'turbo' } }, out });
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.accessibility, 600);
     await g.shot('e15-accesibilidad');
     let s = await g.state();
@@ -415,8 +409,7 @@ export async function runGameScenarios(out) {
   sections.push(['16. Idioma: español e inglés', async () => {
     const g = await openGame({ label: 'idioma', seed: { user_settings: { hasSeenTutorial: true, language: 'klingon' } }, out });
     check('con un idioma inválido guardado el juego arranca', !!(await g.page.$('canvas')));
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.accessibility, 600);
     await g.tap(...g.pos.langEn, 700);
     let s = await g.state();
@@ -431,7 +424,8 @@ export async function runGameScenarios(out) {
     check('el idioma persiste al recargar', s.settings?.language === 'en');
     await g.tap(...g.pos.stats, 500);
     await g.shot('e16-estadisticas-ingles');
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.tap(...g.pos.statsClose, 400);
+    await g.openSettings(500);
     await g.tap(...g.pos.accessibility, 600);
     await g.tap(...g.pos.langEs, 700);
     s = await g.state();
@@ -452,8 +446,7 @@ export async function runGameScenarios(out) {
   sections.push(['17. Tienda de aspectos', async () => {
     // Sin Chispas suficientes no se compra
     let g = await openGame({ label: 'aspectos-pobre', seed: { user_settings: { hasSeenTutorial: true } }, out });
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSkins, 600);
+    await g.openSkins(600);
     await g.shot('e17-aspectos');
     await g.tap(...g.pos.skinRow(2), 600);
     let s = await g.state();
@@ -465,8 +458,7 @@ export async function runGameScenarios(out) {
     // Con Chispas: compra, equipa, persiste y se puede cambiar de aspecto gratis una vez comprado
     g = await openGame({ label: 'aspectos', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
     const before = (await g.state()).progress.sparks;
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSkins, 600);
+    await g.openSkins(600);
     await g.tap(...g.pos.skinRow(1), 800);
     s = await g.state();
     check('comprar Cyberpunk lo equipa', s.settings?.skin === 'cyberpunk', `aspecto ${s.settings?.skin}`);
@@ -559,7 +551,7 @@ export async function runGameScenarios(out) {
     // Actualización dentro de la app (APK de GitHub en Android): se simula el plugin nativo
     const stubInstall = (g, result) => g.page.evaluate(`(() => { const u = ${scene}.updates; window.__installs = []; u.canInstallInApp = async () => true;
       u.install = async (info, cb) => { window.__installs.push(info.version); cb(null); cb(45); await new Promise((r) => setTimeout(r, 300)); return '${result}'; }; })()`);
-    const askUpdate = async (g) => { await g.tap(...g.pos.stats, 500); await g.tap(...g.pos.statsSettings, 600); await g.tap(...g.pos.settingsUpdates, 900); };
+    const askUpdate = async (g) => { await g.openSettings(600); await g.tap(...g.pos.settingsUpdates, 900); };
     g = await open(feed('v99.0.0'));
     await settle(g);
     await g.tap(...g.pos.updateLater, 500);
@@ -600,8 +592,7 @@ export async function runGameScenarios(out) {
     await settle(g);
     check('con una versión igual o más vieja no avisa', !(await cardOpen(g)));
     // Buscar a mano: dice que estás al día
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 600);
+    await g.openSettings(600);
     await g.tap(...g.pos.settingsUpdates, 900);
     check('«Buscar actualizaciones» dice que ya tienes la última versión', (await texts(g)).includes('Ya tienes la última versión'), await texts(g));
     await g.shot('e18-al-dia');
@@ -610,8 +601,7 @@ export async function runGameScenarios(out) {
     g = await open(feed('v99.0.0'));
     await settle(g);
     await g.tap(...g.pos.updateLater, 500);
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 600);
+    await g.openSettings(600);
     await g.tap(...g.pos.settingsUpdates, 900);
     check('«Buscar actualizaciones» vuelve a ofrecer la versión nueva', await cardOpen(g));
     await g.close();
@@ -619,8 +609,7 @@ export async function runGameScenarios(out) {
     g = await open('{"message":"rate limit"}', 403);
     await settle(g);
     check('si las dos fuentes fallan, no avisa ni rompe nada', !(await cardOpen(g)) && !!(await g.page.$('canvas')));
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 600);
+    await g.openSettings(600);
     await g.tap(...g.pos.settingsUpdates, 900);
     const failure = await texts(g);
     check('«Buscar actualizaciones» explica por qué falló', failure.includes('No se pudo consultar') && failure.includes('HTTP 403'), failure);
@@ -681,9 +670,9 @@ export async function runGameScenarios(out) {
     const lightsState = (g) => g.page.evaluate(`(() => { const sc = ${scene}; return { grid: sc.lightGrid.map((r) => [...r]), puzzle: sc.puzzle, minTaps: sc.currentLevelData.minTaps, views: sc.cellViews.map((row) => row.map((v) => ({ x: v.container.x, y: v.container.y }))) }; })()`);
     const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true };
     let g = await openGame({ label: 'luces', seed: { user_settings: { hasSeenTutorial: true }, ...RICH }, out, query: '?debug' });
-    await g.tap(...g.pos.stats, 500);
-    await g.shot('e19-estadisticas-puzzle');
-    await g.tap(...g.pos.puzzleLights, 900);
+    await g.openMenu();
+    await g.shot('e19-menu');
+    await g.playPuzzle('lights', 900);
     let s = await g.state();
     check('elegir Luces lo guarda', s.settings?.puzzle === 'lights', `guardado ${s.settings?.puzzle}`);
 
@@ -701,10 +690,8 @@ export async function runGameScenarios(out) {
     check('tocar el panel de luces vuelve a mostrar el tutorial', (await texts(g)).includes('Cómo se juega Luces'));
     await g.tap(...g.pos.lightsTutorialOk, 500);
     // Cambiar a Circuitos y volver a Luces no repite el tutorial
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.puzzleCircuits, 900);
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.puzzleLights, 900);
+    await g.playPuzzle('circuits', 900);
+    await g.playPuzzle('lights', 900);
     check('volver a Luces no repite el tutorial', !(await texts(g)).includes('Cómo se juega Luces'));
 
     let st = await lightsState(g);
@@ -829,9 +816,9 @@ export async function runGameScenarios(out) {
 
     // Elegir Hilos: tutorial la primera vez
     let g = await openGame({ label: 'hilos', seed: { user_settings: { hasSeenTutorial: true }, ...RICH }, out, query: '?debug' });
-    await g.tap(...g.pos.stats, 500);
-    await g.shot('e20-estadisticas-puzzle');
-    await g.tap(...g.pos.puzzleFlow, 900);
+    await g.openMenu();
+    await g.shot('e20-menu');
+    await g.playPuzzle('flow', 900);
     let s = await g.state();
     check('elegir Hilos lo guarda', s.settings?.puzzle === 'flow', `guardado ${s.settings?.puzzle}`);
     check('la primera vez en Hilos sale el mini tutorial', (await texts(g)).includes('Cómo se juega Hilos'));
@@ -975,6 +962,117 @@ export async function runGameScenarios(out) {
       check(`Hilos con ${label} se dibuja`, !!(await g.page.$('canvas')) && (await connected(g)) === 1);
       await g.close();
     }
+  }]);
+
+  sections.push(['21. Menú principal: puzzles, modos, saludo y partidas guardadas', async () => {
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => o.visible === false ? [] : [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
+    const info = (g) => g.page.evaluate(`(() => { const sc = ${scene}; return { inMenu: sc.inMenu, puzzle: sc.puzzle, taps: sc.tapCount, hour: new Date().getHours(), rotations: sc.board.grid.flat().map((c) => c.rotation), lights: sc.lightGrid.flat(), mode: sc.profile.mode }; })()`);
+    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true };
+    let g = await openGame({ label: 'menu', seed: { user_settings: SEEN, ...RICH }, out, query: '?debug', menu: true });
+
+    // La app abre en el menú: nombre, tres puzzles, modos, accesos y un saludo de la hora del dispositivo
+    let i = await info(g);
+    const tx = await texts(g);
+    check('la app abre en el menú principal', i.inMenu === true);
+    check('el menú muestra el nombre y los tres puzzles', ['Lumihilo', 'Circuitos', 'Luces', 'Hilos'].every((w) => tx.includes(w)), tx);
+    check('el menú muestra los modos y los accesos', ['Relajado', 'Normal', 'Reto', 'Estadísticas', 'Aspectos', 'Ajustes'].every((w) => tx.includes(w)));
+    const parts = {
+      morning: ['Buenos días', 'Buen día', 'Amanece', 'Arranca'],
+      afternoon: ['Buenas tardes', 'Buena tarde', 'Tómate', 'A media jornada'],
+      night: ['Buenas noches', 'Noche tranquila', 'Antes de dormir', 'La noche'],
+    };
+    const part = i.hour >= 5 && i.hour < 12 ? 'morning' : i.hour >= 12 && i.hour < 19 ? 'afternoon' : 'night';
+    check('el saludo es de la franja de la hora del dispositivo', parts[part].some((w) => tx.includes(w)), `hora ${i.hour}`);
+    check('el menú no es el juego: no se ven el cronómetro ni los toques', !/\d+ toques?/.test(tx));
+    await g.shot('e21-menu');
+
+    // Entrar a Circuitos, jugar y volver: la partida se conserva
+    await g.enter('circuits');
+    i = await info(g);
+    check('tocar Circuitos entra al juego', i.inMenu === false && i.puzzle === 'circuits');
+    await g.tap(200, 900, 450);
+    await g.tap(300, 1000, 450);
+    await g.tap(200, 900, 450);
+    const circuits = await info(g);
+    check('se juegan tres toques', circuits.taps === 3, `${circuits.taps}`);
+    await g.openMenu();
+    check('el botón Menú vuelve al menú', (await info(g)).inMenu === true);
+    const back = await texts(g);
+    check('Circuitos ya muestra Partida en curso y Continuar', back.includes('Partida en curso') && back.includes('Continuar'));
+    await g.shot('e21-menu-en-curso');
+
+    // Otro puzzle: su propia partida; la de Circuitos queda guardada
+    await g.enter('lights');
+    i = await info(g);
+    check('elegir Luces entra a Luces y lo guarda', i.puzzle === 'lights' && (await g.state()).settings?.puzzle === 'lights');
+    await g.tap(200, 900, 450);
+    await g.tap(300, 1000, 450);
+    const lights = await info(g);
+    check('Luces cuenta sus propios toques', lights.taps >= 1, `${lights.taps}`);
+    await g.openMenu();
+    await g.enter('circuits');
+    i = await info(g);
+    check('al volver a Circuitos retoma su partida (toques y piezas como las dejó)', i.puzzle === 'circuits' && i.taps === 3 && JSON.stringify(i.rotations) === JSON.stringify(circuits.rotations), `${i.taps}`);
+    await g.openMenu();
+    await g.enter('lights');
+    i = await info(g);
+    check('al volver a Luces retoma su partida', i.taps === lights.taps && JSON.stringify(i.lights) === JSON.stringify(lights.lights), `${i.taps}`);
+
+    // La partida sobrevive a cerrar y abrir la app (vuelve a abrir en el menú)
+    await g.openMenu();
+    check('hay partidas guardadas en el almacenamiento', await g.page.evaluate(() => { const s = JSON.parse(localStorage.getItem('saved_games') ?? '{}'); return !!s.circuits && !!s.lights; }));
+    await g.reload();
+    await g.openMenu();
+    check('al reabrir la app vuelve a abrir en el menú', (await info(g)).inMenu === true);
+    await g.enter('circuits');
+    i = await info(g);
+    check('tras cerrar y abrir la app Circuitos sigue como estaba', i.taps === 3 && JSON.stringify(i.rotations) === JSON.stringify(circuits.rotations), `${i.taps}`);
+    await g.openMenu();
+    await g.enter('lights');
+    i = await info(g);
+    check('tras cerrar y abrir la app Luces sigue como estaba', i.taps === lights.taps && JSON.stringify(i.lights) === JSON.stringify(lights.lights), `${i.taps}`);
+
+    // Reiniciar el nivel descarta la partida a medias
+    await g.tap(...g.pos.reset, 500);
+    i = await info(g);
+    check('reiniciar deja el nivel sin jugadas', i.taps === 0);
+    check('y borra la partida guardada de ese puzzle', await g.page.evaluate(() => !JSON.parse(localStorage.getItem('saved_games') ?? '{}').lights));
+
+    // Cambiar de modo desde el menú
+    await g.openMenu();
+    await g.tap(...g.pos.menuMode(2), 600);
+    i = await info(g);
+    check('elegir Reto cambia el modo y se queda en el menú', i.mode === 'challenge' && i.inMenu === true, `${i.mode}`);
+    check('cambiar de modo descarta las partidas a medias', await g.page.evaluate(() => localStorage.getItem('saved_games') === null));
+    await g.enter('circuits');
+    i = await info(g);
+    check('Circuitos arranca de cero en el nuevo modo', i.taps === 0 && i.mode === 'challenge');
+    await g.close();
+
+    // Estadísticas y Ajustes ya no van juntos: cada uno se abre aparte desde el menú
+    g = await openGame({ label: 'menu-accesos', seed: { user_settings: SEEN }, out, query: '?debug', menu: true });
+    await g.tap(...g.pos.menuStats, 500);
+    const all = await texts(g);
+    const st = all.slice(all.lastIndexOf('Estadísticas |')); // solo la tarjeta (el menú sigue debajo)
+    check('Estadísticas solo muestra números y Cerrar', st.includes('Racha actual') && st.includes('Cerrar') && !st.includes('Aspectos') && !st.includes('Ajustes'), st);
+    await g.shot('e21-estadisticas');
+    await g.tap(...g.pos.statsClose, 400);
+    check('cerrar Estadísticas deja el menú', (await info(g)).inMenu === true);
+    await g.tap(...g.pos.menuSettings, 500);
+    check('Ajustes se abre desde el menú', (await texts(g)).includes('Efectos de sonido') || (await texts(g)).includes('Música'));
+    await g.shot('e21-ajustes');
+    g.menuOpen = false; // aquí se quiere comprobar que Ajustes vuelve al menú, no reentrar al puzzle
+    await g.tap(...g.pos.settingsDone, 400);
+    g.menuOpen = true;
+    check('cerrar Ajustes deja el menú', (await info(g)).inMenu === true);
+    await g.close();
+
+    // Primera vez en Luces entrando directo desde el menú: sale su tutorial aunque no se haya visto el de Circuitos
+    g = await openGame({ label: 'menu-luces-nuevo', seed: { user_settings: {}, ...RICH }, out, query: '?debug', menu: true });
+    await g.enter('lights');
+    check('el tutorial de Luces sale al entrar por primera vez', (await texts(g)).includes('Cómo se juega Luces'));
+    await g.close();
   }]);
 
 

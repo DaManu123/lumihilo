@@ -53,22 +53,19 @@ export async function runAudioCheck() {
     await g.page.waitForTimeout(3500);
     const standard = await sample(g, 'Música swing al 100 % (estándar), 14 s', 14000);
 
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.volume(200), 300);
     await g.tap(...g.pos.settingsDone, 400);
     await g.page.waitForTimeout(1500);
     const loud = await sample(g, 'Música swing al 200 % (el doble), 14 s', 14000);
 
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.volume(50), 300);
     await g.tap(...g.pos.settingsDone, 400);
     await g.page.waitForTimeout(1500);
     const soft = await sample(g, 'Música swing al 50 % (la mitad), 14 s', 14000);
 
-    await g.tap(...g.pos.stats, 500);
-    await g.tap(...g.pos.statsSettings, 500);
+    await g.openSettings(500);
     await g.tap(...g.pos.volume(0), 300);
     await g.tap(...g.pos.settingsDone, 400);
     await g.page.waitForTimeout(1500);
