@@ -55,8 +55,8 @@ export interface Point {
 }
 
 export interface HudLayout {
-  /** Título, alineado a la izquierda. */
-  titlePos: Point;
+  /** Botón «Volver» al menú (flecha y texto), arriba a la izquierda. */
+  backBtn: Rect;
   /** Botón de estadísticas (a la derecha del título). */
   statsBtn: Rect;
   /** Borde derecho del marcador de Chispas (justo a la izquierda del botón de estadísticas). */
@@ -95,7 +95,7 @@ export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
   const toolbar: Rect = { x: width / 2, y: toolbarY, w: barW, h: BUTTON_H };
 
   return {
-    titlePos: { x: MARGIN, y: titleY },
+    backBtn: { x: MARGIN + 100, y: titleY, w: 200, h: ICON_BTN },
     statsBtn,
     sparksRight: { x: statsBtn.x - ICON_BTN / 2 - 16, y: titleY },
     modeBar,

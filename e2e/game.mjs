@@ -978,11 +978,12 @@ export async function runGameScenarios(out) {
     check('el menú muestra el nombre y los tres puzzles', ['Lumihilo', 'Circuitos', 'Luces', 'Hilos'].every((w) => tx.includes(w)), tx);
     check('el menú muestra los modos y los accesos', ['Relajado', 'Normal', 'Reto', 'Estadísticas', 'Aspectos', 'Ajustes'].every((w) => tx.includes(w)));
     const parts = {
-      morning: ['Buenos días', 'Buen día', 'Amanece', 'Arranca'],
-      afternoon: ['Buenas tardes', 'Buena tarde', 'Tómate', 'A media jornada'],
-      night: ['Buenas noches', 'Noche tranquila', 'Antes de dormir', 'La noche'],
+      morning: ['Buenos días'],
+      afternoon: ['Buenas tardes'],
+      night: ['Buenas noches'],
+      lateNight: ['Es un poco tarde', 'madrugada', 'Es muy tarde', 'hora de dormir', 'cuando despiertes', 'cuida tu sueño', 'Tu salud primero'],
     };
-    const part = i.hour >= 5 && i.hour < 12 ? 'morning' : i.hour >= 12 && i.hour < 19 ? 'afternoon' : 'night';
+    const part = i.hour >= 5 && i.hour < 12 ? 'morning' : i.hour >= 12 && i.hour < 19 ? 'afternoon' : i.hour >= 1 && i.hour < 5 ? 'lateNight' : 'night';
     check('el saludo es de la franja de la hora del dispositivo', parts[part].some((w) => tx.includes(w)), `hora ${i.hour}`);
     check('el menú no es el juego: no se ven el cronómetro ni los toques', !/\d+ toques?/.test(tx));
     await g.shot('e21-menu');
@@ -996,8 +997,9 @@ export async function runGameScenarios(out) {
     await g.tap(200, 900, 450);
     const circuits = await info(g);
     check('se juegan tres toques', circuits.taps === 3, `${circuits.taps}`);
-    await g.openMenu();
-    check('el botón Menú vuelve al menú', (await info(g)).inMenu === true);
+    await g.tap(...g.pos.back, 500); // botón «Volver»
+    g.menuOpen = true;
+    check('el botón Volver (flecha arriba a la izquierda) vuelve al menú', (await info(g)).inMenu === true);
     const back = await texts(g);
     check('Circuitos ya muestra Partida en curso y Continuar', back.includes('Partida en curso') && back.includes('Continuar'));
     await g.shot('e21-menu-en-curso');

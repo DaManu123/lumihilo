@@ -17,6 +17,7 @@ export type IconKind =
   | 'spark'
   | 'home'
   | 'menu'
+  | 'back'
   | 'circuits'
   | 'lights'
   | 'flow';
@@ -179,6 +180,20 @@ export function drawIcon(
       g.lineTo(cx - s * 0.1, cy + s * 0.2);
       g.moveTo(cx + s * 0.1, by + r * 0.95);
       g.lineTo(cx + s * 0.1, cy + s * 0.2);
+      g.strokePath();
+      break;
+    }
+
+    case 'back': {
+      // Flecha hacia la izquierda
+      g.beginPath();
+      g.moveTo(cx + s * 0.4, cy);
+      g.lineTo(cx - s * 0.4, cy);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(cx - s * 0.04, cy - s * 0.36);
+      g.lineTo(cx - s * 0.4, cy);
+      g.lineTo(cx - s * 0.04, cy + s * 0.36);
       g.strokePath();
       break;
     }
