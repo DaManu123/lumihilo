@@ -4,6 +4,15 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- **Menú principal.** La app siempre abre en un menú: arriba el nombre del juego, después una tarjeta por puzzle (Circuitos, Luces e Hilos, con su nivel, si tienes una partida en curso y si el reto diario está hecho), en medio el selector de modo (Relajado, Normal, Reto), los accesos a Estadísticas, Aspectos y Ajustes y, hasta abajo, un mensaje de bienvenida al azar según la hora del dispositivo (mañana, tarde o noche, ES y EN). Dentro del juego, el botón de la izquierda de la barra de arriba (antes «Modo») es ahora «Menú» y vuelve al menú.
+- **Cada puzzle conserva su partida.** Al salir al menú, cambiar de puzzle o cerrar la app, se guarda el tablero a medias (giros, luces, hilos, toques, tiempo y jugadas para deshacer) y la tarjeta muestra «Partida en curso / Continuar». Si cambias de modo, las partidas a medias se descartan (eran de otra dificultad); reiniciar o ganar el nivel también borra la del puzzle.
+
+### Cambiado
+- **Estadísticas y Ajustes ya no van juntos.** Estadísticas solo muestra los números (con «Cerrar»); Ajustes y Aspectos se abren desde el menú. Elegir puzzle ya no se hace desde Estadísticas.
+- El modo de juego se cambia desde el menú y reinicia el nivel de los tres puzzles.
+- El mini tutorial de Luces y el de Hilos salen la primera vez que entras a ese puzzle, aunque no hayas visto el de Circuitos.
+
 ## [0.2.0-beta.10] - 2026-11-10
 
 ### Añadido

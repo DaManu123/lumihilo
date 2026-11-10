@@ -15,7 +15,11 @@ export type IconKind =
   | 'undo'
   | 'bulb'
   | 'spark'
-  | 'home';
+  | 'home'
+  | 'menu'
+  | 'circuits'
+  | 'lights'
+  | 'flow';
 
 type G = Phaser.GameObjects.Graphics;
 
@@ -176,6 +180,60 @@ export function drawIcon(
       g.moveTo(cx + s * 0.1, by + r * 0.95);
       g.lineTo(cx + s * 0.1, cy + s * 0.2);
       g.strokePath();
+      break;
+    }
+
+    case 'menu': {
+      // Tres barras
+      for (const dy of [-0.26, 0, 0.26]) {
+        g.beginPath();
+        g.moveTo(cx - s * 0.38, cy + dy * s);
+        g.lineTo(cx + s * 0.38, cy + dy * s);
+        g.strokePath();
+      }
+      break;
+    }
+
+    case 'circuits': {
+      // Cable con codo, una fuente y un nodo
+      g.beginPath();
+      g.moveTo(cx - s * 0.42, cy + s * 0.24);
+      g.lineTo(cx - s * 0.04, cy + s * 0.24);
+      g.lineTo(cx - s * 0.04, cy - s * 0.24);
+      g.lineTo(cx + s * 0.4, cy - s * 0.24);
+      g.strokePath();
+      g.fillCircle(cx - s * 0.42, cy + s * 0.24, s * 0.11);
+      g.fillCircle(cx + s * 0.4, cy - s * 0.24, s * 0.11);
+      break;
+    }
+
+    case 'lights': {
+      // Lámpara encendida: disco con rayos
+      g.fillCircle(cx, cy, s * 0.2);
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI / 4) * i;
+        g.beginPath();
+        g.moveTo(cx + Math.cos(a) * s * 0.33, cy + Math.sin(a) * s * 0.33);
+        g.lineTo(cx + Math.cos(a) * s * 0.48, cy + Math.sin(a) * s * 0.48);
+        g.strokePath();
+      }
+      break;
+    }
+
+    case 'flow': {
+      // Un hilo ondulado que une dos puntos
+      g.beginPath();
+      const steps = 20;
+      for (let i = 0; i <= steps; i++) {
+        const u = i / steps;
+        const x = cx - s * 0.42 + u * s * 0.84;
+        const y = cy + Math.sin(u * Math.PI * 2) * s * 0.22;
+        if (i === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.strokePath();
+      g.fillCircle(cx - s * 0.42, cy, s * 0.11);
+      g.fillCircle(cx + s * 0.42, cy, s * 0.11);
       break;
     }
 
