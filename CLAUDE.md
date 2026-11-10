@@ -1,6 +1,6 @@
 # CLAUDE.md — Lumihilo
 
-Guía para retomar el trabajo. Todo lo de aquí se comprobó contra el repositorio el 2026-11-09 (versión **0.2.0-beta.8**). El usuario escribe en español: responde y documenta en español.
+Guía para retomar el trabajo. Todo lo de aquí se comprobó contra el repositorio el 2026-11-10 (versión **0.2.0-beta.9**). El usuario escribe en español: responde y documenta en español.
 
 ## 1. Descripción
 **Lumihilo** (antes «Puzzle Adaptativo»; significado del nombre en `docs/09-nombre.md`) es un juego de puzzle casual para **Android, web y escritorio (Windows/Linux)**. Cada nivel se genera por algoritmo (siempre resoluble) y la dificultad se adapta al nivel real del jugador, no a su edad. Audiencia: **13+**, partidas de 30–90 s. Hay **3 puzzles**:

@@ -4,6 +4,8 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.9] - 2026-11-10
+
 ### Añadido
 - **Hilos: hay que llenar todo el tablero.** Para ganar ya no basta con unir las parejas: no puede quedar ninguna casilla vacía (en Normal, Reto y en el reto diario; en Relajado sigue bastando con unir las parejas). Siempre hay una forma de llenarlo y cualquiera vale. Si unes todas las parejas pero quedan casillas vacías, esas casillas se marcan con un aro que late y un aviso te dice cuántas faltan. El panel muestra «N de M casillas llenas» y la pista, si todo está unido pero falta llenar, te enseña qué hilo cambiar. El tutorial tiene ahora dos pantallas: la segunda muestra el mismo tablero resuelto de dos formas, la que lo llena todo (paloma) y la que deja casillas vacías (equis).
 - **Bonus de Chispas por aspecto.** Cada aspecto que llevas puesto da un porcentaje extra de Chispas por nivel: Cyberpunk +5 %, Matrix +10 %, Océano +15 %, Solar +20 %, Aurora +25 % (Filamento, 0 %). Se ve en la tienda («+15 % Chispas») y en el desglose de la victoria («aspecto N»). Se aplica antes del doble del reto diario.
@@ -16,6 +18,7 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 - **Subes más rápido:** con 3 victorias seguidas (antes 5), y una victoria muy buena (eficiente y rápida) tras otra salta dos peldaños.
 
 ### Interno
+- **La Release solo lleva tres archivos:** el APK de Android, el portable de Windows y el AppImage de Linux (se quitan el instalador de Windows, el `.tar.gz` de Linux y las sumas de verificación).
 - Las pruebas del navegador (e2e) corren en paralelo: de unos 33 a unos 9–16 minutos, con las mismas comprobaciones (185).
 
 ## [0.2.0-beta.8] - 2026-11-09
