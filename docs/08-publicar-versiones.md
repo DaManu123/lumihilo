@@ -7,9 +7,10 @@ Cada versión del juego se publica sola: al subir una etiqueta `v…`, GitHub Ac
 | Plataforma | Archivos | Cómo se hace |
 |---|---|---|
 | Android | `Lumihilo-<versión>-android.apk` (firmado) | Capacitor + Gradle |
-| Windows | `…-windows-x64-portable.exe` y `…-windows-x64-instalador.exe` | Electron (`desktop/`) |
-| Linux | `…-linux-x64.AppImage` y `…-linux-x64.tar.gz` | Electron (`desktop/`) |
-| Todas | `SHA256SUMS.txt` | Sumas de verificación |
+| Windows | `…-windows-x64-portable.exe` | Electron (`desktop/`) |
+| Linux | `…-linux-x64.AppImage` | Electron (`desktop/`) |
+
+**La Release lleva solo estos tres archivos, y así seguirá** (decisión del propietario, 2026-11-10: no hay público para el instalador de Windows, el `.tar.gz` de Linux ni las sumas de verificación). El flujo falla si sobra o falta alguno. El AAB para Google Play se compila aparte y queda como artefacto del flujo (`aab-android`, 30 días), no en la Release.
 
 La versión de escritorio (`desktop/`) es solo un contenedor que carga el mismo juego web (`dist/`). Vive en su propia carpeta con su propio `package.json` para que `npm install` del juego no descargue Electron.
 
@@ -65,7 +66,7 @@ Android solo instala un APK firmado, y la firma debe ser **siempre la misma** en
 - **Windows y Linux sin firmar:** Windows SmartScreen avisa. Firmar el `.exe` requiere un certificado de pago; por ahora se explica en las notas de cada versión.
 - **Capacitor y TypeScript:** la configuración de Capacitor es `capacitor.config.json` (no `.ts`) porque el CLI no puede leer archivos `.ts` con TypeScript 7 en Node 22.
 - **`npm run cap:sync`** hay que ejecutarlo en cada copia de trabajo al cambiar los plugins; el flujo de publicación lo hace solo.
-- **Probar la versión de escritorio en local:** `npm run build`, luego `cd desktop && npm install && npm start`. Para generar los instaladores de Linux en local: `cd desktop && npm run dist:linux`.
+- **Probar la versión de escritorio en local:** `npm run build`, luego `cd desktop && npm install && npm start`. Para generar el AppImage de Linux en local: `cd desktop && npm run dist:linux`.
 
 ## Aviso de versión nueva (y el paso a Google Play)
 

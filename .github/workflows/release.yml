@@ -1,6 +1,8 @@
 name: Release
 
-# Publica una versión (APK de Android, .exe de Windows y AppImage de Linux) al subir una etiqueta "v*".
+# Publica una versión al subir una etiqueta "v*". La Release lleva SOLO tres archivos: el APK de Android, el .exe portable
+# de Windows y el AppImage de Linux (decisión del propietario: no hay público para instalador, tar.gz ni sumas). El AAB de
+# Google Play se compila aparte y queda como artefacto del flujo (`aab-android`), no en la Release.
 # Ejemplo: git tag v0.1.0-beta.2 && git push origin v0.1.0-beta.2
 # Si la versión lleva guion (p. ej. 0.1.0-beta.2) se publica como "pre-lanzamiento".
 # Guía completa: docs/08-publicar-versiones.md
@@ -254,7 +256,6 @@ jobs:
             script: dist:win
             artifact: release-windows
             files: |
-              desktop/release/*-instalador.exe
               desktop/release/*-portable.exe
           - name: Linux
             os: ubuntu-latest
@@ -262,7 +263,6 @@ jobs:
             artifact: release-linux
             files: |
               desktop/release/*.AppImage
-              desktop/release/*.tar.gz
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -380,12 +380,12 @@ jobs:
           path: assets
           merge-multiple: true
 
-      - name: Calcular las sumas de verificación
+      - name: Comprobar que solo hay los tres archivos de la Release
         run: |
           cd assets
           ls -la
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          test "$(ls | wc -l)" -eq 3 || { echo "::error::La Release debe llevar exactamente 3 archivos (APK, portable de Windows y AppImage de Linux)"; exit 1; }
+          ls *-android.apk *-windows-x64-portable.exe *-linux-x64.AppImage
 
       - name: Crear la versión en GitHub
         env:
