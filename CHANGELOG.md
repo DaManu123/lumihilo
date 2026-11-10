@@ -4,6 +4,8 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.13] - 2026-11-10
+
 ### Añadido
 - **Tutorial de Circuitos nuevo, animado y en tres pantallas** (como el de Hilos): un tablero de ejemplo donde un dedo gira las piezas mal puestas y todo se enciende; el sentido del giro (una pieza que gira a la derecha y a la izquierda con su flecha); y trucos (empezar por esquinas y bordes, las rectas solo tienen dos posiciones, seguir la luz desde la fuente, cómo se gana más y cómo baja la dificultad).
 - **Tutorial de Luces ampliado a tres pantallas:** la de siempre; «Dos toques se anulan» (tocar dos veces la misma casilla la deja igual y el orden no importa); y «Truco: fila por fila» (si una luz está apagada, se toca la de justo debajo), con un ejemplo animado que se resuelve en dos toques.
