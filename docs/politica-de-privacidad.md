@@ -2,13 +2,13 @@
 
 > Versión publicada en `docs/landing/privacidad.html` (y en la ventana de privacidad de la página de presentación). Si cambias una, cambia la otra. No constituye asesoría legal; revísala si el juego añade anuncios u otros servicios.
 
-**Última actualización:** 8 de noviembre de 2026
+**Última actualización:** 10 de noviembre de 2026
 
 ## 1. Responsable y contacto
 Lumihilo lo desarrolla y mantiene un desarrollador independiente. Contacto: **myprimemg@gmail.com**.
 
 ## 2. Datos que no recopilamos
-- Sin cuentas ni contraseñas.
+- Sin cuentas ni contraseñas (el correo solo se pide si te unes a la beta desde la web; ver 9).
 - Sin datos personales: no se piden cámara, micrófono, ubicación, contactos ni almacenamiento.
 - Sin funciones sociales.
 
@@ -31,3 +31,6 @@ Pensado para público general; no se recopilan datos de nadie.
 
 ## 8. Cambios
 Se publicarán con fecha de revisión.
+
+## 9. Registro opcional para la beta (página web)
+Si pides unirte a la prueba cerrada de Google Play desde la página de presentación, recibimos **únicamente el correo de tu cuenta de Google** (y, con formulario, tu aceptación). Se usa solo para añadirte a la lista de testers de Play Console y escribirte sobre la prueba. Solo lo ve el desarrollador; no se publica, no se vende ni se comparte, salvo con Google (Play y el formulario). Se conserva hasta el final de la prueba cerrada y después se borra. Puedes pedir acceso, corrección o borrado escribiendo al contacto. No afecta al juego, que sigue sin recopilar datos.

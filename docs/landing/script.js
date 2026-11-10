@@ -6,7 +6,22 @@
  * NOTA DE SEGURIDAD: No contiene ni interactúa con la lógica interna del videojuego.
  */
 
+/**
+ * Enlace del formulario privado para pedir acceso a la beta (Google Forms, respuestas solo visibles para el
+ * propietario). Mientras esté vacío, el botón «Únete a la beta» usa el correo de contacto (mailto) como respaldo.
+ * Pega aquí la URL pública de rellenar el formulario (termina en /viewform), NUNCA la de la hoja de respuestas.
+ */
+const BETA_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdui9rSLMR0abGc6i2YgCMF5x6RH1k4nl9bAdW5VUzfBc_MFA/viewform';
+
 document.addEventListener('DOMContentLoaded', () => {
+  // 0. Botón «Únete a la beta»: apunta al formulario si está configurado
+  const betaJoinBtn = document.getElementById('betaJoinBtn');
+  if (betaJoinBtn && /^https:\/\/(docs\.google\.com\/forms|forms\.gle)\//.test(BETA_FORM_URL)) {
+    betaJoinBtn.href = BETA_FORM_URL;
+    betaJoinBtn.target = '_blank';
+    betaJoinBtn.rel = 'noopener noreferrer';
+  }
+
   // 1. Elementos del DOM
   const currentYearSpan = document.getElementById('currentYear');
   const mobileMenuBtn = document.getElementById('mobileMenuBtn');
