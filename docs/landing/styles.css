@@ -1347,3 +1347,37 @@ button {
     text-align: center;
   }
 }
+
+/* ==========================================================================
+   Únete a la beta (prueba cerrada de Google Play)
+   ========================================================================== */
+.beta-steps {
+  margin: 0 0 2rem;
+  padding-left: 1.4rem;
+  color: var(--text-primary);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.beta-steps li::marker {
+  color: var(--primary-cyan);
+  font-weight: 800;
+}
+
+.beta-actions {
+  margin-bottom: 1.5rem;
+}
+
+.beta-privacy {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  background: var(--bg-main);
+  border: 1px solid var(--border-highlight);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin: 0;
+}
+
+.beta-privacy a {
+  color: var(--primary-cyan);
+}
