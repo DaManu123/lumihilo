@@ -104,7 +104,7 @@ import {
 } from '../../core/flow';
 import { FlowCellLook, flowLooks } from '../flowLooks';
 import { paintFlowCell } from '../flowArt';
-import { SKINS, SkinId, buySkin, isSkinUnlocked, skinInfo, usableSkin } from '../../core/skins';
+import { SKINS, SkinId, buySkin, isSkinUnlocked, skinInfo, skinSparksBonus, usableSkin } from '../../core/skins';
 import { mixColors, toCss } from '../color';
 import { IconKind, drawArrowCircle, drawIcon } from '../icons';
 import {
@@ -1616,6 +1616,9 @@ export class GameScene extends Phaser.Scene {
       overlay.add(g);
 
       overlay.add(this.uiText(left + 222, y - 18, t(skin.name), { size: 32, display: true, weight: '700', color: THEME.text }));
+      if (skin.sparksBonusPercent > 0) {
+        overlay.add(this.uiText(left + 222, y + 22, t('+{0} % Chispas', skin.sparksBonusPercent), { size: 24, weight: '600', color: THEME.mutedText }));
+      }
       const state = equipped ? t('Equipado') : unlocked ? t('Usar') : '';
       if (state) {
         overlay.add(
@@ -3195,6 +3198,7 @@ export class GameScene extends Phaser.Scene {
       minTaps,
       hintsUsed: this.hintsUsed,
       isNewRecord,
+      skinBonusPercent: skinSparksBonus(this.settings.skin),
       multiplier,
     });
 
@@ -3325,6 +3329,7 @@ export class GameScene extends Phaser.Scene {
             reward.efficiencyBonus > 0 ? t('eficiencia {0}', reward.efficiencyBonus) : '',
             reward.speedBonus > 0 ? t('rapidez {0}', reward.speedBonus) : '',
             reward.recordBonus > 0 ? t('récord {0}', reward.recordBonus) : '',
+            reward.skinBonus > 0 ? t('aspecto {0}', reward.skinBonus) : '',
           ]
             .filter(Boolean)
             .join(' + '),

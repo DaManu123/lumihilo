@@ -8,7 +8,7 @@ Guía para retomar el trabajo. Todo lo de aquí se comprobó contra el repositor
 - **Luces**: tocar una casilla cambia su luz y la de sus 4 vecinas; encender todo. Con **piedras** (casillas bloqueadas) desde habilidad 3.
 - **Hilos**: arrastrar para unir parejas de puntos del mismo color sin que se solapen hilos (cortar el de otro lo borra por ahí). Ganar = unir todas las parejas (no hace falta llenar el tablero).
 
-Economía: moneda **Chispas** (ganar niveles; pistas cuestan 10; tienda de **6 aspectos**: Filamento gratis, Cyberpunk 150, Matrix 350, Océano 550, Solar 800, Aurora 1000). Cada puzzle tiene nivel, récords y **reto diario** propios. Localización ES/EN.
+Economía: moneda **Chispas** (ganar niveles; pistas cuestan 10; tienda de **6 aspectos**: Filamento gratis, Cyberpunk 150, Matrix 350, Océano 550, Solar 800, Aurora 1000). Cada aspecto equipado da un bonus de Chispas por nivel: +5/10/15/20/25 % (Cyberpunk…Aurora; sin publicar, beta.9). Cada puzzle tiene nivel, récords y **reto diario** propios. Localización ES/EN.
 
 Repo: `DaManu123/lumihilo` (público). Web: https://damanu123.github.io/lumihilo/
 
@@ -34,11 +34,11 @@ Piezas clave:
 npm ci                    # instalar (si node_modules viene de Windows y rompe: rm -rf node_modules && npm ci)
 npm run dev               # desarrollo (Vite, puerto 3000)
 npm run typecheck         # tsc --noEmit (strict, noUnusedLocals)
-npm test                  # unitarias (Vitest): 444 pruebas
+npm test                  # unitarias (Vitest): 450 pruebas
 npm run build             # tsc + vite build → dist/
 npm run build:play        # build con UPDATE_SOURCE=play
 npm run cap:sync          # build + cap sync android (necesario al cambiar plugins)
-npm run test:e2e          # navegador (Playwright, ~9 min, 184 comprobaciones). Compila solo.
+npm run test:e2e          # navegador (Playwright, ~9-12 min, 185 comprobaciones). Compila solo.
 npm run test:audio        # mide volumen/pico en dBFS de música y efectos
 npm run test:perf         # CPU por fotograma (requiere ?debug)
 ```

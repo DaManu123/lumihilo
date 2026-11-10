@@ -110,6 +110,8 @@ export const EN: Record<string, string> = {
   'Aún no se ha comprobado sola.': 'It has not checked by itself yet.',
   'La última comprobación automática ({0}) falló: {1}.': 'The last automatic check ({0}) failed: {1}.',
   'La última comprobación automática ({0}) salió bien.': 'The last automatic check ({0}) succeeded.',
+  'aspecto {0}': 'skin {0}',
+  '+{0} % Chispas': '+{0} % Sparks',
   'Buscando actualizaciones…': 'Checking for updates…',
   'No se pudo consultar las versiones ({0}).\nRevisa tu conexión.': 'Could not check for updates ({0}).\nCheck your connection.',
   'Ya tienes la última versión ({0}).': 'You have the latest version ({0}).',

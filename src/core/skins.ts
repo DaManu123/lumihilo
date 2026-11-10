@@ -12,18 +12,25 @@ export interface SkinInfo {
   name: string;
   /** Precio en Chispas; el aspecto inicial es gratis. */
   price: number;
+  /** Chispas extra (en %) por cada nivel resuelto mientras el aspecto está equipado: recompensa por haberlo conseguido. */
+  sparksBonusPercent: number;
 }
 
 export const DEFAULT_SKIN: SkinId = 'filamento';
 
 export const SKINS: readonly SkinInfo[] = [
-  { id: 'filamento', name: 'Filamento', price: 0 },
-  { id: 'cyberpunk', name: 'Cyberpunk', price: 150 },
-  { id: 'matrix', name: 'Matrix', price: 350 },
-  { id: 'oceano', name: 'Océano', price: 550 },
-  { id: 'solar', name: 'Solar', price: 800 },
-  { id: 'aurora', name: 'Aurora', price: 1000 },
+  { id: 'filamento', name: 'Filamento', price: 0, sparksBonusPercent: 0 },
+  { id: 'cyberpunk', name: 'Cyberpunk', price: 150, sparksBonusPercent: 5 },
+  { id: 'matrix', name: 'Matrix', price: 350, sparksBonusPercent: 10 },
+  { id: 'oceano', name: 'Océano', price: 550, sparksBonusPercent: 15 },
+  { id: 'solar', name: 'Solar', price: 800, sparksBonusPercent: 20 },
+  { id: 'aurora', name: 'Aurora', price: 1000, sparksBonusPercent: 25 },
 ];
+
+/** Bonus de Chispas (%) del aspecto equipado; 0 si no existe. */
+export function skinSparksBonus(id: unknown): number {
+  return isSkinId(id) ? skinInfo(id).sparksBonusPercent : 0;
+}
 
 export function isSkinId(value: unknown): value is SkinId {
   return SKINS.some((s) => s.id === value);

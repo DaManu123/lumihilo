@@ -498,6 +498,19 @@ export async function runGameScenarios(out) {
     await g.shot('e17-matrix-claro');
     await g.close();
 
+    // El aspecto equipado da Chispas extra al ganar y la tienda lo anuncia
+    g = await openGame({ label: 'aspectos-bonus', seed: { user_settings: { hasSeenTutorial: true, skin: 'aurora' }, player_progress: { ...RICH.player_progress, unlockedSkins: ['aurora'] } }, out });
+    const walkTexts = (page) => page.evaluate(() => (function walk(list) { return list.flatMap((o) => [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(window.__game.scene.scenes.find((sc) => sc.handleCellTap).children.getAll()).join(' | '));
+    await g.page.goto('http://localhost:4173/?debug');
+    await g.page.waitForSelector('canvas');
+    await g.page.waitForTimeout(1500);
+    const won = await winWithHints(g);
+    let resultTexts = await walkTexts(g.page);
+    for (let i = 0; i < 20 && !/aspecto \d+/.test(resultTexts); i++) { await g.page.waitForTimeout(500); resultTexts = await walkTexts(g.page); } // la tarjeta tarda más con carga
+    check('con un aspecto con bonus, el desglose de la victoria lo muestra', !!won && /aspecto \d+/.test(resultTexts), resultTexts.slice(0, 160));
+    await g.tap(360, g.dims.h / 2 - 300, 400).catch(() => undefined);
+    await g.close();
+
     // Un aspecto guardado que no se ha comprado no se usa
     g = await openGame({ label: 'aspectos-trampa', seed: { user_settings: { hasSeenTutorial: true, skin: 'solar' } }, out });
     check('un aspecto no comprado guardado en los ajustes no rompe el juego', !!(await g.page.$('canvas')));
