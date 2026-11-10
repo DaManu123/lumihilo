@@ -664,7 +664,7 @@ export class GameScene extends Phaser.Scene {
     const lastDaily = lastDailyOf(this.progress, this.puzzle);
     const dailyDone = lastDaily === dateKey(new Date());
 
-    this.setSegment(this.modeSeg, { label: this.modeLabel(this.profile.mode), sub: t('Modo') });
+    this.setSegment(this.modeSeg, { label: t('Ayuda'), kind: 'help', sub: t('cómo jugar') });
     this.setSegment(
       this.dailySeg,
       this.isDaily
@@ -687,7 +687,7 @@ export class GameScene extends Phaser.Scene {
 
     // Barra de modo / reto diario / tema
     const [mode, daily, theme] = this.createSegmentedBar(c, this.hud.modeBar, this.hud.modeSegments, [
-      () => this.goToMenu(),
+      () => this.showHelp(),
       () => this.toggleDaily(),
       // Se difiere para no destruir el botón mientras se procesa su propio toque
       () => this.time.delayedCall(0, () => this.toggleTheme()),
@@ -871,8 +871,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Aviso breve y no bloqueante sobre el tablero. */
-  private showToast(message: string): void {
-    this.toast?.destroy();
+  /**
+   * Aviso breve sobre el tablero. Es solo informativo: no cuenta como tarjeta abierta (ver `overlayOpen`), así que
+   * nunca bloquea el juego. Con `sticky` no se desvanece solo: se queda hasta `dismissToast` (p. ej. al volver a tocar).
+   */
+  private showToast(message: string, sticky = false): void {
+    this.dismissToast();
     const { width } = this.cameras.main;
     const toast = this.add
       .text(width / 2, this.hud.boardTop + 70, message, {
@@ -888,6 +892,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(150);
     this.toast = toast;
+    if (sticky) return;
 
     this.tweens.add({
       targets: toast,
@@ -899,6 +904,14 @@ export class GameScene extends Phaser.Scene {
         if (this.toast === toast) this.toast = undefined;
       },
     });
+  }
+
+  /** Quita el aviso que esté en pantalla. */
+  private dismissToast(): void {
+    if (!this.toast) return;
+    this.tweens.killTweensOf(this.toast);
+    this.toast.destroy();
+    this.toast = undefined;
   }
 
   // ---------------------------------------------------------------------------
@@ -1213,7 +1226,8 @@ export class GameScene extends Phaser.Scene {
 
   /** ¿Hay alguna tarjeta o aviso abierto encima del juego? */
   private overlayOpen(): boolean {
-    return this.isWon || this.children.getAll().some((o) => ((o as { depth?: number }).depth ?? 0) >= 100);
+    // El aviso (toast) no cuenta: es informativo y no debe bloquear el tablero
+    return this.isWon || this.children.getAll().some((o) => o !== this.toast && ((o as { depth?: number }).depth ?? 0) >= 100);
   }
 
   /**
@@ -1432,9 +1446,24 @@ export class GameScene extends Phaser.Scene {
    * Mini tutorial de Luces para cualquier edad: un tablero de ejemplo que se repite solo (un dedo toca el centro y las
    * cinco lámparas cambian), tres frases cortas y un botón. No depende de leer mucho: la animación lo explica.
    */
-  private showLightsTutorial(): void {
+  private showLightsTutorial(page: 1 | 2 | 3 = 1): void {
     const cardH = 1090;
+    const total = 3;
     const { overlay, w } = this.createCard(cardH, 250);
+    const finishLights = () => {
+      this.settings.hasSeenLightsTip = true;
+      storage.saveSettings(this.settings);
+      overlay.destroy();
+    };
+    const nextLights = () => {
+      overlay.destroy();
+      this.showLightsTutorial((page + 1) as 2 | 3);
+    };
+    this.addTutorialFooter(overlay, w, cardH, page, total, nextLights, finishLights);
+    if (page !== 1) {
+      this.showLightsTutorialPage(overlay, w, cardH, page);
+      return;
+    }
     overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Luces'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
 
     // Tablero de ejemplo 3×3: la cruz del centro está apagada y las esquinas, encendidas
@@ -1524,57 +1553,418 @@ export class GameScene extends Phaser.Scene {
     });
     tip.setOrigin(0.5, 0).setAlign('center');
     overlay.add(tip);
+  }
 
-    this.addCardButton(
-      overlay,
-      { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
-      t('Entendido'),
-      () => {
-        this.settings.hasSeenLightsTip = true;
-        storage.saveSettings(this.settings);
-        overlay.destroy();
-      },
-      true
+  /**
+   * Pantallas 2 y 3 del tutorial de Luces. Segunda: tocar dos veces la misma casilla la deja igual (el dedo toca el
+   * centro dos veces). Tercera: el truco de ir fila por fila («perseguir las luces»): si una luz está apagada, se toca la
+   * de justo debajo; en el ejemplo, dos toques encienden todo.
+   */
+  private showLightsTutorialPage(overlay: Phaser.GameObjects.Container, w: number, cardH: number, page: 2 | 3): void {
+    const alive = () => overlay.active;
+    overlay.add(
+      this.uiText(0, -cardH / 2 + 70, page === 2 ? t('Dos toques se anulan') : t('Truco: fila por fila'), {
+        size: 36,
+        display: true,
+        color: THEME.primaryCss,
+        originX: 0.5,
+      })
     );
+    const size = 104;
+    const step = size + 14;
+    const top = -cardH / 2 + 150 + size / 2;
+    this.addDemoPlate(overlay, 0, top, size, step);
+    // Página 2: la misma cruz apagada de la primera pantalla. Página 3: lo que dejan los toques (1,0) y (2,2) sobre todo encendido
+    const initial: boolean[][] =
+      page === 2
+        ? [
+            [true, false, true],
+            [false, false, false],
+            [true, false, true],
+          ]
+        : [
+            [false, true, true],
+            [false, false, false],
+            [false, false, false],
+          ];
+    const grid = initial.map((row) => [...row]);
+    const lamps = initial.map((row, r) =>
+      row.map((lit, c) => {
+        const lamp = this.add.image((c - 1) * step, top + r * step, this.lampTutorialKey(size, lit));
+        overlay.add(lamp);
+        return lamp;
+      })
+    );
+    // Marco que señala la fila en la que se está trabajando (página 3)
+    const rowFrame = this.add.graphics();
+    overlay.add(rowFrame);
+    const markRow = (r: number | null) => {
+      rowFrame.clear();
+      if (r === null) return;
+      rowFrame.lineStyle(5, THEME.accent, 1);
+      rowFrame.strokeRoundedRect(-step * 1.5 + 2, top + r * step - size / 2 - 6, step * 3 - 4, size + 12, 22);
+    };
+    const finger = this.addTutorialFinger(overlay);
+    const paint = (changed: Array<[number, number]> = []) => {
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) lamps[r][c].setTexture(this.lampTutorialKey(size, grid[r][c])).setScale(1);
+      if (this.reducedMotion()) return;
+      for (const [r, c] of changed) {
+        lamps[r][c].setScale(0.86);
+        this.tweens.add({ targets: lamps[r][c], scale: 1, duration: 260, ease: 'Back.easeOut' });
+      }
+    };
+    const tap = (r: number, c: number, delay: number) => {
+      this.time.delayedCall(delay, () => {
+        if (!alive()) return;
+        finger.setPosition(lamps[r][c].x, lamps[r][c].y).setAlpha(1).setScale(1);
+        if (!this.reducedMotion()) this.tweens.add({ targets: finger, scale: 0.8, duration: 240, yoyo: true, ease: 'Sine.easeInOut' });
+      });
+      this.time.delayedCall(delay + 560, () => {
+        if (!alive()) return;
+        const changed: Array<[number, number]> = [];
+        for (const [dr, dc] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr < 0 || nr > 2 || nc < 0 || nc > 2) continue;
+          grid[nr][nc] = !grid[nr][nc];
+          changed.push([nr, nc]);
+        }
+        feedback.rotate(r, c);
+        finger.setAlpha(0);
+        paint(changed);
+      });
+    };
+    const cycle = () => {
+      if (!alive()) return;
+      initial.forEach((row, r) => row.forEach((lit, c) => (grid[r][c] = lit)));
+      paint();
+      finger.setAlpha(0);
+      if (page === 2) {
+        markRow(null);
+        tap(1, 1, 700);
+        tap(1, 1, 2300);
+        return;
+      }
+      // Fila 0: la casilla apagada es la de la izquierda → se toca la de debajo; luego, en la fila 1, la de la derecha
+      markRow(0);
+      tap(1, 0, 900);
+      this.time.delayedCall(2100, () => alive() && markRow(1));
+      tap(2, 2, 2700);
+      this.time.delayedCall(3500, () => {
+        if (!alive()) return;
+        markRow(null);
+        feedback.connected(1, 1);
+      });
+    };
+    cycle();
+    const timer = this.time.addEvent({ delay: page === 2 ? 4000 : 5400, loop: true, callback: cycle });
+    overlay.once('destroy', () => timer.remove(false));
+
+    const linesY = top + step * 2 + size / 2 + 50;
+    if (page === 2) {
+      const y = this.addTutorialLines(overlay, w, linesY, [
+        t('Tocar dos veces la misma casilla la deja como estaba.'),
+        t('El orden no importa: solo cuenta qué casillas tocas.'),
+        t('Las piedras no se encienden ni se tocan: no cuentan.'),
+      ], 28, 22);
+      this.addTutorialTip(overlay, w, y + 4, t('Menos toques, más Chispas. Al ganar ves el mínimo posible.'));
+      return;
+    }
+    this.addTutorialLines(overlay, w, linesY, [
+      t('Ve fila por fila, de arriba abajo.'),
+      t('Si una luz está apagada, toca la casilla de justo debajo: se enciende sin desordenar las filas de arriba.'),
+      t('Si al final queda algo apagado en la última fila, toca casillas de la primera fila y repite.'),
+    ], 28, 22);
   }
 
   private checkAndShowTutorial(): void {
     if (this.puzzle !== 'circuits' || this.settings.hasSeenTutorial) return;
+    this.showCircuitsTutorial();
+  }
 
-    const cardH = 700;
-    const { overlay, w } = this.createCard(cardH, 100);
+  /** «Ayuda» de la barra: vuelve a mostrar el tutorial del puzzle en juego. */
+  private showHelp(): void {
+    if (this.overlayOpen()) return;
+    this.flowDrag = null;
+    if (this.puzzle === 'lights') this.showLightsTutorial();
+    else if (this.puzzle === 'flow') this.showFlowTutorial();
+    else this.showCircuitsTutorial();
+  }
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
-
-    const lines = [
-      t('Toca una pieza para girarla.'),
-      t('El botón grande cambia el sentido del giro.'),
-      t('Conecta todo el circuito a la fuente.'),
-      t('Gana Chispas y úsalas en las pistas.'),
-      t('Cada día hay un reto nuevo. Cuida tu racha.'),
-    ];
-    let y = -cardH / 2 + 160;
+  /** Frases con viñeta en una tarjeta de tutorial; devuelve la y donde terminan. */
+  private addTutorialLines(overlay: Phaser.GameObjects.Container, w: number, y: number, lines: string[], size = 29, gap = 26): number {
     for (const line of lines) {
-      const bullet = this.add.graphics();
-      bullet.fillStyle(THEME.primary, 1);
-      bullet.fillCircle(-w / 2 + 56, y + 17, 7);
-      const text = this.uiText(-w / 2 + 84, y, line, { size: 29, weight: '500', wrap: w - 140 });
+      const dot = this.add.graphics();
+      dot.fillStyle(THEME.primary, 1);
+      dot.fillCircle(-w / 2 + 56, y + size * 0.6, 7);
+      const text = this.uiText(-w / 2 + 84, y, line, { size, weight: '500', wrap: w - 140 });
       text.setOrigin(0, 0);
-      overlay.add([bullet, text]);
-      y += text.height + 30;
+      overlay.add([dot, text]);
+      y += text.height + gap;
+    }
+    return y;
+  }
+
+  /** Nota centrada y discreta bajo las frases de un tutorial. */
+  private addTutorialTip(overlay: Phaser.GameObjects.Container, w: number, y: number, tip: string): void {
+    const text = this.uiText(0, y, tip, { size: FONT.small, weight: '500', color: THEME.mutedText, wrap: w - 88, originX: 0.5 });
+    text.setOrigin(0.5, 0).setAlign('center');
+    overlay.add(text);
+  }
+
+  /**
+   * Pie de los tutoriales de varias pantallas: puntos de página (el actual relleno, los demás huecos: no depende del
+   * color) y «Saltar» + «Siguiente», o «Entendido» en la última.
+   */
+  private addTutorialFooter(
+    overlay: Phaser.GameObjects.Container,
+    w: number,
+    cardH: number,
+    page: number,
+    total: number,
+    onNext: () => void,
+    onFinish: () => void
+  ): void {
+    const dotsY = cardH / 2 - 160;
+    for (let i = 0; i < total; i++) {
+      const dot = this.add.graphics();
+      const x = (i - (total - 1) / 2) * 32;
+      if (i === page - 1) {
+        dot.fillStyle(THEME.primary, 1);
+        dot.fillCircle(x, dotsY, 9);
+      } else {
+        dot.lineStyle(3, THEME.cardBorder, 1);
+        dot.strokeCircle(x, dotsY, 7);
+      }
+      overlay.add(dot);
+    }
+    const y = cardH / 2 - 84;
+    if (page >= total) {
+      this.addCardButton(overlay, { x: 0, y, w: w - 88, h: 100 }, t('Entendido'), onFinish, true);
+      return;
+    }
+    const btnW = (w - 88 - 18) / 2;
+    this.addCardButton(overlay, { x: -(btnW + 18) / 2, y, w: btnW, h: 100 }, t('Saltar'), onFinish, false);
+    this.addCardButton(overlay, { x: (btnW + 18) / 2, y, w: btnW, h: 100 }, t('Siguiente'), onNext, true);
+  }
+
+  /** El dedo de los tutoriales: un anillo que pulsa. */
+  private addTutorialFinger(overlay: Phaser.GameObjects.Container): Phaser.GameObjects.Graphics {
+    const finger = this.add.graphics();
+    finger.lineStyle(7, THEME.accent, 1);
+    finger.strokeCircle(0, 0, 42);
+    finger.fillStyle(THEME.accent, 0.35);
+    finger.fillCircle(0, 0, 30);
+    finger.setAlpha(0);
+    overlay.add(finger);
+    return finger;
+  }
+
+  /** Placa de fondo de un tablero de ejemplo de 3×3 (o 1×1). */
+  private addDemoPlate(overlay: Phaser.GameObjects.Container, cx: number, top: number, size: number, step: number, cells = 3): void {
+    const side = step * cells;
+    const plate = this.add.graphics();
+    plate.fillStyle(mixColors(THEME.background, THEME.surface, 0.45), 1);
+    plate.fillRoundedRect(cx - side / 2 - 4, top - size / 2 - 18, side + 8, side + 22, 30);
+    plate.lineStyle(3, THEME.cardBorder, 1);
+    plate.strokeRoundedRect(cx - side / 2 - 4, top - size / 2 - 18, side + 8, side + 22, 30);
+    overlay.add(plate);
+  }
+
+  /** Tablero de ejemplo de Circuitos (3×3, resuelto con todos los giros a 0): la fuente en el centro. */
+  private circuitDemoBoard(): BoardState {
+    // N = 1, E = 2, S = 4, O = 8
+    const masks = [
+      [6, 14, 12],
+      [5, 5, 5],
+      [1, 1, 1],
+    ];
+    const grid = masks.map((row, r) => row.map((baseMask, c) => ({ row: r, col: c, baseMask, rotation: 0, isSource: r === 1 && c === 1 })));
+    return { rows: 3, cols: 3, grid, source: { row: 1, col: 1 } };
+  }
+
+  /** Textura de una pieza de Circuitos para los tutoriales: el mismo dibujo que en el tablero, a otro tamaño. */
+  private circuitTutorialKey(board: BoardState, row: number, col: number, powered: boolean, size: number): string {
+    const cell = board.grid[row][col];
+    const half = size / 2;
+    const gap = Math.max(4, Math.round(size * 0.06));
+    const bridge = half + gap / 2;
+    const dirs: Array<{ dir: Direction; dx: number; dy: number }> = [
+      { dir: Direction.NORTH, dx: 0, dy: -1 },
+      { dir: Direction.EAST, dx: 1, dy: 0 },
+      { dir: Direction.SOUTH, dx: 0, dy: 1 },
+      { dir: Direction.WEST, dx: -1, dy: 0 },
+    ];
+    const legs: CellLeg[] = dirs
+      .filter((d) => hasDirection(cell.baseMask, d.dir))
+      .map((d) => {
+        const worldDir = ((d.dir + cell.rotation) % 4) as Direction;
+        const delta = DIRECTION_DELTAS[worldDir];
+        const nr = row + delta.dr;
+        const nc = col + delta.dc;
+        const hasNeighbor = nr >= 0 && nr < board.rows && nc >= 0 && nc < board.cols;
+        return { dx: d.dx, dy: d.dy, reach: hasNeighbor ? bridge : half, lit: powered && isBranchConnected(board, row, col, worldDir) };
+      });
+    const look: CellLook = { powered, isSource: cell.isSource, hintRing: false, glowStep: powered ? GLOW_STEPS : 0, marks: false, legs };
+    const key =
+      `ctut|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${size}|${powered ? 1 : 0}${cell.isSource ? 1 : 0}|` +
+      legs.map((l) => `${l.dx},${l.dy},${l.reach === bridge ? 'b' : 'h'}${l.lit ? 'L' : 'o'}`).join(';');
+    if (!this.textures.exists(key)) {
+      const side = size + gap + 2;
+      const texture = this.textures.addDynamicTexture(key, side, side);
+      if (texture) {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        this.paintCell(g, look, size);
+        texture.draw(g, side / 2, side / 2);
+        g.destroy();
+      }
+    }
+    return key;
+  }
+
+  /**
+   * Tutorial de Circuitos en tres pantallas, como el de Hilos. Primera: un tablero de ejemplo donde un dedo gira las dos
+   * piezas mal puestas y todo se enciende (se repite solo). Segunda: el sentido del giro (una pieza que gira a la
+   * derecha y luego a la izquierda). Tercera: trucos.
+   */
+  private showCircuitsTutorial(page: 1 | 2 | 3 = 1): void {
+    const cardH = 1090;
+    const total = 3;
+    const { overlay, w } = this.createCard(cardH, 250);
+    const alive = () => overlay.active;
+    const finish = () => {
+      this.settings.hasSeenTutorial = true;
+      storage.saveSettings(this.settings);
+      overlay.destroy();
+    };
+    const next = () => {
+      overlay.destroy();
+      this.showCircuitsTutorial((page + 1) as 2 | 3);
+    };
+    const titles = [t('Cómo se juega Circuitos'), t('El sentido del giro'), t('Trucos para Circuitos')];
+    overlay.add(this.uiText(0, -cardH / 2 + 70, titles[page - 1], { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addTutorialFooter(overlay, w, cardH, page, total, next, finish);
+
+    if (page === 1) {
+      const size = 116;
+      const step = size + Math.max(4, Math.round(size * 0.06));
+      const top = -cardH / 2 + 150 + size / 2;
+      const board = this.circuitDemoBoard();
+      this.addDemoPlate(overlay, 0, top, size, step);
+      const images: Phaser.GameObjects.Image[][] = board.grid.map((row, r) =>
+        row.map((_, c) => {
+          const image = this.add.image((c - 1) * step, top + r * step, '__DEFAULT');
+          overlay.add(image);
+          return image;
+        })
+      );
+      const finger = this.addTutorialFinger(overlay);
+      const paint = () => {
+        const powered = computePowerFlow(board);
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            images[r][c].setTexture(this.circuitTutorialKey(board, r, c, powered[r][c], size)).setAngle(board.grid[r][c].rotation * 90).setScale(1);
+          }
+        }
+      };
+      // Las dos piezas mal puestas: un giro a la derecha las coloca
+      const wrong: Array<[number, number]> = [[0, 2], [2, 2]];
+      const tapAt = (r: number, c: number, delay: number) => {
+        this.time.delayedCall(delay, () => {
+          if (!alive()) return;
+          finger.setPosition(images[r][c].x, images[r][c].y).setAlpha(1).setScale(1);
+          if (!this.reducedMotion()) this.tweens.add({ targets: finger, scale: 0.8, duration: 240, yoyo: true, ease: 'Sine.easeInOut' });
+        });
+        this.time.delayedCall(delay + 560, () => {
+          if (!alive()) return;
+          feedback.rotate(r, c);
+          rotateCell(board, r, c, 1);
+          finger.setAlpha(0);
+          const image = images[r][c];
+          if (this.reducedMotion()) paint();
+          else this.tweens.add({ targets: image, angle: image.angle + 90, duration: 220, ease: 'Cubic.easeOut', onComplete: () => alive() && paint() });
+        });
+      };
+      const cycle = () => {
+        if (!alive()) return;
+        for (const [r, c] of wrong) board.grid[r][c].rotation = 3;
+        paint();
+        finger.setAlpha(0);
+        tapAt(0, 2, 700);
+        tapAt(2, 2, 2200);
+        this.time.delayedCall(3200, () => {
+          if (!alive()) return;
+          feedback.connected(2, 2);
+          if (!this.reducedMotion()) this.tweens.add({ targets: images.flat(), scale: 1.07, duration: 200, yoyo: true, ease: 'Sine.easeInOut' });
+        });
+      };
+      cycle();
+      const timer = this.time.addEvent({ delay: 5200, loop: true, callback: cycle });
+      overlay.once('destroy', () => timer.remove(false));
+
+      const y = this.addTutorialLines(overlay, w, top + step * 2 + size / 2 + 56, [
+        t('Toca una pieza para girarla.'),
+        t('Gira las piezas hasta que todas queden conectadas a la fuente.'),
+        t('Cuando todo el circuito se enciende, ganas.'),
+      ]);
+      this.addTutorialTip(overlay, w, y + 4, t('¿Atascado? La pista coloca bien una pieza por 10 Chispas.'));
+      return;
     }
 
-    this.addCardButton(
-      overlay,
-      { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
-      t('Entendido'),
-      () => {
-        this.settings.hasSeenTutorial = true;
-        storage.saveSettings(this.settings);
-        overlay.destroy();
-      },
-      true
-    );
+    if (page === 2) {
+      // Una pieza grande que gira dos veces a la derecha y dos a la izquierda, con la flecha del sentido alrededor
+      const size = 170;
+      const cy = -cardH / 2 + 285;
+      const board: BoardState = { rows: 1, cols: 1, grid: [[{ row: 0, col: 0, baseMask: 14, rotation: 0, isSource: false }]], source: { row: 0, col: 0 } };
+      const piece = this.add.image(0, cy, this.circuitTutorialKey(board, 0, 0, false, size));
+      const arrow = this.add.graphics();
+      const label = this.uiText(0, cy + 172, '', { size: 32, display: true, originX: 0.5 });
+      overlay.add([arrow, piece, label]);
+      const setSense = (clockwise: boolean) => {
+        const color = clockwise ? THEME.clockwise : THEME.counterClockwise;
+        arrow.clear();
+        drawArrowCircle(arrow, 0, cy, 136, color, 10, clockwise ? 1 : -1);
+        label.setText(clockwise ? t('Giro a la derecha') : t('Giro a la izquierda')).setColor(clockwise ? THEME.clockwiseCss : THEME.counterClockwiseCss);
+      };
+      const turn = (step: number, delay: number) =>
+        this.time.delayedCall(delay, () => {
+          if (!alive()) return;
+          feedback.rotate(1, step > 0 ? 2 : 0);
+          if (this.reducedMotion()) piece.setAngle(piece.angle + step * 90);
+          else this.tweens.add({ targets: piece, angle: piece.angle + step * 90, duration: 260, ease: 'Cubic.easeOut' });
+        });
+      const cycle = () => {
+        if (!alive()) return;
+        piece.setAngle(0);
+        setSense(true);
+        turn(1, 700);
+        turn(1, 1500);
+        this.time.delayedCall(2500, () => alive() && setSense(false));
+        turn(-1, 3200);
+        turn(-1, 4000);
+      };
+      cycle();
+      const timer = this.time.addEvent({ delay: 5200, loop: true, callback: cycle });
+      overlay.once('destroy', () => timer.remove(false));
+
+      this.addTutorialLines(overlay, w, cy + 226, [
+        t('El botón grande de debajo de la barra cambia el sentido: a la derecha o a la izquierda.'),
+        t('Elige el sentido que te deje colocar cada pieza con menos toques.'),
+        t('En computadora, el clic derecho gira al revés.'),
+        t('Deshacer devuelve la última pieza que giraste.'),
+      ], 28, 22);
+      return;
+    }
+
+    // Tercera pantalla: trucos
+    this.addTutorialLines(overlay, w, -cardH / 2 + 150, [
+      t('Empieza por las esquinas y los bordes: sus piezas tienen menos posiciones posibles.'),
+      t('Las piezas rectas solo tienen dos posiciones distintas.'),
+      t('Sigue la luz desde la fuente: lo que ya está encendido va bien.'),
+      t('Cuantos menos toques uses y más rápido termines, más Chispas ganas y antes sube la dificultad.'),
+      t('Si te atascas varias veces seguidas, la dificultad baja sola.'),
+      t('Cada día hay un reto nuevo. Cuida tu racha.'),
+    ], 28, 22);
   }
 
   /** Pantalla de estadísticas del jugador. */
@@ -2025,6 +2415,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Genera el nivel y reinicia el estado de la partida (sin tocar la interfaz). */
   private loadLevel(levelIndex: number): void {
+    this.dismissToast();
     this.currentLevelIndex = levelIndex;
     this.isWon = false;
     this.tapCount = 0;
@@ -2240,6 +2631,7 @@ export class GameScene extends Phaser.Scene {
   private goToMenu(): void {
     if (this.inMenu || this.isWon) return;
     this.flowDrag = null;
+    this.dismissToast();
     this.persistGame();
     this.inMenu = true;
     this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
@@ -2763,7 +3155,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private paintCell(g: Phaser.GameObjects.Graphics, look: CellLook): void {
+  private paintCell(g: Phaser.GameObjects.Graphics, look: CellLook, visual?: number): void {
     if (look.flow) {
       paintFlowCell(g, THEME, skinStyle(THEME.skin), this.geometry.cellVisual, look.flow);
       return;
@@ -2772,7 +3164,7 @@ export class GameScene extends Phaser.Scene {
       this.paintLightsCell(g, look);
       return;
     }
-    const { cellVisual } = this.geometry;
+    const cellVisual = visual ?? this.geometry.cellVisual;
     const half = cellVisual / 2;
     const radius = cellVisual * 0.17;
     const { powered, isSource, legs } = look;
@@ -2862,7 +3254,8 @@ export class GameScene extends Phaser.Scene {
       this.flowMissingShown = true;
       const n = emptyCount(this.flowState, this.flowLevelData);
       if (!this.isWon && !this.overlayOpen()) {
-        this.showToast(n === 1 ? t('Falta 1 casilla por llenar.\nTodo el tablero debe quedar lleno.') : t('Faltan {0} casillas por llenar.\nTodo el tablero debe quedar lleno.', n));
+        // Se queda hasta que el jugador vuelve a tocar los hilos (ver `flowPointerDown`)
+        this.showToast(n === 1 ? t('Falta 1 casilla por llenar.\nTodo el tablero debe quedar lleno.') : t('Faltan {0} casillas por llenar.\nTodo el tablero debe quedar lleno.', n), true);
       }
     }
   }
@@ -3053,6 +3446,8 @@ export class GameScene extends Phaser.Scene {
   /** Dedo abajo: prepara un trazo desde un punto o desde un hilo ya trazado. El estado no cambia hasta que el dedo se mueve. */
   private flowPointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.puzzle !== 'flow' || this.isWon || this.overlayOpen()) return;
+    // Volver a tocar el tablero quita el aviso de casillas vacías (el aro de las casillas sigue marcándolas)
+    this.dismissToast();
     const cell = this.flowCellAt(pointer.x, pointer.y);
     if (!cell) return;
     const endpoint = endpointPair(this.flowLevelData, cell);
@@ -3616,6 +4011,8 @@ export class GameScene extends Phaser.Scene {
 
     // Evaluar desempeño; el reto diario NO altera el perfil adaptativo (es igual para todos)
     const { updatedProfile, evaluation } = evaluateAndAdapt(this.profile, {
+      puzzle: this.puzzle,
+      cells: this.board.rows * this.board.cols,
       minTaps,
       actualTaps: this.tapCount,
       elapsedSeconds: this.elapsedTime,
@@ -3642,6 +4039,7 @@ export class GameScene extends Phaser.Scene {
       hintsUsed: this.hintsUsed,
       isNewRecord,
       skinBonusPercent: skinSparksBonus(this.settings.skin),
+      expectedSeconds: evaluation.expectedSeconds,
       multiplier,
     });
 

@@ -11,9 +11,15 @@ export async function runGameScenarios(out) {
     check('se genera una semilla base propia', Number.isInteger(s.progress?.seedBase) && s.progress.seedBase > 0);
     check('el tutorial aún no está marcado como visto', !s.settings?.hasSeenTutorial);
     await g.shot('e1-tutorial');
-    await g.tap(...g.pos.tutorialOk);
+    await g.tap(...g.pos.tutorialNext, 700);
     s = await g.state();
-    check('"Entendido" marca el tutorial como visto', s.settings?.hasSeenTutorial === true);
+    check('«Siguiente» pasa de pantalla sin marcar el tutorial como visto', !s.settings?.hasSeenTutorial);
+    await g.shot('e1-tutorial-2');
+    await g.tap(...g.pos.tutorialNext, 700);
+    await g.shot('e1-tutorial-3');
+    await g.tap(...g.pos.tutorialDone);
+    s = await g.state();
+    check('"Entendido" en la última pantalla marca el tutorial como visto', s.settings?.hasSeenTutorial === true);
     await g.reload();
     await g.shot('e1-sin-tutorial');
     await g.close();
@@ -58,7 +64,7 @@ export async function runGameScenarios(out) {
   }]);
 
   sections.push(['4. Resolver un nivel: progreso, racha y exploit de pistas', async () => {
-    const g = await openGame({ label: 'victoria', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
+    const g = await openGame({ label: 'victoria', seed: { ...SEEN_TUTORIAL, ...RICH }, out, query: '?debug' });
     const r = await winWithHints(g);
     check('se puede resolver el nivel solo con pistas', !!r, r ? `${r.hints} pistas` : 'no se resolvió');
     if (r) {
@@ -80,7 +86,7 @@ export async function runGameScenarios(out) {
   }]);
 
   sections.push(['5. Reto diario: doble recompensa una vez y no toca el perfil', async () => {
-    const g = await openGame({ label: 'diario', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
+    const g = await openGame({ label: 'diario', seed: { ...SEEN_TUTORIAL, ...RICH }, out, query: '?debug' });
     await g.tap(...g.pos.daily, 700);
     await g.shot('e5-diario');
     const r1 = await winWithHints(g, 120);
@@ -126,7 +132,7 @@ export async function runGameScenarios(out) {
   }]);
 
   sections.push(['8. Movimiento reducido', async () => {
-    const g = await openGame({ label: 'movimiento-reducido', reducedMotion: 'reduce', seed: { ...SEEN_TUTORIAL, ...RICH }, out });
+    const g = await openGame({ label: 'movimiento-reducido', reducedMotion: 'reduce', seed: { ...SEEN_TUTORIAL, ...RICH }, out, query: '?debug' });
     const r = await winWithHints(g);
     check('con "reducir movimiento" también se resuelve y se muestra el resultado', !!r && r.after.progress.stats.levelsSolved === 1);
     await g.shot('e8-movimiento-reducido');
@@ -688,7 +694,20 @@ export async function runGameScenarios(out) {
     check('el panel cuenta las luces encendidas', /\d+ de \d+ luces encendidas/.test(await texts(g)), await texts(g));
     await g.tap(...g.pos.lightsPanel, 500);
     check('tocar el panel de luces vuelve a mostrar el tutorial', (await texts(g)).includes('Cómo se juega Luces'));
-    await g.tap(...g.pos.lightsTutorialOk, 500);
+    await g.tap(...g.pos.tutorialNext, 700);
+    check('la segunda pantalla de Luces explica que dos toques se anulan', (await texts(g)).includes('Dos toques se anulan'));
+    await g.page.waitForTimeout(2600);
+    await g.shot('e19-tutorial-luces-p2');
+    await g.tap(...g.pos.tutorialNext, 700);
+    check('la tercera pantalla de Luces enseña el truco de fila por fila', (await texts(g)).includes('Truco: fila por fila'));
+    await g.page.waitForTimeout(3600);
+    await g.shot('e19-tutorial-luces-p3');
+    await g.tap(...g.pos.tutorialDone, 500);
+    check('«Entendido» cierra el tutorial de Luces', !(await texts(g)).includes('Truco: fila por fila'));
+    await g.tap(...g.pos.help, 600);
+    check('«Ayuda» de la barra muestra el tutorial de Luces', (await texts(g)).includes('Cómo se juega Luces'));
+    await g.tap(...g.pos.tutorialSkip, 500);
+    check('«Saltar» cierra el tutorial', !(await texts(g)).includes('Cómo se juega Luces'));
     // Cambiar a Circuitos y volver a Luces no repite el tutorial
     await g.playPuzzle('circuits', 900);
     await g.playPuzzle('lights', 900);
@@ -934,6 +953,14 @@ export async function runGameScenarios(out) {
       check('con todas las parejas unidas pero casillas vacías no se gana', joinedNotFull.won === false && joinedNotFull.filled < joinedNotFull.cells && joinedNotFull.mode === 'normal', JSON.stringify(joinedNotFull));
       check('avisa de las casillas que faltan por llenar', /por llenar/.test(tx) && new RegExp('\\d+ de \\d+ casillas llenas').test(tx), tx.slice(0, 200));
       await g.shot('e20-hilos-faltan-casillas');
+      // El aviso no bloquea: el tablero sigue aceptando trazos y, al volver a tocar, el aviso se quita
+      await g.page.waitForTimeout(2500); // más que lo que antes duraba el aviso: debe seguir en pantalla
+      const toastState = await g.page.evaluate(`(() => { const sc = ${scene}; return { toast: !!sc.toast, blocked: sc.overlayOpen() }; })()`);
+      check('el aviso de casillas vacías sigue en pantalla y no bloquea el tablero', toastState.toast && !toastState.blocked, JSON.stringify(toastState));
+      const pairsDrag = await flowInfo(g);
+      const [x0, y0] = pairsDrag.solution[0][0];
+      await g.tap(x0, y0, 400);
+      check('al volver a tocar los hilos el aviso se quita', await g.page.evaluate(`(() => !${scene}.toast)()`));
       const relaxedWin = await g.page.evaluate(`(() => { const sc = ${scene}; sc.profile.mode = 'relaxed'; sc.updateFlowVisuals(); sc.evaluateVictory(); return sc.isWon; })()`);
       check('tampoco se gana en Relajado: hay que llenar todo el tablero en todos los modos', relaxedWin === false);
     }
@@ -1034,6 +1061,29 @@ export async function runGameScenarios(out) {
     await g.enter('lights');
     i = await info(g);
     check('tras cerrar y abrir la app Luces sigue como estaba', i.taps === lights.taps && JSON.stringify(i.lights) === JSON.stringify(lights.lights), `${i.taps}`);
+
+    // «Ayuda» muestra el tutorial de Circuitos (tres pantallas) sin tocar la partida
+    await g.openMenu();
+    await g.enter('circuits');
+    await g.tap(...g.pos.help, 700);
+    let help = await texts(g);
+    check('«Ayuda» muestra el tutorial de Circuitos', help.includes('Cómo se juega Circuitos'));
+    await g.page.waitForTimeout(3600);
+    await g.shot('e21-tutorial-circuitos-1');
+    await g.tap(...g.pos.tutorialNext, 700);
+    help = await texts(g);
+    check('la segunda pantalla explica el sentido del giro', help.includes('El sentido del giro'));
+    await g.page.waitForTimeout(2200);
+    await g.shot('e21-tutorial-circuitos-2');
+    await g.tap(...g.pos.tutorialNext, 700);
+    help = await texts(g);
+    check('la tercera pantalla da trucos', help.includes('Trucos para Circuitos') && help.includes('esquinas'));
+    await g.shot('e21-tutorial-circuitos-3');
+    await g.tap(...g.pos.tutorialDone, 500);
+    i = await info(g);
+    check('cerrar la ayuda deja la partida como estaba', !(await texts(g)).includes('Trucos para Circuitos') && i.taps === 3, `${i.taps}`);
+    await g.openMenu();
+    await g.enter('lights');
 
     // Reiniciar el nivel descarta la partida a medias
     await g.tap(...g.pos.reset, 500);

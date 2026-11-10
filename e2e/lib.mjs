@@ -220,7 +220,9 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     mode: [136, 158], daily: [360, 158], theme: [584, 158],
     reset: [136, 378], undo: [360, 378], hint: [584, 378],
     dir: [360, 502], stats: [650, 56], back: [124, 56],
-    tutorialOk: [360, H / 2 + 700 / 2 - 84],
+    // Tutoriales de varias pantallas (tarjeta de 1090 px): «Saltar» y «Siguiente» abajo; en la última, «Entendido» en el centro
+    tutorialOk: [360 - 144.5, H / 2 + 1090 / 2 - 84], tutorialSkip: [360 - 144.5, H / 2 + 1090 / 2 - 84],
+    tutorialNext: [360 + 144.5, H / 2 + 1090 / 2 - 84], tutorialDone: [360, H / 2 + 1090 / 2 - 84], help: [136, 158],
     // Estadísticas (tarjeta de 900 px): solo los números y «Cerrar»
     statsClose: [360, H / 2 + 900 / 2 - 84],
     // Menú principal (ver computeMenuLayout): tarjetas de puzzles, modos y accesos
@@ -232,7 +234,7 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
     settingsUpdates: [360, H / 2 + 429],
     // Mini tutorial de Luces (tarjeta de 1090 px) y panel de luces (siempre en [360, 502])
-    lightsTutorialOk: [360, H / 2 + 1090 / 2 - 84], flowTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
+    lightsTutorialOk: [360 - 144.5, H / 2 + 1090 / 2 - 84], flowTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
     // Aviso de versión nueva (tarjeta de 620 px)
     updateLater: [360 - 144.5, H / 2 + 226], updateNow: [360 + 144.5, H / 2 + 226],
     // Ajustes (tarjeta de 1150 px)
@@ -258,7 +260,7 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
   g.menuOpen = true;
   g.openMenu = async (wait = 500) => {
     if (g.menuOpen) return;
-    await g.tap(...g.pos.mode, wait);
+    await g.tap(...g.pos.back, wait); // botón «Volver»
     g.menuOpen = true;
   };
   g.enter = async (puzzle, wait = 700) => {
@@ -293,6 +295,9 @@ export async function winWithHints(g, maxTaps = 120) {
     const sparks = after.progress.sparks;
     if (after.progress.stats.levelsSolved > baseSolved) {
       charged += 1; // la pista ganadora ya estaba cobrada; lo que sobre es la recompensa del nivel
+      // Con ?debug se lee del juego cuántas pistas se usaron: deducirlo de los cambios de saldo falla con mucha carga
+      const exact = await g.page.evaluate(() => window.__game?.scene?.scenes?.find((sc) => sc.handleCellTap)?.hintsUsed);
+      if (Number.isInteger(exact)) charged = exact;
       const reward = sparks - (start.sparks - 10 * charged);
       await g.page.waitForTimeout(1600); // pulso de luz + tarjeta de resultados
       return { hints: charged, reward, after };

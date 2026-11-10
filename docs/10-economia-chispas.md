@@ -13,7 +13,7 @@ Las Chispas se ganan resolviendo niveles y se gastan en **pistas** (10 cada una)
 | Aspecto equipado | **+5 % / +10 % / +15 % / +20 % / +25 %** (Cyberpunk / Matrix / Océano / Solar / Aurora) del subtotal del nivel |
 | Reto diario, la primera vez de cada día | **el doble** (también del bonus del aspecto) |
 
-Los puzzles **Luces** e **Hilos** pagan igual que Circuitos (misma fórmula; sus récords de tiempo son aparte). Cada puzzle tiene su reto diario, y cada uno paga doble la primera vez de cada día. Usar pistas quita los bonos de eficiencia y rapidez, y cada pista cuesta 10: por eso quien juega sin ayuda gana varias veces más que quien juega con pistas.
+Los puzzles **Luces** e **Hilos** pagan igual que Circuitos (misma fórmula; sus récords de tiempo son aparte), salvo el bono de rapidez: el tiempo que cuenta como «rápido» es el tiempo esperado de cada puzzle (`expectedSecondsFor` en `adaptive.ts`: Luces da más tiempo para pensar y en Hilos crece con el tablero), el mismo que usa la dificultad. Cada puzzle tiene su reto diario, y cada uno paga doble la primera vez de cada día. Usar pistas quita los bonos de eficiencia y rapidez, y cada pista cuesta 10: por eso quien juega sin ayuda gana varias veces más que quien juega con pistas.
 
 ## Perfiles de jugador (por día)
 
@@ -44,7 +44,7 @@ Objetivos que cumple la tabla (y que comprueban las pruebas):
 
 Cada aspecto da un porcentaje extra de Chispas por nivel mientras está equipado: es la recompensa por haberlo conseguido, además de su aspecto. El bonus se calcula sobre el subtotal del nivel (base + eficiencia + rapidez + récord), se redondea y aparece en el desglose de la victoria («aspecto N») y en la tienda («+15 % Chispas»). El bonus acelera la colección, pero no la regala: la prueba exige que con él se tarde más del 75 % de lo que se tardaría sin él. No afecta al coste de las pistas.
 
-**Nota sobre la dificultad:** desde la beta.9 los jugadores suben de nivel de habilidad antes (3 victorias seguidas en vez de 5), y cada peldaño paga `5 + nivel` Chispas, así que en la práctica se gana algo más de lo que modela esta tabla (que parte de un nivel fijo por perfil). Si la colección resulta demasiado rápida con datos reales, se ajustan los precios o los bonus aquí.
+**Nota sobre la dificultad:** desde la beta.9 los jugadores suben de nivel de habilidad antes (3 victorias seguidas en vez de 5; tras la beta.12, 3 victorias buenas o 6 normales), y cada peldaño paga `5 + nivel` Chispas, así que en la práctica se gana algo más de lo que modela esta tabla (que parte de un nivel fijo por perfil). Si la colección resulta demasiado rápida con datos reales, se ajustan los precios o los bonus aquí.
 
 ## Cómo ajustarlo
 

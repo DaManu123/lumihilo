@@ -218,6 +218,8 @@ export interface RewardInput {
   multiplier: number;
   /** Bonus (%) del aspecto equipado sobre la recompensa; 0 por defecto. */
   skinBonusPercent?: number;
+  /** Tiempo que tarda un buen jugador (ver `expectedSecondsFor` en adaptive.ts); si falta, el de Circuitos. */
+  expectedSeconds?: number;
 }
 
 export interface SparksReward {
@@ -243,7 +245,7 @@ export function computeSparksReward(input: RewardInput): SparksReward {
     else if (input.tapEfficiency >= 0.6) efficiencyBonus = 2;
   }
 
-  const expectedSeconds = Math.max(12, input.minTaps * 2.5);
+  const expectedSeconds = input.expectedSeconds ?? Math.max(12, input.minTaps * 2.5);
   // La rapidez también exige no haber usado pistas (con ayuda, un nivel sale en segundos)
   const speedBonus = input.hintsUsed === 0 && input.elapsedSeconds <= expectedSeconds ? 5 : 0;
   const recordBonus = input.isNewRecord ? 5 : 0;

@@ -53,7 +53,7 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
     expect(profile.gamesWon).toBe(3);
   });
 
-  it('criterio de salida: 3 partidas atorado bajan la dificultad para evitar frustración', () => {
+  it('criterio de salida: los atascos seguidos bajan la dificultad para evitar frustración', () => {
     let profile: AdaptiveProfile = {
       ...createDefaultProfile('normal'),
       currentTier: 4, // Empezamos en tier 4
@@ -90,14 +90,12 @@ describe('Sistema de Dificultad Adaptativa (Fase 3)', () => {
     expect(res.updatedProfile.consecutiveStruggles).toBe(1);
   });
 
-  it('abandonos consecutivos bajan el tier solo al llegar a 3 (igual que los atascos)', () => {
+  it('abandonos consecutivos bajan el tier al llegar a 2 (igual que los atascos)', () => {
     let profile: AdaptiveProfile = { ...createDefaultProfile('normal'), currentTier: 4 };
     const abandon = { minTaps: 10, actualTaps: 5, elapsedSeconds: 40, abandoned: true };
 
-    for (let i = 0; i < 2; i++) {
-      profile = evaluateAndAdapt(profile, abandon).updatedProfile;
-      expect(profile.currentTier).toBe(4);
-    }
+    profile = evaluateAndAdapt(profile, abandon).updatedProfile;
+    expect(profile.currentTier).toBe(4);
     profile = evaluateAndAdapt(profile, abandon).updatedProfile;
     expect(profile.currentTier).toBe(3);
   });

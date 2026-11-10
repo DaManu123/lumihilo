@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DIFFICULTY_TIERS, MAX_TIER, WINS_TO_RISE, createDefaultProfile, effectiveTier, evaluateAndAdapt, getLevelParamsForProfile, profileFromShared,
+  DIFFICULTY_TIERS, MAX_TIER, RISE_POINTS, STRUGGLES_TO_DROP, WINS_TO_RISE, AdaptiveProfile, createDefaultProfile, effectiveTier,
+  evaluateAndAdapt, expectedSecondsFor, getLevelParamsForProfile, profileFromShared,
 } from '../src/core/adaptive';
+import type { MatchResult } from '../src/core/adaptive';
+import { computeSparksReward } from '../src/core/progress';
 import { HybridStorageService } from '../src/services/StorageService';
 
 describe('Dificultad: peldaños de Circuitos', () => {
@@ -84,5 +87,78 @@ describe('Dificultad: un perfil por puzzle', () => {
     storage.set('profile_adaptive', '???');
     expect(storage.loadProfile('flow').currentTier).toBe(2);
     expect(storage.loadProfile('circuits').currentTier).toBe(2);
+  });
+});
+
+describe('Dificultad: sube o baja según lo bien que se juega', () => {
+  const play = (p: AdaptiveProfile, r: MatchResult) => evaluateAndAdapt(p, r).updatedProfile;
+  const playMany = (p: AdaptiveProfile, r: MatchResult, n: number) => {
+    for (let i = 0; i < n; i++) p = play(p, r);
+    return p;
+  };
+  // Circuitos, 10 giros mínimos: tiempo esperado 25 s
+  const good: MatchResult = { minTaps: 10, actualTaps: 13, elapsedSeconds: 24 };
+  const average: MatchResult = { minTaps: 10, actualTaps: 20, elapsedSeconds: 40 };
+  const poor: MatchResult = { minTaps: 10, actualTaps: 40, elapsedSeconds: 60 };
+
+  it('quien juega bien sube cada 3 niveles; quien va justo, cada 6', () => {
+    expect(playMany(createDefaultProfile('normal'), good, WINS_TO_RISE).currentTier).toBe(3);
+    const avg = createDefaultProfile('normal');
+    expect(playMany(avg, average, RISE_POINTS - 1).currentTier).toBe(2);
+    expect(playMany(avg, average, RISE_POINTS).currentTier).toBe(3);
+  });
+
+  it('quien se atasca no sube nunca y baja con dos atascos seguidos', () => {
+    let p: AdaptiveProfile = { ...createDefaultProfile('normal'), currentTier: 5 };
+    expect(evaluateAndAdapt(p, poor).evaluation.isStruggle).toBe(true);
+    p = playMany(p, poor, STRUGGLES_TO_DROP);
+    expect(p.currentTier).toBe(4);
+    p = playMany(p, poor, STRUGGLES_TO_DROP);
+    expect(p.currentTier).toBe(3);
+  });
+
+  it('un atasco borra los puntos ganados: alternar bien y atascado no hace subir', () => {
+    let p = createDefaultProfile('normal');
+    for (let i = 0; i < 10; i++) p = play(p, i % 2 === 0 ? good : poor);
+    expect(p.currentTier).toBe(2);
+  });
+
+  it('tardar muchísimo más de lo esperado cuenta como atasco aunque no sobren toques', () => {
+    const res = evaluateAndAdapt(createDefaultProfile('normal'), { minTaps: 10, actualTaps: 10, elapsedSeconds: 25 * 3.6 });
+    expect(res.evaluation.isStruggle).toBe(true);
+  });
+
+  it('cada puzzle tiene su tiempo esperado: Hilos crece con el tablero y Luces da tiempo para pensar', () => {
+    expect(expectedSecondsFor('circuits', 20, 49)).toBe(50);
+    expect(expectedSecondsFor('flow', 8, 64)).toBeGreaterThan(expectedSecondsFor('flow', 3, 16) * 2);
+    expect(expectedSecondsFor('flow', 8, 64)).toBeGreaterThan(expectedSecondsFor('circuits', 8, 64) * 3);
+    expect(expectedSecondsFor('lights', 20, 49)).toBeGreaterThan(expectedSecondsFor('circuits', 20, 49));
+  });
+
+  it('Hilos: un 8×8 bien jugado en poco más de un minuto es maestría (con la vara de Circuitos sería atasco)', () => {
+    const flow = evaluateAndAdapt(createDefaultProfile('normal'), { puzzle: 'flow', cells: 64, minTaps: 8, actualTaps: 10, elapsedSeconds: 75 });
+    expect(flow.evaluation.isMastery).toBe(true);
+    const asCircuits = evaluateAndAdapt(createDefaultProfile('normal'), { minTaps: 8, actualTaps: 10, elapsedSeconds: 75 });
+    expect(asCircuits.evaluation.isMastery).toBe(false);
+    expect(asCircuits.evaluation.isStruggle).toBe(true);
+  });
+
+  it('Hilos: rehacer todos los trazos muchas veces y tardar no es maestría', () => {
+    const res = evaluateAndAdapt(createDefaultProfile('normal'), { puzzle: 'flow', cells: 36, minTaps: 6, actualTaps: 30, elapsedSeconds: 120 });
+    expect(res.evaluation.isMastery).toBe(false);
+    expect(res.evaluation.isStruggle).toBe(true);
+  });
+
+  it('Luces: el doble del mínimo de toques a buen ritmo es maestría (encontrar el mínimo exacto es muy difícil)', () => {
+    const lights = evaluateAndAdapt(createDefaultProfile('normal'), { puzzle: 'lights', cells: 36, minTaps: 12, actualTaps: 24, elapsedSeconds: 60 });
+    expect(lights.evaluation.isMastery).toBe(true);
+    const lost = evaluateAndAdapt(createDefaultProfile('normal'), { puzzle: 'lights', cells: 36, minTaps: 12, actualTaps: 60, elapsedSeconds: 150 });
+    expect(lost.evaluation.isStruggle).toBe(true);
+  });
+
+  it('la recompensa de rapidez usa el mismo tiempo esperado del puzzle', () => {
+    const base = { tier: 5, tapEfficiency: 0.8, elapsedSeconds: 60, minTaps: 8, hintsUsed: 0, isNewRecord: false, multiplier: 1 };
+    expect(computeSparksReward(base).speedBonus).toBe(0); // vara de Circuitos: 20 s
+    expect(computeSparksReward({ ...base, expectedSeconds: expectedSecondsFor('flow', 8, 64) }).speedBonus).toBe(5);
   });
 });
