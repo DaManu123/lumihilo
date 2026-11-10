@@ -797,13 +797,23 @@ export async function runGameScenarios(out) {
     check('la primera vez en Hilos sale el mini tutorial', (await texts(g)).includes('Cómo se juega Hilos'));
     await g.page.waitForTimeout(3500);
     await g.shot('e20-tutorial-hilos');
+    check('el tutorial dice que hay que llenar todas las casillas', (await texts(g)).includes('llena todas las casillas'));
+    await g.tap(...g.pos.flowTutorialOk, 700); // «Siguiente»
+    s = await g.state();
+    let tt = await texts(g);
+    check('«Siguiente» enseña la segunda pantalla: un tablero lleno gana y uno con casillas vacías no', tt.includes('Hay que llenar todo el tablero') && tt.includes('Todas las casillas llenas') && tt.includes('Quedan casillas vacías') && !tt.includes('Cómo se juega Hilos') && s.settings?.hasSeenFlowTip !== true, tt.slice(0, 160));
+    await g.page.waitForTimeout(500);
+    await g.shot('e20-tutorial-hilos-llenar');
     await g.tap(...g.pos.flowTutorialOk, 500);
     s = await g.state();
-    check('«Entendido» cierra el tutorial y lo anota', !(await texts(g)).includes('Cómo se juega Hilos') && s.settings?.hasSeenFlowTip === true);
+    check('«Entendido» cierra el tutorial y lo anota', !(await texts(g)).includes('Hay que llenar todo el tablero') && s.settings?.hasSeenFlowTip === true);
     check('el panel cuenta los hilos unidos', /0 de \d+ hilos unidos/.test(await texts(g)), await texts(g));
     await g.tap(...g.pos.lightsPanel, 500);
     check('tocar el panel de hilos vuelve a mostrar el tutorial', (await texts(g)).includes('Cómo se juega Hilos'));
+    await g.tap(...g.pos.flowTutorialOk, 600);
     await g.tap(...g.pos.flowTutorialOk, 500);
+    check('el tutorial se cierra tras sus dos pantallas', !(await texts(g)).includes('Hay que llenar todo el tablero') && !(await texts(g)).includes('Cómo se juega Hilos'));
+    check('el panel también cuenta las casillas llenas', /0 de \d+ casillas llenas/.test(await texts(g)), await texts(g));
     await g.close();
 
     // Trazar, deshacer, bloqueos y cortes
@@ -864,6 +874,42 @@ export async function runGameScenarios(out) {
     s = await g.state();
     check('sube el nivel de Hilos y no el de Circuitos ni el de Luces', s.progress.flowLevel === 2 && s.progress.currentLevel === (levelBefore.progress.currentLevel ?? 1) && s.progress.lightsLevel === (levelBefore.progress.lightsLevel ?? 1), `hilos ${s.progress.flowLevel}, circuitos ${s.progress.currentLevel} (antes ${levelBefore.progress.currentLevel}), luces ${s.progress.lightsLevel} (antes ${levelBefore.progress.lightsLevel})`);
     check('guarda un récord de tiempo con su propia clave', Object.keys(s.progress.stats.bestTimeByTier).some((k) => k.startsWith('F')) || s.progress.stats.levelsSolved >= 1);
+    await g.close();
+
+    // Llenar todo el tablero: unir las parejas sin llenarlo no gana en Normal (y avisa), y sí en Relajado
+    g = await openGame({ label: 'hilos-llenar', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
+    const route = `(() => { const sc = ${scene}; const L = sc.flowLevelData; const n = L.params.size; const key = (c) => c.row + ',' + c.col;
+      const sameC = (a, b) => a.row === b.row && a.col === b.col;
+      const ends = new Set(L.pairs.flatMap((q) => [key(q.a), key(q.b)]));
+      for (let attempt = 0; attempt < 400; attempt++) {
+        const order = L.pairs.map((_, i) => i).sort(() => Math.random() - 0.5);
+        const used = new Set(); const paths = L.pairs.map(() => []); let ok = true;
+        for (const i of order) {
+          const { a, b } = L.pairs[i]; const prev = new Map([[key(a), null]]); const queue = [a]; let found = false;
+          while (queue.length && !found) { const c = queue.shift();
+            for (const [dr, dc] of [[0, 1], [1, 0], [0, -1], [-1, 0]].sort(() => Math.random() - 0.5)) { const nx = { row: c.row + dr, col: c.col + dc };
+              if (nx.row < 0 || nx.col < 0 || nx.row >= n || nx.col >= n || prev.has(key(nx))) continue;
+              if (!sameC(nx, b) && (used.has(key(nx)) || ends.has(key(nx)))) continue;
+              prev.set(key(nx), c); if (sameC(nx, b)) { found = true; break; } queue.push(nx); } }
+          if (!found) { ok = false; break; }
+          const path = []; for (let c = b; c; c = prev.get(key(c))) path.unshift(c);
+          path.forEach((c) => used.add(key(c))); paths[i] = path; }
+        if (ok && used.size < n * n) return paths; }
+      return null; })()`;
+    const joinedNotFull = await g.page.evaluate(`(() => { const sc = ${scene}; const paths = ${route}; if (!paths) return null;
+      sc.flowState = { paths }; sc.updateFlowVisuals(); sc.evaluateVictory();
+      return { won: sc.isWon, filled: paths.flat().length, cells: sc.flowLevelData.params.size ** 2, mode: sc.profile.mode }; })()`);
+    if (!joinedNotFull) {
+      check('se encontró una forma de unir las parejas sin llenar el tablero', false, 'sin ruta');
+    } else {
+      await g.page.waitForTimeout(800);
+      const tx = await texts(g);
+      check('con todas las parejas unidas pero casillas vacías no se gana en Normal', joinedNotFull.won === false && joinedNotFull.filled < joinedNotFull.cells && joinedNotFull.mode === 'normal', JSON.stringify(joinedNotFull));
+      check('avisa de las casillas que faltan por llenar', /por llenar/.test(tx) && new RegExp('\\d+ de \\d+ casillas llenas').test(tx), tx.slice(0, 200));
+      await g.shot('e20-hilos-faltan-casillas');
+      const relaxedWin = await g.page.evaluate(`(() => { const sc = ${scene}; sc.profile.mode = 'relaxed'; sc.updateFlowVisuals(); sc.evaluateVictory(); return sc.isWon; })()`);
+      check('en Relajado basta con unir las parejas', relaxedWin === true);
+    }
     await g.close();
 
     // Reto diario de Hilos: aparte de los de Circuitos y Luces

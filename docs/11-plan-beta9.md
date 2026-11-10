@@ -40,5 +40,9 @@ Hoy: 1 proceso, 1 navegador, ~36 `openGame`, `deviceScaleFactor: 2` en todo (Web
 ## Parte 5 · Más Chispas con los aspectos
 **Decidido por el usuario:** bonus por aspecto equipado. Cada aspecto da un % extra de Chispas por nivel mientras se lleva puesto (propuesta: Cyberpunk +5 %, Matrix +10 %, Océano +15 %, Solar +20 %, Aurora +25 %; Filamento 0 %). Se aplica en `computeSparksReward` (campo nuevo, visible en el desglose de la victoria) y se muestra en la tienda («+15 % Chispas»). Se reequilibra `docs/10-economia-chispas.md` y `tests/economy.test.ts` (los plazos de compra bajan algo; se ajustan los umbrales). Las frases nuevas llevan su entrada en `EN`.
 
+## Parte 7 · Añadido después (2026-11-10, a petición del usuario)
+- **Hilos: llenar todo el tablero** en Normal, Reto y reto diario (Relajado, solo unir). Aviso y aro que late en las casillas vacías, contador de casillas en el panel, pista que ayuda a llenar y tutorial de 2 pantallas con paloma y equis.
+- **Circuitos: «Giro a la derecha/izquierda»** en lugar de horario/antihorario.
+
 ## Parte 6 · Cierre
 Pasada completa: `npm run typecheck`, `npm test`, `npm run test:e2e`, `npm run test:audio` si se toca audio; actualizar `CLAUDE.md` (números de pruebas, estado). Sin etiquetar ni publicar.

@@ -96,7 +96,11 @@ import {
   flowHint,
   flowParamsForTier,
   generateFlow,
-  isFlowSolved,
+  emptyCount,
+  flowCellCount,
+  flowRequiresFill,
+  isFlowComplete,
+  isFlowJoinedButNotFull,
   applySolutionPath,
   pathOwner,
   endpointPair,
@@ -275,6 +279,9 @@ export class GameScene extends Phaser.Scene {
   private flowDrag: { pair: number; start: FlowCell; began: boolean; before: FlowState; steps: number } | null = null;
   private flowUndo: FlowState[] = [];
   private lastFlowCell: FlowCell | null = null;
+  /** Hilos: ya se avisó de que faltan casillas por llenar (para no repetir el aviso en cada trazo) y latido de las vacías. */
+  private flowMissingShown = false;
+  private flowMissingPulse?: Phaser.Tweens.Tween;
   private lastLightsTap: { row: number; col: number } | null = null;
   private dailyKey = '';
 
@@ -707,18 +714,22 @@ export class GameScene extends Phaser.Scene {
 
   private renderDirectionButton(): void {
     if (this.puzzle === 'flow') {
-      // En Hilos no se gira nada: el panel cuenta los hilos unidos (y al tocarlo explica cómo se juega)
+      // En Hilos no se gira nada: el panel cuenta los hilos unidos (y, si hay que llenar, las casillas) y al tocarlo explica cómo se juega
       const { w, h } = this.dirRect;
       const total = this.flowLevelData?.pairs.length ?? 0;
       const joined = this.flowLevelData ? connectedCount(this.flowState, this.flowLevelData) : 0;
-      const fraction = total > 0 ? joined / total : 0;
+      const needFill = !!this.flowLevelData && this.flowFillRequired();
+      const cells = this.flowLevelData ? flowCellCount(this.flowLevelData) : 0;
+      const filled = this.flowLevelData ? cells - emptyCount(this.flowState, this.flowLevelData) : 0;
+      // La barra mide lo que falta para ganar: las casillas llenas (si hay que llenar) o los hilos unidos
+      const fraction = needFill ? (cells > 0 ? filled / cells : 0) : total > 0 ? joined / total : 0;
       this.dirPanel.clear();
       this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.06 + 0.1 * fraction), 1);
       this.dirPanel.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
       this.dirPanel.lineStyle(4, THEME.primary, 1);
       this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
-      this.dirTitle.setText(t('{0} de {1} hilos unidos', joined, total)).setColor(THEME.primaryCss).setPosition(40, -16);
-      this.dirSub.setText('');
+      this.dirTitle.setText(t('{0} de {1} hilos unidos', joined, total)).setColor(THEME.primaryCss).setPosition(40, needFill ? -30 : -16);
+      this.dirSub.setText(needFill ? t('{0} de {1} casillas llenas', filled, cells) : '').setPosition(40, needFill ? 4 : 26);
       this.dirIcon.clear();
       // Icono: dos puntos unidos por un hilo
       const ix = -w / 2 + 84;
@@ -734,11 +745,13 @@ export class GameScene extends Phaser.Scene {
       this.dirIcon.fillCircle(ix + 26, 10, 11);
       const barW = 400;
       const barX = 40 - barW / 2;
+      const barY = needFill ? 34 : 18;
+      const barH = needFill ? 12 : 16;
       this.dirIcon.fillStyle(THEME.divider, 1);
-      this.dirIcon.fillRoundedRect(barX, 18, barW, 16, 8);
+      this.dirIcon.fillRoundedRect(barX, barY, barW, barH, barH / 2);
       if (fraction > 0) {
         this.dirIcon.fillStyle(THEME.primary, 1);
-        this.dirIcon.fillRoundedRect(barX, 18, Math.max(16, barW * fraction), 16, 8);
+        this.dirIcon.fillRoundedRect(barX, barY, Math.max(barH, barW * fraction), barH, barH / 2);
       }
       return;
     }
@@ -768,7 +781,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.dirTitle.setPosition(40, -20);
-    this.dirSub.setText(t('Toca para cambiar el sentido'));
+    this.dirSub.setPosition(40, 26).setText(t('Toca para cambiar el sentido'));
     const clockwise = this.rotationDirection === 'cw';
     const color = clockwise ? THEME.clockwise : THEME.counterClockwise;
     const colorCss = clockwise ? THEME.clockwiseCss : THEME.counterClockwiseCss;
@@ -781,7 +794,7 @@ export class GameScene extends Phaser.Scene {
     this.dirPanel.lineStyle(4, color, 1);
     this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
 
-    this.dirTitle.setText(clockwise ? t('Giro horario') : t('Giro antihorario')).setColor(colorCss);
+    this.dirTitle.setText(clockwise ? t('Giro a la derecha') : t('Giro a la izquierda')).setColor(colorCss);
 
     this.dirIcon.clear();
     drawArrowCircle(this.dirIcon, -w / 2 + 84, 0, 28, color, 9, clockwise ? 1 : -1);
@@ -2051,6 +2064,9 @@ export class GameScene extends Phaser.Scene {
     this.flowState = createFlowState(level);
     this.flowUndo = [];
     this.flowDrag = null;
+    this.flowMissingShown = false;
+    this.flowMissingPulse?.remove();
+    this.flowMissingPulse = undefined;
     this.lastFlowCell = null;
     this.currentParams = { width: size, height: size, extraLoops: 0, branchBias: 0 };
     const grid = Array.from({ length: size }, (_, row) =>
@@ -2329,7 +2345,7 @@ export class GameScene extends Phaser.Scene {
     flow.glow = Math.round(Math.min(1, Math.max(0, view.glow)) * GLOW_STEPS) / GLOW_STEPS;
     const legs = flow.legs.map((l) => `${l.dx},${l.dy}`).join(';');
     const prefix = `F|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${cellSize}|${cellVisual}`;
-    const key = `fcell|${prefix}|${flow.owner}|${flow.endpoint ? 1 : 0}${flow.complete ? 1 : 0}${flow.hintRing ? 1 : 0}|${Math.round(flow.glow * GLOW_STEPS)}|${legs}`;
+    const key = `fcell|${prefix}|${flow.owner}|${flow.endpoint ? 1 : 0}${flow.complete ? 1 : 0}${flow.hintRing ? 1 : 0}${flow.missing ? 1 : 0}|${Math.round(flow.glow * GLOW_STEPS)}|${legs}`;
     if (key === view.textureKey) return;
     const look: CellLook = { powered: false, isSource: false, hintRing: flow.hintRing, glowStep: 0, marks: false, legs: [], flow };
     this.ensureCellTexture(key, prefix, look);
@@ -2519,10 +2535,45 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** En Hilos, ¿hay que llenar todo el tablero para ganar? (Normal, Reto y reto diario; en Relajado no.) */
+  private flowFillRequired(): boolean {
+    return flowRequiresFill(this.profile.mode, this.isDaily);
+  }
+
+  /** Avisa (una vez por situación) de que faltan casillas por llenar y hace latir las vacías. */
+  private updateFlowMissing(missing: boolean): void {
+    this.flowMissingPulse?.remove();
+    this.flowMissingPulse = undefined;
+    const empties: Phaser.GameObjects.Image[] = [];
+    for (const row of this.cellViews) {
+      for (const view of row) {
+        view.img.setAlpha(1);
+        if (missing && pathOwner(this.flowState, { row: view.row, col: view.col }) < 0) empties.push(view.img);
+      }
+    }
+    if (!missing) {
+      this.flowMissingShown = false;
+      return;
+    }
+    if (!this.reducedMotion() && empties.length > 0) {
+      this.flowMissingPulse = this.tweens.add({ targets: empties, alpha: 0.45, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    if (!this.flowMissingShown) {
+      this.flowMissingShown = true;
+      const n = emptyCount(this.flowState, this.flowLevelData);
+      if (!this.isWon && !this.overlayOpen()) {
+        this.showToast(n === 1 ? t('Falta 1 casilla por llenar.\nTodo el tablero debe quedar lleno.') : t('Faltan {0} casillas por llenar.\nTodo el tablero debe quedar lleno.', n));
+      }
+    }
+  }
+
   private updateFlowVisuals(): void {
     if (this.puzzle === 'flow') {
-      const looks = flowLooks(this.flowLevelData, this.flowState, this.geometry.cellSize / 2);
+      // Con todas las parejas unidas pero casillas vacías (y hay que llenar), esas casillas se señalan
+      const missing = this.flowFillRequired() && isFlowJoinedButNotFull(this.flowState, this.flowLevelData);
+      const looks = flowLooks(this.flowLevelData, this.flowState, this.geometry.cellSize / 2, missing);
       for (const row of this.cellViews) for (const view of row) this.drawFlowCell(view, looks);
+      this.updateFlowMissing(missing);
       const total = this.flowLevelData.pairs.length;
       feedback.setIntensity(total > 0 ? connectedCount(this.flowState, this.flowLevelData) / total : 0);
       if (this.dirRect) this.renderDirectionButton();
@@ -2765,7 +2816,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Pista en Hilos: por 10 Chispas, traza por ti el hilo de la pareja que menos estropea. */
   private useFlowHint(): void {
-    const pair = flowHint(this.flowState, this.flowLevelData);
+    const pair = flowHint(this.flowState, this.flowLevelData, this.flowFillRequired());
     if (pair === null) {
       this.showToast(t('Todo está unido.'));
       return;
@@ -2815,7 +2866,7 @@ export class GameScene extends Phaser.Scene {
   /** Textura de una casilla del tutorial de Hilos con el aspecto actual. */
   private flowTutorialKey(look: FlowCellLook, size: number): string {
     const legs = look.legs.map((l) => `${l.dx},${l.dy}`).join(';');
-    const key = `ftut|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${size}|${look.owner}|${look.endpoint ? 1 : 0}${look.complete ? 1 : 0}|${legs}`;
+    const key = `ftut|${this.settings.theme}${this.settings.highContrast ? '+hc' : ''}|${this.settings.skin}|${size}|${look.owner}|${look.endpoint ? 1 : 0}${look.complete ? 1 : 0}${look.missing ? 1 : 0}|${legs}`;
     if (!this.textures.exists(key)) {
       const texture = this.textures.addDynamicTexture(key, size + 16, size + 16);
       if (texture) {
@@ -2828,130 +2879,226 @@ export class GameScene extends Phaser.Scene {
     return key;
   }
 
-  /**
-   * Mini tutorial de Hilos para cualquier edad: un tablero de ejemplo donde un dedo arrastra de un punto al otro de cada
-   * color (se repite solo), tres frases cortas y un botón.
-   */
-  private showFlowTutorial(): void {
-    const cardH = 1090;
-    const { overlay, w } = this.createCard(cardH, 250);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Hilos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
-
-    // Tablero de ejemplo 3×3: dos parejas, una por cada lado
-    const size = 116;
-    const step = size + 14;
-    const top = -cardH / 2 + 150 + size / 2;
-    const demo: FlowLevel = {
+  /** Tablero de ejemplo 3×3 de los tutoriales de Hilos: dos parejas y una solución que llena las nueve casillas. */
+  private flowDemoLevel(): { level: FlowLevel; red: FlowCell[]; blue: FlowCell[]; blueShort: FlowCell[] } {
+    const red: FlowCell[] = [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 }];
+    const blue: FlowCell[] = [{ row: 0, col: 1 }, { row: 0, col: 2 }, { row: 1, col: 2 }, { row: 1, col: 1 }];
+    const level: FlowLevel = {
       seed: 0,
       params: { size: 3, pairs: 2 },
-      pairs: [{ a: { row: 0, col: 0 }, b: { row: 2, col: 0 } }, { a: { row: 0, col: 2 }, b: { row: 2, col: 2 } }],
-      solution: [
-        [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 2, col: 0 }],
-        [{ row: 0, col: 2 }, { row: 1, col: 2 }, { row: 2, col: 2 }],
-      ],
+      pairs: [{ a: red[0], b: red[4] }, { a: blue[0], b: blue[3] }],
+      solution: [red, blue],
       minTaps: 2,
     };
+    // La otra forma de unir la pareja azul: más corta, pero deja dos casillas vacías
+    return { level, red, blue, blueShort: [blue[0], blue[3]] };
+  }
+
+  /** Dibuja en una tarjeta un tablero 3×3 de ejemplo y devuelve cómo pintarlo (hilos trazados y, si se quiere, las vacías marcadas). */
+  private addFlowDemoBoard(
+    overlay: Phaser.GameObjects.Container,
+    level: FlowLevel,
+    cx: number,
+    top: number,
+    size: number
+  ): { render: (paths: FlowCell[][], missing?: boolean) => void; at: (cell: FlowCell) => { x: number; y: number }; width: number } {
+    const step = size + Math.round(size * 0.12);
+    const side = step * 3;
     const plate = this.add.graphics();
     plate.fillStyle(mixColors(THEME.background, THEME.surface, 0.45), 1);
-    plate.fillRoundedRect(-step * 1.5 - 4, top - size / 2 - 18, step * 3 + 8, step * 3 + 22, 30);
+    plate.fillRoundedRect(cx - side / 2 - 4, top - size / 2 - 14, side + 8, side + 18, 26);
     plate.lineStyle(3, THEME.cardBorder, 1);
-    plate.strokeRoundedRect(-step * 1.5 - 4, top - size / 2 - 18, step * 3 + 8, step * 3 + 22, 30);
+    plate.strokeRoundedRect(cx - side / 2 - 4, top - size / 2 - 14, side + 8, side + 18, 26);
     overlay.add(plate);
     const images: Phaser.GameObjects.Image[][] = [];
     for (let r = 0; r < 3; r++) {
       const row: Phaser.GameObjects.Image[] = [];
       for (let c = 0; c < 3; c++) {
-        const image = this.add.image((c - 1) * step, top + r * step, '__DEFAULT');
+        const image = this.add.image(cx + (c - 1) * step, top + r * step, '__DEFAULT');
         overlay.add(image);
         row.push(image);
       }
       images.push(row);
     }
-    const render = (paths: FlowCell[][]) => {
-      const looks = flowLooks(demo, { paths }, step / 2);
+    const render = (paths: FlowCell[][], missing = false) => {
+      const looks = flowLooks(level, { paths }, step / 2, missing);
       for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) images[r][c].setTexture(this.flowTutorialKey(looks[r][c], size));
     };
+    const at = (cell: FlowCell) => ({ x: cx + (cell.col - 1) * step, y: top + cell.row * step });
+    return { render, at, width: side + 8 };
+  }
 
-    // El dedo (un anillo) que va de un punto al otro
-    const finger = this.add.graphics();
-    finger.lineStyle(7, THEME.accent, 1);
-    finger.strokeCircle(0, 0, 42);
-    finger.fillStyle(THEME.accent, 0.35);
-    finger.fillCircle(0, 0, 30);
-    finger.setAlpha(0);
-    overlay.add(finger);
-    const at = (cell: FlowCell) => ({ x: (cell.col - 1) * step, y: top + cell.row * step });
-
-    // Cada paso de la animación: (hilos trazados, dónde está el dedo)
-    const red = demo.solution[0];
-    const blue = demo.solution[1];
-    const frames: Array<{ paths: FlowCell[][]; finger: FlowCell | null }> = [
-      { paths: [[], []], finger: red[0] },
-      { paths: [[red[0]], []], finger: red[0] },
-      { paths: [red.slice(0, 2), []], finger: red[1] },
-      { paths: [red, []], finger: red[2] },
-      { paths: [red, []], finger: blue[0] },
-      { paths: [red, [blue[0]]], finger: blue[0] },
-      { paths: [red, blue.slice(0, 2)], finger: blue[1] },
-      { paths: [red, blue], finger: blue[2] },
-      { paths: [red, blue], finger: null },
-    ];
-    const alive = () => overlay.active;
-    const show = (frame: (typeof frames)[number], index: number) => {
-      if (!alive()) return;
-      render(frame.paths);
-      if (frame.finger) {
-        const target = at(frame.finger);
-        finger.setAlpha(1);
-        if (index === 0 || this.reducedMotion()) finger.setPosition(target.x, target.y);
-        else this.tweens.add({ targets: finger, x: target.x, y: target.y, duration: 320, ease: 'Sine.easeInOut' });
-        if (index === 3 || index === 7) feedback.flowConnected();
-      } else {
-        finger.setAlpha(0);
-      }
-    };
-    const cycle = () => {
-      if (!alive()) return;
-      frames.forEach((frame, index) => this.time.delayedCall(300 + index * 620, () => show(frame, index)));
-    };
-    render([[], []]);
-    cycle();
-    const timer = this.time.addEvent({ delay: 300 + frames.length * 620 + 900, loop: true, callback: cycle });
-    overlay.once('destroy', () => timer.remove(false));
-
-    // Tres frases cortas
-    const lines = [t('Arrastra el dedo de un punto al otro del mismo color.'), t('Los hilos no pueden cruzarse: si pasas por otro, lo cortas.'), t('Une todas las parejas para ganar.')];
-    let y = top + step * 2 + size / 2 + 56;
-    for (const line of lines) {
-      const dot = this.add.graphics();
-      dot.fillStyle(THEME.primary, 1);
-      dot.fillCircle(-w / 2 + 56, y + 17, 7);
-      const text = this.uiText(-w / 2 + 84, y, line, { size: 29, weight: '500', wrap: w - 140 });
-      text.setOrigin(0, 0);
-      overlay.add([dot, text]);
-      y += text.height + 26;
+  /** Paloma (bien) o equis (mal) dentro de un círculo: se distinguen por la forma, no solo por el color. */
+  private addMarkBadge(overlay: Phaser.GameObjects.Container, x: number, y: number, good: boolean): void {
+    const color = good ? THEME.primary : THEME.accent;
+    const g = this.add.graphics();
+    g.fillStyle(mixColors(THEME.surface, color, 0.16), 1);
+    g.fillCircle(x, y, 40);
+    g.lineStyle(5, color, 1);
+    g.strokeCircle(x, y, 40);
+    g.lineStyle(10, color, 1);
+    g.beginPath();
+    if (good) {
+      g.moveTo(x - 17, y + 2);
+      g.lineTo(x - 5, y + 15);
+      g.lineTo(x + 19, y - 14);
+    } else {
+      g.moveTo(x - 15, y - 15);
+      g.lineTo(x + 15, y + 15);
+      g.moveTo(x + 15, y - 15);
+      g.lineTo(x - 15, y + 15);
     }
-    const tip = this.uiText(0, y + 10, t('¿Atascado? La pista une una pareja por ti.'), {
-      size: FONT.small,
+    g.strokePath();
+    overlay.add(g);
+  }
+
+  /**
+   * Mini tutorial de Hilos para cualquier edad, en dos pantallas. Primera: un tablero de ejemplo donde un dedo arrastra
+   * de un punto al otro de cada color (se repite solo) y unas frases cortas. Segunda (cuando hay que llenar el tablero):
+   * el mismo tablero resuelto de dos formas: la que lo llena todo gana (paloma) y la que deja casillas vacías no (equis).
+   */
+  private showFlowTutorial(page: 1 | 2 = 1): void {
+    const needFill = this.flowFillRequired();
+    const cardH = 1090;
+    const { overlay, w } = this.createCard(cardH, 250);
+    const { level: demo, red, blue, blueShort } = this.flowDemoLevel();
+    const size = page === 1 ? 116 : 88;
+    const finish = () => {
+      this.settings.hasSeenFlowTip = true;
+      storage.saveSettings(this.settings);
+      overlay.destroy();
+    };
+
+    if (page === 1) {
+      overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Hilos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+      const step = size + Math.round(size * 0.12);
+      const top = -cardH / 2 + 150 + size / 2;
+      const board = this.addFlowDemoBoard(overlay, demo, 0, top, size);
+      board.render([[], []]);
+
+      // El dedo (un anillo) que va de un punto al otro
+      const finger = this.add.graphics();
+      finger.lineStyle(7, THEME.accent, 1);
+      finger.strokeCircle(0, 0, 42);
+      finger.fillStyle(THEME.accent, 0.35);
+      finger.fillCircle(0, 0, 30);
+      finger.setAlpha(0);
+      overlay.add(finger);
+
+      // Cada paso de la animación: (hilos trazados, dónde está el dedo)
+      const frames: Array<{ paths: FlowCell[][]; finger: FlowCell | null; connected?: boolean }> = [{ paths: [[], []], finger: red[0] }];
+      for (let k = 1; k <= red.length; k++) frames.push({ paths: [red.slice(0, k), []], finger: red[k - 1], connected: k === red.length });
+      frames.push({ paths: [red, []], finger: blue[0] });
+      for (let k = 1; k <= blue.length; k++) frames.push({ paths: [red, blue.slice(0, k)], finger: blue[k - 1], connected: k === blue.length });
+      frames.push({ paths: [red, blue], finger: null });
+      const frameMs = 480;
+      const alive = () => overlay.active;
+      const show = (frame: (typeof frames)[number], index: number) => {
+        if (!alive()) return;
+        board.render(frame.paths);
+        if (frame.finger) {
+          const target = board.at(frame.finger);
+          finger.setAlpha(1);
+          if (index === 0 || this.reducedMotion()) finger.setPosition(target.x, target.y);
+          else this.tweens.add({ targets: finger, x: target.x, y: target.y, duration: 260, ease: 'Sine.easeInOut' });
+          if (frame.connected) feedback.flowConnected();
+        } else {
+          finger.setAlpha(0);
+        }
+      };
+      const cycle = () => {
+        if (!alive()) return;
+        frames.forEach((frame, index) => this.time.delayedCall(300 + index * frameMs, () => show(frame, index)));
+      };
+      cycle();
+      const timer = this.time.addEvent({ delay: 300 + frames.length * frameMs + 1100, loop: true, callback: cycle });
+      overlay.once('destroy', () => timer.remove(false));
+
+      // Frases cortas
+      const lines = [
+        t('Arrastra el dedo de un punto al otro del mismo color.'),
+        t('Los hilos no pueden cruzarse: si pasas por otro, lo cortas.'),
+        needFill ? t('Para ganar, une todas las parejas y llena todas las casillas.') : t('Une todas las parejas para ganar. En Normal y Reto, además, hay que llenar todo el tablero.'),
+      ];
+      let y = top + step * 2 + size / 2 + 56;
+      for (const line of lines) {
+        const dot = this.add.graphics();
+        dot.fillStyle(THEME.primary, 1);
+        dot.fillCircle(-w / 2 + 56, y + 17, 7);
+        const text = this.uiText(-w / 2 + 84, y, line, { size: 29, weight: '500', wrap: w - 140 });
+        text.setOrigin(0, 0);
+        overlay.add([dot, text]);
+        y += text.height + 26;
+      }
+      const tip = this.uiText(0, y + 10, t('¿Atascado? La pista une una pareja por ti.'), {
+        size: FONT.small,
+        weight: '500',
+        color: THEME.mutedText,
+        wrap: w - 88,
+        originX: 0.5,
+      });
+      tip.setOrigin(0.5, 0).setAlign('center');
+      overlay.add(tip);
+
+      this.addCardButton(
+        overlay,
+        { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
+        needFill ? t('Siguiente') : t('Entendido'),
+        () => {
+          overlay.destroy();
+          if (needFill) this.showFlowTutorial(2);
+          else {
+            this.settings.hasSeenFlowTip = true;
+            storage.saveSettings(this.settings);
+          }
+        },
+        true
+      );
+      return;
+    }
+
+    // Segunda pantalla: el mismo tablero, resuelto de dos formas
+    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Hay que llenar todo el tablero'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    const intro = this.uiText(0, -cardH / 2 + 124, t('Las dos formas unen las dos parejas, pero solo una gana.'), {
+      size: 28,
       weight: '500',
       color: THEME.mutedText,
       wrap: w - 88,
       originX: 0.5,
     });
-    tip.setOrigin(0.5, 0).setAlign('center');
-    overlay.add(tip);
+    intro.setOrigin(0.5, 0).setAlign('center');
+    overlay.add(intro);
 
-    this.addCardButton(
-      overlay,
-      { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
-      t('Entendido'),
-      () => {
-        this.settings.hasSeenFlowTip = true;
-        storage.saveSettings(this.settings);
-        overlay.destroy();
-      },
-      true
-    );
+    const rowGap = 330;
+    const boardCx = -w / 2 + 44 + (size + Math.round(size * 0.12)) * 1.5;
+    const examples: Array<{ paths: FlowCell[][]; good: boolean; caption: string }> = [
+      { paths: [red, blue], good: true, caption: t('Todas las casillas llenas: ¡ganas!') },
+      { paths: [red, blueShort], good: false, caption: t('Quedan casillas vacías: no ganas, aunque las parejas estén unidas.') },
+    ];
+    examples.forEach((example, i) => {
+      const top = -cardH / 2 + 250 + size / 2 + i * rowGap;
+      const board = this.addFlowDemoBoard(overlay, demo, boardCx, top, size);
+      board.render(example.paths, !example.good);
+      const textX = boardCx + board.width / 2 + 28;
+      const textW = w / 2 - 44 - textX;
+      this.addMarkBadge(overlay, textX + 40, top - 40, example.good);
+      const caption = this.uiText(textX, top + 20, example.caption, { size: 26, weight: '600', wrap: textW });
+      caption.setOrigin(0, 0);
+      overlay.add(caption);
+    });
+
+    const lines = [t('Las casillas vacías se marcan con un aro que late.'), t('¿Atascado? La pista también te ayuda a llenarlo.')];
+    let y = -cardH / 2 + 250 + size / 2 + 2 * rowGap - 70;
+    for (const line of lines) {
+      const dot = this.add.graphics();
+      dot.fillStyle(THEME.primary, 1);
+      dot.fillCircle(-w / 2 + 56, y + 17, 7);
+      const text = this.uiText(-w / 2 + 84, y, line, { size: 28, weight: '500', wrap: w - 140 });
+      text.setOrigin(0, 0);
+      overlay.add([dot, text]);
+      y += text.height + 22;
+    }
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Entendido'), finish, true);
   }
 
   private handleUndo(): void {
@@ -3158,7 +3305,7 @@ export class GameScene extends Phaser.Scene {
   private evaluateVictory(): void {
     if (this.isWon) return;
     const solved =
-      this.puzzle === 'lights' ? isAllLit(this.lightGrid) : this.puzzle === 'flow' ? isFlowSolved(this.flowState, this.flowLevelData) : checkVictory(this.board);
+      this.puzzle === 'lights' ? isAllLit(this.lightGrid) : this.puzzle === 'flow' ? isFlowComplete(this.flowState, this.flowLevelData, this.flowFillRequired()) : checkVictory(this.board);
     if (!solved) return;
 
     this.isWon = true;

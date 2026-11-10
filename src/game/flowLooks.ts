@@ -20,10 +20,12 @@ export interface FlowCellLook {
   hintRing: boolean;
   /** Brillo extra, de 0 a 1. */
   glow: number;
+  /** Casilla vacía que impide ganar (todas las parejas están unidas pero falta llenarla). */
+  missing: boolean;
 }
 
 /** El aspecto de cada casilla del tablero para un estado de los hilos. `reach` es lo que se asoma el hilo hacia una casilla vecina. */
-export function flowLooks(level: FlowLevel, state: FlowState, reach: number): FlowCellLook[][] {
+export function flowLooks(level: FlowLevel, state: FlowState, reach: number, highlightEmpty = false): FlowCellLook[][] {
   const size = level.params.size;
   const looks: FlowCellLook[][] = [];
   for (let row = 0; row < size; row++) {
@@ -48,6 +50,7 @@ export function flowLooks(level: FlowLevel, state: FlowState, reach: number): Fl
         legs,
         hintRing: false,
         glow: 0,
+        missing: highlightEmpty && owner < 0,
       });
     }
     looks.push(line);

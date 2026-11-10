@@ -6,7 +6,7 @@ Guía para retomar el trabajo. Todo lo de aquí se comprobó contra el repositor
 **Lumihilo** (antes «Puzzle Adaptativo»; significado del nombre en `docs/09-nombre.md`) es un juego de puzzle casual para **Android, web y escritorio (Windows/Linux)**. Cada nivel se genera por algoritmo (siempre resoluble) y la dificultad se adapta al nivel real del jugador, no a su edad. Audiencia: **13+**, partidas de 30–90 s. Hay **3 puzzles**:
 - **Circuitos** (el original): girar piezas hasta conectar todo a la fuente.
 - **Luces**: tocar una casilla cambia su luz y la de sus 4 vecinas; encender todo. Con **piedras** (casillas bloqueadas) desde habilidad 3.
-- **Hilos**: arrastrar para unir parejas de puntos del mismo color sin que se solapen hilos (cortar el de otro lo borra por ahí). Ganar = unir todas las parejas (no hace falta llenar el tablero).
+- **Hilos**: arrastrar para unir parejas de puntos del mismo color sin que se solapen hilos (cortar el de otro lo borra por ahí). Ganar = unir todas las parejas **y no dejar ninguna casilla vacía** (en Normal, Reto y reto diario; en Relajado basta con unir las parejas; sin publicar, beta.9).
 
 Economía: moneda **Chispas** (ganar niveles; pistas cuestan 10; tienda de **6 aspectos**: Filamento gratis, Cyberpunk 150, Matrix 350, Océano 550, Solar 800, Aurora 1000). Cada aspecto equipado da un bonus de Chispas por nivel: +5/10/15/20/25 % (Cyberpunk…Aurora; sin publicar, beta.9). Cada puzzle tiene nivel, récords y **reto diario** propios. Localización ES/EN.
 
@@ -34,11 +34,11 @@ Piezas clave:
 npm ci                    # instalar (si node_modules viene de Windows y rompe: rm -rf node_modules && npm ci)
 npm run dev               # desarrollo (Vite, puerto 3000)
 npm run typecheck         # tsc --noEmit (strict, noUnusedLocals)
-npm test                  # unitarias (Vitest): 450 pruebas
+npm test                  # unitarias (Vitest): 455 pruebas
 npm run build             # tsc + vite build → dist/
 npm run build:play        # build con UPDATE_SOURCE=play
 npm run cap:sync          # build + cap sync android (necesario al cambiar plugins)
-npm run test:e2e          # navegador (Playwright, ~9-16 min según la carga, 185 comprobaciones). Compila solo.
+npm run test:e2e          # navegador (Playwright, ~9-16 min según la carga, 192 comprobaciones). Compila solo.
 npm run test:audio        # mide volumen/pico en dBFS de música y efectos
 npm run test:perf         # CPU por fotograma (requiere ?debug)
 ```
@@ -63,7 +63,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 - **iOS descartado** (sin Mac ni dispositivo). **Anuncios y cuentas pospuestos** (Fase 5; #7, #8). Nada de «privacidad total» (AdMob recogería IDs si algún día se añade).
 - **appId definitivo `com.damanu.lumihilo`** desde la beta.7 (las betas 1–6 usaban otro; el progreso no se traslada). No cambiable tras publicar.
 - Segundo puzzle = Luces (eligió el usuario entre 3 opciones); tercero = Hilos (eligió entre Hilos/Espejos/Mareas; descartados Espejos y Mareas, quedan como ideas).
-- Hilos: nivel = camino hamiltoniano aleatorio («backbite») cortado en tramos de ≥3 casillas; ganar = unir parejas (sin obligar a llenar → más accesible). Un toque sobre un hilo unido no lo borra (el trazo es «perezoso»: no cambia nada hasta que el dedo se mueve).
+- Hilos: nivel = camino hamiltoniano aleatorio («backbite») cortado en tramos de ≥3 casillas; ganar = unir parejas **y llenar todo el tablero** en Normal, Reto y reto diario (`flowRequiresFill` en `flow.ts`); en Relajado solo unir parejas (más accesible). Decidido el 2026-11-10 por feedback de dos personas: sin llenar, Hilos era muy permisivo. Siempre hay solución que llena (el nivel se genera desde un camino hamiltoniano) y cualquier forma de llenar vale. Con todo unido y casillas vacías, estas se marcan con un aro que late y un aviso; el panel muestra «N de M casillas llenas»; el tutorial tiene 2 pantallas (la segunda enseña con paloma y equis qué gana y qué no); la pista, si todo está unido pero falta llenar, enseña el hilo de la solución que difiere. Un toque sobre un hilo unido no lo borra (el trazo es «perezoso»: no cambia nada hasta que el dedo se mueve).
 - Dificultad (parte 4 del plan beta.9, sin publicar): **un perfil adaptativo por puzzle** (`profile_adaptive` = Circuitos, `profile_adaptive_lights`, `profile_adaptive_flow`; los que no existen heredan modo y peldaño del de Circuitos). Tablas propias de 10 peldaños en `adaptive.ts` (Circuitos), `lights.ts` (hasta 7×7, ~27 toques mínimos en el 10, antes ~13) y `flow.ts` (hasta 8×8 y 8 hilos; el 9 y el 10 son iguales porque solo hay 8 colores). Sube con 3 victorias seguidas (antes 5) y una victoria dominante tras otra salta 2 peldaños. `effectiveTier()` aplica el modo (Relajado ≤3, Reto ≥5) también a Luces e Hilos.
 - Luces: Gaussian GF(2) para mínimo de toques y pista; las piedras se excluyen del sistema.
 - Economía modelada por ritmo de juego en `tests/economy.test.ts` (perfiles 52/153/437 Chispas al día) y documentada en `docs/10-economia-chispas.md`; Aurora a 1000 obligó a relajar límites (habitual ≤ 21 días, ocasional ≤ 56).
@@ -77,7 +77,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 **Descartado**: iOS, anuncios/cuentas por ahora, Espejos/Mareas como tercer puzzle.
 
 ## 7. Pendientes (por prioridad)
-0. **Hecho en `dev` y sin publicar (candidato a beta.9; el usuario pedirá la beta):** aviso de versión con reintentos (`updateRetry.ts`), docs al día, e2e en paralelo, dificultad por puzzle y más alta, bonus de Chispas por aspecto, capturas de Hilos. Verificado el 2026-11-09: typecheck, 450 unitarias y 185/185 e2e. **Falta probarlo en el teléfono** (Hilos con el dedo, la nueva dificultad y que el aviso salga solo). Plan y estado en `docs/11-plan-beta9.md`. El usuario quiere empezar la prueba cerrada de Play cuanto antes: hacen falta su cuenta (#7), la clave de subida (#46) y ≥12 testers (#49).
+0. **Hecho en `dev` y sin publicar (candidato a beta.9; el usuario pedirá la beta):** aviso de versión con reintentos (`updateRetry.ts`), **Hilos obliga a llenar el tablero** (Normal/Reto/diario) con tutorial de 2 pantallas, **«Giro a la derecha/izquierda»** en vez de horario/antihorario en Circuitos, docs al día, e2e en paralelo, dificultad por puzzle y más alta, bonus de Chispas por aspecto, capturas de Hilos. Verificado el 2026-11-10: typecheck, 455 unitarias y 192 e2e (en la pasada completa fallaron 2 por la carga, que pasan solas). **Falta probarlo en el teléfono** (Hilos con el dedo, la nueva dificultad y que el aviso salga solo). Plan y estado en `docs/11-plan-beta9.md`. El usuario quiere empezar la prueba cerrada de Play cuanto antes: hacen falta su cuenta (#7), la clave de subida (#46) y ≥12 testers (#49).
 1. **Retomar aquí:** el usuario probará la beta.8 en el teléfono. Esperar su feedback sobre Hilos: control táctil (arrastre rápido/diagonal, cortes accidentales), dificultad/tamaño, música de cuerda. Ajustar lo que diga (probable: sensibilidad del trazo en `flowPointerMove`, `flowStepsTo`).
 2. Tareas **del usuario** (bloquean Play): cuenta de Play Console (#7), clave de subida (#46; pasos en `docs/store/play-console.md`), reintentar búsqueda de marca en el IMPI, reclutar ≥12 testers para prueba cerrada de 14 días (#49).
 3. Capturas de la tienda con Hilos: hechas (11-13). Falta elegir las 8 que se suben a Play (propuesta en `docs/store/ficha.md`) y, si se quiere, versión en inglés.

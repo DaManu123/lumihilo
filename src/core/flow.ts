@@ -1,4 +1,5 @@
 import { mulberry32 } from './rng';
+import type { GameMode } from './adaptive';
 
 /**
  * Tercer puzzle: **Hilos**. Un tablero cuadrado con parejas de puntos del mismo color; hay que unir cada pareja
@@ -7,8 +8,10 @@ import { mulberry32 } from './rng';
  *
  * Cada nivel se genera partiendo de la solución: se traza un camino que recorre todas las casillas (un camino
  * hamiltoniano aleatorio, con el algoritmo «backbite»), se corta en tramos y los extremos de cada tramo son una
- * pareja. Así **siempre tiene solución** y la pista puede enseñar el tramo exacto. Ganar es unir todas las parejas
- * (no hace falta llenar el tablero). 100 % TypeScript puro, igual que el resto de `src/core`.
+ * pareja. Así **siempre tiene solución** (y una que llena todo el tablero) y la pista puede enseñar el tramo exacto.
+ * Ganar es unir todas las parejas **y, en los modos Normal y Reto y en el reto diario, no dejar ninguna casilla vacía**
+ * (en Relajado basta con unir las parejas). Un nivel puede tener varias soluciones y todas valen. 100 % TypeScript
+ * puro, igual que el resto de `src/core`.
  */
 
 export interface FlowCell {
@@ -177,6 +180,37 @@ export function filledCount(state: FlowState): number {
   return state.paths.reduce((total, path) => total + path.length, 0);
 }
 
+/** Casillas del tablero. */
+export const flowCellCount = (level: FlowLevel): number => level.params.size * level.params.size;
+
+/** Casillas que ningún hilo ocupa todavía. */
+export function emptyCount(state: FlowState, level: FlowLevel): number {
+  return flowCellCount(level) - filledCount(state);
+}
+
+/** No queda ninguna casilla vacía (los hilos no se solapan, así que basta con contarlas). */
+export function isFlowFull(state: FlowState, level: FlowLevel): boolean {
+  return emptyCount(state, level) === 0;
+}
+
+/**
+ * ¿Hay que llenar todo el tablero para ganar? Sí en Normal y en Reto, y siempre en el reto diario (es el mismo para
+ * todos); en Relajado basta con unir las parejas.
+ */
+export function flowRequiresFill(mode: GameMode, isDaily: boolean): boolean {
+  return isDaily || mode !== 'relaxed';
+}
+
+/** Victoria: todas las parejas unidas y, si `requireFill`, ninguna casilla vacía. */
+export function isFlowComplete(state: FlowState, level: FlowLevel, requireFill: boolean): boolean {
+  return isFlowSolved(state, level) && (!requireFill || isFlowFull(state, level));
+}
+
+/** Todas las parejas están unidas pero quedan casillas vacías (lo que impide ganar cuando hay que llenar). */
+export function isFlowJoinedButNotFull(state: FlowState, level: FlowLevel): boolean {
+  return isFlowSolved(state, level) && !isFlowFull(state, level);
+}
+
 /**
  * Empieza un trazo en una casilla. Sobre un extremo, empieza de cero el hilo de su pareja; sobre un hilo ya trazado,
  * lo recorta hasta esa casilla para seguir desde ahí. Devuelve la pareja, o -1 si la casilla está vacía.
@@ -249,16 +283,32 @@ export function applySolutionPath(state: FlowState, level: FlowLevel, pair: numb
   state.paths[pair] = solution.map((cell) => ({ ...cell }));
 }
 
+/** El hilo de la pareja es justo el de la solución del nivel (en cualquier sentido). */
+function matchesSolution(state: FlowState, level: FlowLevel, index: number): boolean {
+  const path = state.paths[index];
+  const solution = level.solution[index];
+  if (path.length !== solution.length) return false;
+  const forward = path.every((c, k) => sameCell(c, solution[k]));
+  const backward = path.every((c, k) => sameCell(c, solution[solution.length - 1 - k]));
+  return forward || backward;
+}
+
 /**
  * Pista: completa la pareja sin unir que menos hilos ajenos estropea (y, a igualdad, la más corta). Devuelve su
- * índice, o null si todo está unido.
+ * índice, o null si no hay nada que enseñar. Con `requireFill`, si todo está unido pero quedan casillas vacías, enseña
+ * el tramo de la solución de una pareja cuyo hilo es distinto (así el tablero acaba lleno).
  */
-export function flowHint(state: FlowState, level: FlowLevel): number | null {
-  let best: { index: number; score: number } | null = null;
-  level.pairs.forEach((_pair, i) => {
-    if (pairComplete(state, level, i)) return;
-    const score = conflicts(state, i, level.solution[i]) * 100 + level.solution[i].length;
-    if (!best || score < best.score) best = { index: i, score };
-  });
-  return best ? (best as { index: number }).index : null;
+export function flowHint(state: FlowState, level: FlowLevel, requireFill = false): number | null {
+  const pick = (eligible: (i: number) => boolean): number | null => {
+    let best: { index: number; score: number } | null = null;
+    level.pairs.forEach((_pair, i) => {
+      if (!eligible(i)) return;
+      const score = conflicts(state, i, level.solution[i]) * 100 + level.solution[i].length;
+      if (!best || score < best.score) best = { index: i, score };
+    });
+    return best ? (best as { index: number }).index : null;
+  };
+  const open = pick((i) => !pairComplete(state, level, i));
+  if (open !== null || !requireFill || isFlowFull(state, level)) return open;
+  return pick((i) => !matchesSolution(state, level, i));
 }
