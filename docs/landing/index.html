@@ -1,571 +1,156 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Landing Page oficial y portal de desarrollo de Lumihilo, el rompecabezas minimalista de circuitos que se adapta en tiempo real a tu estilo de juego. Próximamente en Google Play." />
-  <meta name="theme-color" content="#0a0e17" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lumihilo · Puzzles de luz para Android, web y escritorio</title>
+  <meta name="description" content="Lumihilo reúne tres puzzles de luz: Circuitos, Luces e Hilos. Partidas de menos de un minuto, sin cuentas ni anuncios. Juega en el navegador o únete a la beta en Android." />
   <link rel="alternate" hreflang="en" href="en/" />
-  <link rel="alternate" hreflang="es" href="./" />
-
-  <!-- Open Graph / Meta de compartir -->
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="Lumihilo | Rompecabezas Minimalista de Circuitos" />
-  <meta property="og:description" content="El rompecabezas que aprende de ti. Conecta circuitos de energía neón que se ajustan suavemente a tu ritmo." />
-
-  <title>Lumihilo · Circuito de Luz Minimalista</title>
-
-  <!-- Fuentes e Iconos -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
-  
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <meta property="og:title" content="Lumihilo · Puzzles de luz" />
+  <meta property="og:description" content="Conecta circuitos, enciende tableros y une parejas con un hilo de luz." />
+  <meta property="og:image" content="https://damanu123.github.io/lumihilo/img/portada.png" />
+  <meta name="theme-color" content="#0b1026" />
+  <link rel="preload" href="fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-
-  <!-- Fondo dinámico con partículas sutiles de circuito -->
-  <div class="circuit-bg" aria-hidden="true">
-    <div class="circuit-glow glow-1"></div>
-    <div class="circuit-glow glow-2"></div>
-    <div class="grid-overlay"></div>
-  </div>
-
-  <!-- Barra de Navegación -->
-  <header class="site-header">
-    <div class="nav-container">
-      <a href="#hero" class="brand-logo">
-        <span class="logo-symbol">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3" fill="#00f0ff" stroke="none" />
-            <path d="M12 2v7" />
-            <path d="M12 15v7" />
-            <path d="M2 12h7" />
-            <path d="M15 12h7" />
-          </svg>
-        </span>
-        <span class="brand-name">Lumi<strong>hilo</strong></span>
-      </a>
-
-      <nav class="nav-links" id="navLinks">
-        <a href="#experiencia" class="nav-link">Experiencia</a>
-        <a href="#mecanicas" class="nav-link">Mecánicas</a>
-        <a href="#roadmap" class="nav-link">Diario Dev</a>
-        <a href="#beta" class="nav-link">Únete a la beta</a>
-        <a href="#soporte" class="nav-link">Soporte</a>
-        <a href="#privacy" class="nav-link privacy-btn" id="openPrivacyNav">Privacidad</a>
-        <a href="en/" class="nav-link" hreflang="en" lang="en">English</a>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="favicon.svg" alt="" width="32" height="32" />Lumihilo</a>
+      <nav class="nav" aria-label="Secciones">
+        <a href="#puzzles">Puzzles</a>
+        <a href="#ritmo">Cómo se juega</a>
+        <a href="#beta">Beta</a>
+        <a href="#soporte">Contacto</a>
+        <a href="en/" hreflang="en" lang="en">English</a>
       </nav>
-
-      <a href="#beta" class="cta-pill">
-        <span class="pulse-dot"></span>
-        <span>Pruebas Cerradas</span>
-      </a>
-
-      <!-- Botón Menú Móvil -->
-      <button class="mobile-toggle" id="mobileMenuBtn" aria-label="Abrir menú de navegación">
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-      </button>
+      <a class="btn btn-main" href="play/">Jugar</a>
     </div>
   </header>
 
   <main>
-    <!-- 1. Hero Section -->
-    <section id="hero" class="hero-section">
-      <div class="hero-content">
-        <div class="badge-status">
-          <span class="badge-icon">⚡</span>
-          <span>Desarrollo activo para Android · Google Play Console</span>
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-copy">
+          <h1>Un puzzle de luz que se ajusta a cómo juegas</h1>
+          <p class="lead">Gira piezas, enciende tableros y une hilos. Partidas de menos de un minuto, sin cuentas y sin anuncios.</p>
+          <div class="actions">
+            <a class="btn btn-main" href="play/">Jugar en el navegador</a>
+            <a class="btn btn-ghost" href="#beta">Unirme a la beta en Android</a>
+          </div>
+          <p class="fine">También hay versión para Windows y Linux: <a href="https://github.com/DaManu123/lumihilo/releases/latest" rel="noopener">descargar la última beta</a>.</p>
         </div>
 
-        <h1 class="hero-title">
-          El rompecabezas de luz que <span class="gradient-text">aprende de tu ritmo</span>.
-        </h1>
-
-        <p class="hero-subtitle">
-          Una experiencia visual minimalista y zen donde cada rotación canaliza la corriente. Sin temporizadores agobiantes, sin cuentas obligatorias y diseñado para fluir a tu propio nivel.
-        </p>
-
-        <div class="hero-actions">
-          <a href="play/" class="btn btn-primary">
-            <span>Jugar en el navegador</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </a>
-          <a href="https://github.com/DaManu123/lumihilo/releases/latest" class="btn btn-secondary" rel="noopener">
-            <span>Descargar la beta (Android, Windows, Linux)</span>
-          </a>
-          <a href="#mecanicas" class="btn btn-secondary">
-            <span>Ver cómo funciona</span>
-          </a>
-        </div>
-
-        <!-- Contenedor / Placeholder interactivo del tráiler o portada -->
-        <div class="media-container" id="mediaShowcase">
-          <div class="media-frame">
-            <div class="media-top-bar">
-              <div class="dots">
-                <span class="dot dot-red"></span>
-                <span class="dot dot-yellow"></span>
-                <span class="dot dot-green"></span>
-              </div>
-              <span class="media-title">Trailer / Vista Previa de Juego</span>
-              <span class="media-tag">Build v0.1.0 (AAB)</span>
-            </div>
-
-            <div class="media-canvas">
-              <!-- Arte conceptual representativo interactivo front-end puro -->
-              <div class="circuit-preview">
-                <div class="puzzle-grid-demo">
-                  <div class="demo-cell lit cell-1">
-                    <div class="wire-cross"></div>
-                  </div>
-                  <div class="demo-cell lit cell-2">
-                    <div class="wire-corner"></div>
-                  </div>
-                  <div class="demo-cell lit cell-3">
-                    <div class="wire-line"></div>
-                  </div>
-                  <div class="demo-cell core-source">
-                    <div class="source-pulse"></div>
-                  </div>
-                  <div class="demo-cell lit cell-4">
-                    <div class="wire-tee"></div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Overlay del placeholder para video o tráiler real -->
-              <div class="media-placeholder-overlay">
-                <div class="play-btn-circle" id="playTrailerBtn">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                </div>
-                <p class="placeholder-caption">Espacio reservado para el tráiler oficial / Gameplay en video</p>
-                <span class="sub-caption">Próximamente disponible en Google Play Store</span>
-              </div>
-            </div>
+        <div class="play">
+          <div class="board-frame" id="boardFrame">
+            <ol class="board" id="board" aria-label="Tablero de demostración"></ol>
+          </div>
+          <p class="status" id="boardStatus" role="status" aria-live="polite"></p>
+          <div class="controls">
+            <button class="link-btn" type="button" id="newBoard">Otro tablero</button>
+            <fieldset class="skins">
+              <legend>Aspecto del tablero</legend>
+              <label class="skin" title="Filamento"><input type="radio" name="skin" value="filamento" checked aria-label="Filamento" /><span style="--a:#ffb938;--b:#ff6f91"></span></label>
+              <label class="skin" title="Cyberpunk"><input type="radio" name="skin" value="cyberpunk" aria-label="Cyberpunk" /><span style="--a:#00e5ff;--b:#ff2e93"></span></label>
+              <label class="skin" title="Matrix"><input type="radio" name="skin" value="matrix" aria-label="Matrix" /><span style="--a:#3dff7a;--b:#020b05"></span></label>
+              <label class="skin" title="Océano"><input type="radio" name="skin" value="oceano" aria-label="Océano" /><span style="--a:#35e0c4;--b:#0a2433"></span></label>
+              <label class="skin" title="Solar"><input type="radio" name="skin" value="solar" aria-label="Solar" /><span style="--a:#ffe45c;--b:#ff4d2e"></span></label>
+              <label class="skin" title="Aurora"><input type="radio" name="skin" value="aurora" aria-label="Aurora" /><span style="--a:#8affc1;--b:#c77dff"></span></label>
+            </fieldset>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 2. Mecánicas y Entorno Adaptativo -->
-    <section id="experiencia" class="section">
-      <div class="section-header">
-        <span class="section-tag">Experiencia de Usuario</span>
-        <h2 class="section-title">Diseñado para adaptarse a ti, no tú a él</h2>
-        <p class="section-description">
-          Disfruta de una curva de aprendizaje suave e intuitiva sin frustraciones artificiales ni atascamientos continuos.
-        </p>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #00f0ff;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-            </svg>
-          </div>
-          <h3>Dificultad Dinámica Invisible</h3>
-          <p>
-            El juego calibra continuamente el desafío basándose en tu soltura y ritmo de conexión. Si buscas fluidez, el puzzle te acompaña sin interrupciones; si buscas retos mayores, el tablero responde de inmediato.
-          </p>
-          <div class="card-badge">Cero frustración</div>
+    <section class="section" id="puzzles">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Tres puzzles, una misma luz</h2>
+          <p class="lead">Cada uno tiene su propio nivel, sus récords y su reto diario.</p>
         </div>
-
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #ff007f;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 6v6l4 2" />
-            </svg>
-          </div>
-          <h3>Partidas Cortas y Sin Presión</h3>
-          <p>
-            Partidas rápidas de 30 a 90 segundos perfectas para cualquier momento del día. Sin cuentas regresivas castigadoras ni pérdida de vidas: juega y desconéctate a tu ritmo.
-          </p>
-          <div class="card-badge">Sesiones de 60s</div>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #38f9d7;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-          </div>
-          <h3>Modo Claro y Alto Contraste</h3>
-          <p>
-            Cambia fácilmente entre el estilo Neón Oscuro original y un modo claro minimalista de alto contraste, ideal para jugar en exteriores o para descansar la vista tras un día largo.
-          </p>
-          <div class="card-badge">Accesibilidad total</div>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon" style="--accent: #a855f7;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-          </div>
-          <h3>Privacidad y Almacenamiento Local</h3>
-          <p>
-            Sin registros con contraseña, sin pedirte correos personales ni rastrear tu identidad. Tu progreso se conserva únicamente en la memoria de tu teléfono.
-          </p>
-          <div class="card-badge">Sin cuentas obligatorias</div>
+        <div class="shots">
+          <figure class="shot">
+            <div class="phone"><img src="img/circuitos.jpg" width="540" height="1080" loading="lazy" alt="Captura de Circuitos: un tablero de cables con una pieza de energía y varios tramos encendidos en ámbar" /></div>
+            <figcaption>
+              <h3>Circuitos</h3>
+              <p>Gira las piezas hasta que todo el circuito quede conectado a la fuente.</p>
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="phone"><img src="img/luces.jpg" width="540" height="1080" loading="lazy" alt="Captura de Luces: una cuadrícula de casillas, algunas encendidas en ámbar y otras apagadas" /></div>
+            <figcaption>
+              <h3>Luces</h3>
+              <p>Cada toque cambia una casilla y sus cuatro vecinas. Enciéndelas todas.</p>
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="phone"><img src="img/hilos.jpg" width="540" height="1080" loading="lazy" alt="Captura de Hilos: parejas de puntos de colores unidas por hilos de luz sobre un tablero" /></div>
+            <figcaption>
+              <h3>Hilos</h3>
+              <p>Arrastra el dedo para unir cada pareja de puntos sin que los hilos se solapen.</p>
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
 
-    <!-- 3. Mecánicas de Juego -->
-    <section id="mecanicas" class="section mechanics-section">
-      <div class="section-header">
-        <span class="section-tag">Cómo se Juega</span>
-        <h2 class="section-title">Reglas simples, infinitas posibilidades</h2>
-        <p class="section-description">
-          Aprende en 5 segundos. Toca, gira y observa cómo la luz se propaga.
-        </p>
-      </div>
-
-      <div class="steps-wrapper">
-        <div class="step-item">
-          <div class="step-number">01</div>
-          <div class="step-info">
-            <h4>Observa la Fuente</h4>
-            <p>El núcleo central emite energía luminosa continua en busca de un camino cerrado y armónico.</p>
-          </div>
+    <section class="section" id="ritmo">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Se ajusta a ti, no a tu edad</h2>
         </div>
-
-        <div class="step-divider">
-          <span class="pulse-line"></span>
-        </div>
-
-        <div class="step-item">
-          <div class="step-number">02</div>
-          <div class="step-info">
-            <h4>Rota las Conexiones</h4>
-            <p>Con un solo toque gira los bloques 90°. En caso de pasarte, utiliza el botón <strong>Deshacer</strong> para volver atrás al instante.</p>
-          </div>
-        </div>
-
-        <div class="step-divider">
-          <span class="pulse-line"></span>
-        </div>
-
-        <div class="step-item">
-          <div class="step-number">03</div>
-          <div class="step-info">
-            <h4>Completa el Circuito</h4>
-            <p>Cuando cada segmento se ilumina bilateralmente, la corriente resuena y el puzzle concluye con una sensación pura de satisfacción.</p>
-          </div>
-        </div>
+        <dl class="facts">
+          <div><dt>Dificultad que te sigue</dt><dd>Cada puzzle sube o baja según cómo juegas. Ni aburrido ni atascado.</dd></div>
+          <div><dt>Partidas de 30 a 90 segundos</dt><dd>Sin vidas que perder ni cuenta atrás que te agobie.</dd></div>
+          <div><dt>Un reto diario</dt><dd>El mismo puzzle para todos, cada día y en cada tipo de puzzle.</dd></div>
+          <div><dt>Seis aspectos</dt><dd>Filamento, más cinco que se desbloquean con las Chispas que ganas jugando. Pruébalos arriba, en el tablero.</dd></div>
+          <div><dt>Accesible</dt><dd>Tema claro y oscuro, alto contraste, animaciones ajustables y textos grandes. En español e inglés.</dd></div>
+          <div><dt>Privado</dt><dd>Sin cuentas, sin anuncios y sin analíticas. Tu progreso se queda en tu dispositivo.</dd></div>
+        </dl>
       </div>
     </section>
 
-    <!-- 4. Diario de Desarrollo (Roadmap Visual) -->
-    <section id="roadmap" class="section roadmap-section">
-      <div class="section-header">
-        <span class="section-tag">Diario de Desarrollo</span>
-        <h2 class="section-title">El camino hacia la Google Play Store</h2>
-        <p class="section-description">
-          Compartimos de forma transparente nuestro progreso y el enfoque actual de ingeniería rumbo al lanzamiento oficial en Android.
-        </p>
-      </div>
-
-      <div class="timeline-container">
-        <!-- Hito 1: Completado -->
-        <div class="timeline-card completed">
-          <div class="timeline-indicator">
-            <span class="indicator-icon">✓</span>
-          </div>
-          <div class="timeline-body">
-            <div class="timeline-meta">
-              <span class="phase-tag">Fase 1 y 2 · Completadas</span>
-              <span class="date-tag">Octubre 2026</span>
-            </div>
-            <h3>Prototipo y Generación Procedural</h3>
-            <p>
-              Diseño de la mecánica base con pruebas reales de usuarios (100% de comprensión intuitiva), algoritmos de generación procedural y 10,000 niveles generados en &lt; 50 ms.
-            </p>
-            <div class="timeline-screenshot-placeholder">
-              <div class="screenshot-stub">
-                <span class="stub-icon">📸</span>
-                <span>Captura: Prototipo 4×4 con retroalimentación lumínica</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Hito 2: En Enfoque Actual -->
-        <div class="timeline-card active">
-          <div class="timeline-indicator">
-            <span class="indicator-pulse"></span>
-          </div>
-          <div class="timeline-body">
-            <div class="timeline-meta">
-              <span class="phase-tag current">Enfoque Actual</span>
-              <span class="date-tag live">Noviembre 2026</span>
-            </div>
-            <h3>Optimización, Empaquetado AAB y Play Console</h3>
-            <p>
-              Integración nativa con Capacitor en Android, ajuste fino de la curva adaptativa, compilación del paquete firmado <strong>Android App Bundle (.aab)</strong> y configuración de ficha en Google Play Console.
-            </p>
-            <div class="timeline-checklist">
-              <div class="check-item done">✓ AAB y APK firmados en cada versión beta</div>
-              <div class="check-item in-progress">⏳ Ficha y declaraciones en Google Play Console</div>
-              <div class="check-item in-progress">⏳ Reclutamiento para la pista de Pruebas Cerradas (14 días continuos)</div>
-            </div>
-            <div class="timeline-screenshot-placeholder active-preview">
-              <div class="screenshot-stub">
-                <span class="stub-icon">📱</span>
-                <span>Captura: Build de prueba corriendo en dispositivo físico Android</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Hito 3: Próximamente -->
-        <div class="timeline-card upcoming">
-          <div class="timeline-indicator">
-            <span class="indicator-future">3</span>
-          </div>
-          <div class="timeline-body">
-            <div class="timeline-meta">
-              <span class="phase-tag future">Próximo Hito</span>
-              <span class="date-tag">Pronto</span>
-            </div>
-            <h3>Pruebas Cerradas con la Comunidad</h3>
-            <p>
-              Despliegue escalonado con testers de la comunidad para verificar estabilidad en diversos modelos de dispositivos, consumo eficiente de batería y fluidez de juego.
-            </p>
-            <div class="callout-box">
-              <span class="callout-icon">👥</span>
-              <div>
-                <strong>¿Quieres ser tester previo al lanzamiento?</strong>
-                <p>Escríbenos para incluir tu correo de Google Play en el grupo de acceso anticipado.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Hito 4: Lanzamiento Público -->
-        <div class="timeline-card upcoming">
-          <div class="timeline-indicator">
-            <span class="indicator-future">4</span>
-          </div>
-          <div class="timeline-body">
-            <div class="timeline-meta">
-              <span class="phase-tag future">Meta Final</span>
-              <span class="date-tag">Lanzamiento</span>
-            </div>
-            <h3>Disponibilidad Pública Global</h3>
-            <p>
-              Publicación abierta en la Google Play Store, soporte para el Reto Diario compartido y versión Web complementaria accesible para todo navegador.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 4b. Únete a la beta (prueba cerrada de Google Play) -->
-    <section id="beta" class="section beta-section">
-      <div class="support-card">
-        <div class="support-content">
-          <span class="section-tag">Prueba cerrada en Google Play</span>
-          <h2 class="support-title">Únete a la beta</h2>
-          <p class="support-text">
-            Estoy reuniendo a las primeras personas que prueben Lumihilo en Android desde Google Play. Déjame el correo de tu <strong>cuenta de Google</strong> (el que usas en Play Store) y te añado a la lista de testers.
-          </p>
-
-          <ol class="beta-steps">
-            <li><strong>Pide acceso</strong> con el botón de abajo y deja el correo de tu cuenta de Google.</li>
-            <li><strong>Te añado</strong> a la lista de testers de Play Console (puede tardar un par de días).</li>
-            <li><strong>Instala</strong> el juego desde el enlace de Play que te llegará y cuéntame qué tal va.</li>
+    <section class="section" id="beta">
+      <div class="wrap">
+        <div class="beta">
+          <h2>Únete a la beta en Android</h2>
+          <p class="lead">Estoy reuniendo a las primeras personas que prueben Lumihilo desde Google Play. Necesito el correo de tu cuenta de Google, la que usas en Play Store.</p>
+          <ol>
+            <li>Pide acceso con el botón y deja el correo de tu cuenta de Google.</li>
+            <li>Te añado a la lista de testers de Play Console. Puede tardar un par de días.</li>
+            <li>Instala el juego desde el enlace de Play que te llegará y cuéntame qué tal va.</li>
           </ol>
-
-          <div class="beta-actions">
-            <a href="mailto:myprimemg@gmail.com?subject=Quiero%20unirme%20a%20la%20beta%20de%20Lumihilo&amp;body=Mi%20correo%20de%20Google%20Play%20es%3A%20" class="btn btn-primary" id="betaJoinBtn" rel="noopener">
-              <span>Pedir acceso a la beta</span>
-            </a>
+          <div class="actions">
+            <a class="btn btn-main" id="betaJoinBtn" href="mailto:myprimemg@gmail.com?subject=Quiero%20unirme%20a%20la%20beta%20de%20Lumihilo&amp;body=Mi%20correo%20de%20Google%20Play%20es%3A%20" rel="noopener">Pedir acceso a la beta</a>
           </div>
-
-          <p class="beta-privacy">
-            <strong>Tu correo, protegido:</strong> solo pido la dirección de tu cuenta de Google, únicamente para añadirte a la prueba. Solo yo puedo verla, no se publica, no se vende ni se comparte, y la borro cuando termine la beta (o antes, si me lo pides). Detalles en la <a href="privacidad.html">política de privacidad</a>.
-          </p>
+          <p class="note"><strong>Tu correo, protegido.</strong> Solo pido la dirección de tu cuenta de Google, únicamente para añadirte a la prueba. Solo yo puedo verla; no se publica, no se vende ni se comparte. La borro cuando termine la beta, o antes si me lo pides. Los detalles están en la <a href="privacidad.html">política de privacidad</a>.</p>
         </div>
       </div>
     </section>
 
-    <!-- 5. Soporte al Jugador y Contacto -->
-    <section id="soporte" class="section support-section">
-      <div class="support-card">
-        <div class="support-content">
-          <span class="section-tag">Soporte Técnico Oficial</span>
-          <h2 class="support-title">¿Tienes preguntas, feedback o encontraste un fallo?</h2>
-          <p class="support-text">
-            Como desarrollador independiente, cada opinión es vital para pulir la experiencia antes y durante el lanzamiento en la Play Store. No dudes en contactarme directamente:
-          </p>
-
-          <div class="contact-box">
-            <div class="contact-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <polyline points="22,6 12,13 2,6"/>
-              </svg>
-            </div>
-            <div class="contact-details">
-              <span class="contact-label">Correo de atención a jugadores y testers</span>
-              <a href="mailto:myprimemg@gmail.com" class="contact-email" id="supportEmailLink">myprimemg@gmail.com</a>
-            </div>
-            <button class="copy-email-btn" id="copyEmailBtn" aria-label="Copiar correo electrónico" title="Copiar correo">
-              <span class="copy-text">Copiar</span>
-            </button>
-          </div>
-
-          <div class="support-guidelines">
-            <span class="guide-item">✓ Respuestas en menos de 48 horas hábiles</span>
-            <span class="guide-item">✓ Soporte técnico directo sin bots automatizados</span>
-            <span class="guide-item">✓ Canal para reporte de bugs en Android</span>
-          </div>
+    <section class="section" id="soporte">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>¿Una duda o un fallo?</h2>
+          <p class="lead">Lumihilo lo hace una sola persona y cada opinión ayuda. Escríbeme y respondo yo.</p>
+        </div>
+        <div class="contact">
+          <a class="mail" id="supportEmailLink" href="mailto:myprimemg@gmail.com">myprimemg@gmail.com</a>
+          <button class="copy" id="copyEmailBtn" type="button">Copiar</button>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- Modal de Política de Privacidad (Requisito Estricto de Google Play) -->
-  <div class="modal-backdrop" id="privacyModal" aria-hidden="true" role="dialog" aria-labelledby="privacyTitle">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <div>
-          <h2 id="privacyTitle" class="modal-title">Política de Privacidad</h2>
-          <span class="modal-subtitle">Última actualización: 8 de noviembre de 2026 · Conforme a políticas de Google Play</span>
-        </div>
-        <button class="modal-close" id="closePrivacyBtn" aria-label="Cerrar política de privacidad">&times;</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="privacy-notice">
-          <strong>Resumen de Privacidad:</strong> Este videojuego está diseñado bajo principios de máxima privacidad y minimización de datos. No te pide cuenta de usuario, no almacena tus datos personales en servidores externos y tu progreso vive exclusivamente en tu propio teléfono.
-        </div>
-
-        <section class="policy-part">
-          <h3>1. Responsable del Tratamiento y Contacto</h3>
-          <p>
-            El desarrollo y mantenimiento de <strong>Lumihilo</strong> es gestionado por su desarrollador independiente. Si tienes cualquier inquietud, solicitud o duda respecto a esta política de privacidad, puedes escribir a:
-          </p>
-          <p class="highlight-contact">
-            <strong>Correo electrónico:</strong> <a href="mailto:myprimemg@gmail.com">myprimemg@gmail.com</a>
-          </p>
-        </section>
-
-        <section class="policy-part">
-          <h3>2. Datos que NO recopilamos</h3>
-          <p>La aplicación no recopila directamente ningún tipo de información sensible ni personal:</p>
-          <ul>
-            <li><strong>Sin cuentas ni contraseñas:</strong> No es necesario registrarse, identificarse con redes sociales ni ingresar nombres o correos para jugar. (El correo solo se pide si decides unirte a la beta desde esta web; ver la sección 8.)</li>
-            <li><strong>Sin datos biométricos ni de geolocalización precisa:</strong> No solicitamos permisos de cámara, micrófono, contactos ni GPS.</li>
-            <li><strong>Almacenamiento 100% local:</strong> Tus récords, niveles superados, ajustes de volumen y preferencias de modo claro/oscuro se guardan únicamente en la memoria local de tu dispositivo móvil mediante el sistema seguro de preferencias del sistema operativo. Si desinstalas la app, dichos datos se eliminan con ella.</li>
-          </ul>
-        </section>
-
-        <section class="policy-part">
-          <h3>3. Aviso de versión nueva</h3>
-          <p>
-            La app de Android y la de escritorio, al abrirse, leen la lista pública de versiones publicadas del juego (un archivo en <code>damanu123.github.io</code>, o la API de GitHub si falla) para avisarte si hay una más nueva. Es una consulta de solo lectura que <strong>no incluye ningún dato tuyo ni de tu partida</strong>; GitHub puede registrar datos técnicos de la petición, como la dirección IP. Se te pregunta una vez cada vez que abres la app mientras exista una versión más nueva, y puedes seguir jugando sin actualizar; también puedes buscarla a mano en Ajustes. La versión web no hace esta consulta. Cuando el juego se distribuya por Google Play, esta consulta se sustituye por las actualizaciones de Play y la app deja de contactar con GitHub.
-          </p>
-        </section>
-
-        <section class="policy-part">
-          <h3>4. Anuncios y servicios de terceros</h3>
-          <p>
-            <strong>El juego no contiene anuncios, ni herramientas de analítica, ni servicios de terceros que recojan datos.</strong> No se envía información de tu partida a ningún servidor.
-          </p>
-          <p>
-            Si en el futuro se añadiera publicidad o cualquier otro servicio que trate datos, esta política se actualizaría <em>antes</em> de publicar esa versión, indicando qué datos se tratan, con qué fin y cómo darte control sobre ellos.
-          </p>
-          <p>
-            Esta página web está alojada en GitHub Pages, que puede registrar datos técnicos de las visitas (como la dirección IP) según la <a href="https://docs.github.com/es/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">política de privacidad de GitHub</a>, y carga sus tipografías desde Google Fonts. La aplicación del juego incluye sus tipografías y no hace esas peticiones.
-          </p>
-        </section>
-
-        <section class="policy-part">
-          <h3>5. Permisos y control de tus datos</h3>
-          <ul>
-            <li>En Android la aplicación solo usa el permiso de <strong>vibración</strong> (para la respuesta háptica del juego). No pide cámara, micrófono, ubicación, contactos ni almacenamiento.</li>
-            <li>Tu progreso, Chispas, ajustes y estadísticas se guardan únicamente en tu dispositivo. Puedes borrarlos en cualquier momento desde <em>Ajustes de Android &gt; Aplicaciones &gt; Lumihilo &gt; Almacenamiento &gt; Borrar datos</em>, o desinstalando la aplicación.</li>
-            <li>En la versión web se guardan en el almacenamiento local de tu navegador; se borran al limpiar los datos del sitio.</li>
-          </ul>
-        </section>
-
-        <section class="policy-part">
-          <h3>6. Audiencia y Declaración de Menores</h3>
-          <p>
-            Esta aplicación está clasificada y dirigida a una audiencia de <strong>público general (13 años en adelante)</strong>. No recopilamos intencionalmente datos de menores de 13 años. Si tienes motivos para creer que un menor nos ha provisto información involuntariamente, contáctanos a nuestro correo de soporte y tomaremos medidas correctivas inmediatas.
-          </p>
-        </section>
-
-        <section class="policy-part">
-          <h3>7. Modificaciones a la Política</h3>
-          <p>
-            Cualquier actualización futura a esta política motivada por cambios en la aplicación o nuevas directrices normativas se reflejará directamente en esta página con indicación clara de la fecha de última revisión.
-          </p>
-        </section>
-
-        <section class="policy-part">
-          <h3>8. Registro opcional para la beta (esta página web)</h3>
-          <p>
-            Si pides unirte a la prueba cerrada de Google Play desde esta página, recibimos <strong>únicamente el correo de tu cuenta de Google</strong> (y, si usas el formulario, tu aceptación). <strong>Para qué:</strong> solo para añadirte a la lista de testers de Play Console y poder escribirte sobre la prueba. <strong>Quién lo ve:</strong> solo el desarrollador; no se publica, no se vende ni se comparte con terceros, salvo con Google, que gestiona la lista de testers de Play y el formulario. <strong>Cuánto tiempo:</strong> hasta el final de la prueba cerrada; después se borran. <strong>Tus derechos:</strong> puedes pedir acceso, corrección o borrado en cualquier momento escribiendo a <a href="mailto:myprimemg@gmail.com">myprimemg@gmail.com</a>. Esto no afecta al juego, que sigue sin recopilar datos.
-          </p>
-        </section>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-primary modal-action-btn" id="closePrivacyFooterBtn">Entendido y Cerrar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Pie de Página (Footer Requerido) -->
-  <footer class="site-footer">
-    <div class="footer-container">
-      <div class="footer-brand">
-        <div class="brand-logo footer-logo">
-          <span class="logo-symbol mini">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3" fill="#00f0ff" stroke="none" />
-              <path d="M12 2v7M12 15v7M2 12h7M15 12h7" />
-            </svg>
-          </span>
-          <span>Lumihilo</span>
-        </div>
-        <p class="footer-desc">
-          Videojuego de rompecabezas adaptativo desarrollado con Phaser, Vite y Capacitor para Android.
-        </p>
-      </div>
-
-      <div class="footer-nav">
-        <h4>Navegación</h4>
-        <a href="#hero">Inicio</a>
-        <a href="#experiencia">Experiencia</a>
-        <a href="#mecanicas">Mecánicas</a>
-        <a href="#roadmap">Diario Dev</a>
-      </div>
-
-      <div class="footer-legal">
-        <h4>Legal y Contacto</h4>
-        <button class="legal-link" id="openPrivacyFooter">Política de Privacidad (Google Play)</button>
-        <a href="mailto:myprimemg@gmail.com" class="legal-link">Contacto de Soporte</a>
-        <span class="legal-badge">Google Play Developer Compliant</span>
-      </div>
-    </div>
-
-    <div class="footer-bottom">
-      <div class="bottom-container">
-        <p>&copy; <span id="currentYear">2026</span> Lumihilo. Desarrollado de forma independiente. Todos los derechos reservados.</p>
-        <p class="disclaimer-note">Este sitio web aloja la documentación oficial y la política de privacidad requerida para Google Play Console.</p>
-      </div>
+  <footer class="foot">
+    <div class="wrap">
+      <p>© <span id="currentYear">2026</span> Lumihilo. Desarrollado de forma independiente.</p>
+      <nav aria-label="Pie de página">
+        <a href="privacidad.html">Política de privacidad</a>
+        <a href="https://github.com/DaManu123/lumihilo" rel="noopener">Código en GitHub</a>
+        <a href="en/" hreflang="en" lang="en">English</a>
+      </nav>
     </div>
   </footer>
 

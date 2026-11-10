@@ -18,7 +18,7 @@ Progreso (nivel, Chispas, racha, estadísticas) y ajustes se guardan **solo en e
 **Aviso de versión nueva.** La app de Android y la de escritorio, al abrirse, leen la lista pública de versiones publicadas del juego (un archivo en `damanu123.github.io`, o la API de GitHub si falla) para avisarte si hay una más nueva. Es una consulta de solo lectura que **no incluye ningún dato tuyo ni de tu partida**; GitHub puede registrar datos técnicos de la petición, como la dirección IP, según su política de privacidad. Se te pregunta una vez cada vez que abres la app mientras exista una versión más nueva, y puedes seguir jugando sin actualizar; también puedes buscarla a mano en Ajustes. La versión web no hace esta consulta. Cuando el juego se distribuya por Google Play, esta consulta se sustituye por las actualizaciones de Play y la app deja de contactar con GitHub.
 
 ## 4. Anuncios y servicios de terceros
-El juego **no contiene anuncios, analítica ni servicios de terceros** que recojan datos. Si eso cambiara, la política se actualizará antes de publicar esa versión. La web se aloja en GitHub Pages (que puede registrar datos técnicos de las visitas) y la página de presentación carga tipografías de Google Fonts; el juego incluye las suyas.
+El juego **no contiene anuncios, analítica ni servicios de terceros** que recojan datos. Si eso cambiara, la política se actualizará antes de publicar esa versión. La web se aloja en GitHub Pages (que puede registrar datos técnicos de las visitas).
 
 ## 5. Permisos en Android
 Solo **vibración**.
