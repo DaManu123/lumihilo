@@ -4,14 +4,14 @@ Borrador para rellenar los formularios cuando exista la cuenta de desarrollador 
 
 ## Antes de generar la build para Play
 
-1. En `src/config.ts`, `UPDATE_SOURCE = 'play'`. Así la app **no contacta con GitHub** y no envía ningún dato fuera del dispositivo (ver `docs/08-publicar-versiones.md`). Las respuestas de «Seguridad de los datos» de abajo dependen de esto.
+1. El AAB que sale del flujo de publicación ya se compila con `UPDATE_SOURCE='play'` (a mano: `npm run build:play`; no se edita `src/config.ts`). Así la app **no contacta con GitHub** y no envía ningún dato fuera del dispositivo (ver `docs/08-publicar-versiones.md`). Las respuestas de «Seguridad de los datos» de abajo dependen de esto.
 2. Identificador definitivo ya fijado: `com.damanu.lumihilo`.
 3. Clave de subida propia y Play App Signing (ver «Clave de subida» más abajo).
 4. Versión y notas de la versión (`docs/releases/`).
 
 ## Ficha
 
-Textos, icono, gráfico y capturas: `docs/store/ficha.md`. Categoría **Juegos → Puzzle**. Política de privacidad: `https://damanu123.github.io/lumihilo/privacidad.html` (inglés: `/en/privacy.html`). Correo de contacto: myprimemg@gmail.com.
+Textos (ES/EN), icono, gráfico y capturas (13; Play admite 8): `docs/store/ficha.md`. Categoría **Juegos → Puzzle**. Política de privacidad: `https://damanu123.github.io/lumihilo/privacidad.html` (inglés: `/en/privacy.html`). Correo de contacto: myprimemg@gmail.com.
 
 ## Declaraciones
 
@@ -26,11 +26,13 @@ Textos, icono, gráfico y capturas: `docs/store/ficha.md`. Categoría **Juegos �
 | **ID de publicidad** | **No** se usa. |
 | **Permisos** | Vibración. (`INTERNET` figura en el manifiesto por Capacitor; con `'play'` el juego no hace peticiones.) |
 | **Clasificación de contenido** | Cuestionario IARC: sin violencia, sin sexo, sin lenguaje fuerte, sin sustancias, sin juego de azar con dinero, sin compras, sin interacción entre usuarios ni compartir ubicación. Resultado esperado: apto para todas las edades. |
-| **App para niños / Familias** | Ver «Audiencia» (decisión pendiente, #2). |
+| **App para niños / Familias** | No: la app no está dirigida a menores de 13 (ver «Audiencia»). |
 | **Apps gubernamentales / financieras / de salud** | No. |
 | **Funciones de noticias / COVID** | No. |
 
 ## Audiencia objetivo (decidida: 13 años en adelante)
+
+En el formulario: grupo de edad **13+**, sin Familias, y que la app **no** se dirige a menores de 13.
 
 **Decisión del 2026-11-09: Opción A.** En Play Console, declarar que la app **no** está dirigida a menores de 13. Las opciones que se barajaron:
 

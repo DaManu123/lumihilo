@@ -8,7 +8,7 @@
 - Las cuentas personales nuevas también deben verificar acceso a un dispositivo Android mediante la app Play Console antes de poder publicar.
 - Las cuentas de **Organización** no tienen el requisito de pruebas cerradas, pero requieren una entidad legal real; no tiene sentido crear una solo para saltarse la regla.
 
-**Acción en Fase 0:** registrar la cuenta lo antes posible.
+**Estado:** la cuenta de desarrollador ya se pagó (nov 2026); lo que falte de su verificación sigue en manos del usuario (#7).
 
 ## Requisito de pruebas cerradas (cuentas personales nuevas)
 
@@ -49,31 +49,30 @@ Presupuesta alrededor de **3 semanas** entre empezar la prueba y poder publicar.
 
 ## Ficha de la tienda
 
-- [ ] Nombre, descripción corta y larga (español; inglés si se localiza)
-- [ ] Icono 512×512
-- [ ] Gráfico de funciones 1024×500
-- [ ] Capturas de pantalla de teléfono (mínimo las que pida Play Console)
-- [ ] URL de **política de privacidad** pública (GitHub Pages sirve)
-- [ ] Categoría: Juegos → Puzzle
+- [x] Nombre, descripción corta y larga (español e inglés): `docs/store/ficha.md`
+- [x] Icono 512×512 y gráfico de funciones 1024×500: `docs/store/`
+- [x] Capturas de teléfono (13 generadas con `e2e/store.mjs`; Play admite 8 como máximo, hay una propuesta en la ficha)
+- [x] URL de **política de privacidad** pública (GitHub Pages)
+- [ ] Categoría: Juegos → Puzzle (se elige en Play Console)
 
 ## Declaraciones obligatorias en Play Console
 
-- [ ] **Audiencia objetivo y contenido** (ver `01`; si incluye niños aplica Familias)
-- [ ] **Anuncios:** marcar que la app contiene anuncios
-- [ ] **Seguridad de los datos:** declarar el SDK de anuncios y cualquier analítica
+- [x] **Audiencia objetivo:** 13+ (decidido el 2026-11-09), sin Familias. Pendiente solo marcarlo en el formulario
+- [ ] **Anuncios:** hoy la app **no contiene anuncios**; si se añaden, cambiar la declaración antes de publicar esa versión
+- [ ] **Seguridad de los datos:** con `UPDATE_SOURCE='play'` no se recopila ni comparte nada; las respuestas están en `docs/store/play-console.md`
 - [ ] **Clasificación de contenido** (cuestionario)
 - [ ] **Acceso a la app** (no aplica login, indicar que no requiere)
 - [ ] Declaración de ID de publicidad si corresponde
 
 ## Lanzamiento
 
-1. Reemplazar IDs de anuncio de prueba por reales **solo** en la build de release.
+1. Subir el AAB `aab-android` que genera el flujo de publicación (ya compilado con `UPDATE_SOURCE='play'`). Si algún día hay anuncios, sustituir los IDs de prueba por reales **solo** en la build de release.
 2. Publicar con **despliegue escalonado** (por ejemplo 10 % → 50 % → 100 %).
 3. Vigilar crashes (Android vitals) y reseñas los primeros días.
 4. Responder reseñas; las primeras pesan mucho.
 
 ## Versión web
 
-- Compilar con Vite y desplegar la carpeta `dist/` en GitHub Pages, Cloudflare Pages o Netlify.
-- Para AdSense normalmente conviene un **dominio propio** y contenido suficiente; revisar los requisitos vigentes.
+- La web ya se despliega sola en GitHub Pages (`pages.yml`): https://damanu123.github.io/lumihilo/.
+- Si algún día hay anuncios web, AdSense normalmente pide un **dominio propio** y contenido suficiente; revisar los requisitos vigentes.
 - Enlazar la web desde la ficha de Play y viceversa.

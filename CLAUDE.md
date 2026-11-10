@@ -82,7 +82,7 @@ npm run test:perf         # CPU por fotograma (requiere ?debug)
 5. Al publicar en Play: usar el AAB `aab-android` de Actions (ya sale con `'play'`), revisar política de privacidad (`docs/politica-de-privacidad.md`, `landing/`).
 
 ## 8. Problemas conocidos y puntos delicados
-- **Docs desactualizados:** `README.md` (dice «Planeación, no hay código»), `PROJECT_CONTEXT.md` (se quedó en Fase 3) y partes de `docs/05`/`docs/store/play-console.md` (audiencia «pendiente», ya es 13+). Este CLAUDE.md manda.
+- **Docs:** `README.md`, `PROJECT_CONTEXT.md` (histórico de las fases 0-4), `docs/05` y `docs/store/play-console.md` se pusieron al día el 2026-11-09. El plan de trabajo vigente está en `docs/11-plan-beta9.md`.
 - **Caídas de GitHub Actions:** la Release falló alguna vez con 504 al descargar herramientas de `electron-builder-binaries` o por un incidente de Actions («workflow file issue»); se repite con `gh run rerun <id> --failed` (o sin `--failed`). Tras una Release, `releases.json` tarda unos minutos (workflow «Publicar la web»); borrar una Release no lo regenera (`gh workflow run pages.yml --ref main`).
 - **Nombres confusos:** en `GameScene`, `updateFlowVisuals`/`flowState`… mezclan «flujo de energía» de Circuitos con el puzzle **Hilos** (`puzzle==='flow'`, `src/core/flow.ts`). `Scene.lights` choca con Phaser (por eso el campo es `lightGrid`).
 - **e2e frágiles ante el reloj:** el reloj del juego va más lento que el real en headless; esperar con `settle()`/3 s tras ganar. Si una pasada sale con pocas comprobaciones, repetir.
