@@ -89,12 +89,18 @@ export class AudioEngine {
           if (document.hidden) void this.ctx.suspend().catch(() => undefined);
           else void this.ctx.resume().catch(() => undefined);
         });
+        // Algunos Android suspenden el audio sin ocultar la app (al recuperar el foco, se reanuda)
+        window.addEventListener('focus', () => {
+          if (this.ctx && this.ctx.state !== 'running' && this.ctx.state !== 'closed' && !document.hidden) void this.ctx.resume().catch(() => undefined);
+        });
       } catch {
         this.failed = true;
         return null;
       }
     }
-    if (this.ctx.state === 'suspended' && !document.hidden) void this.ctx.resume().catch(() => undefined);
+    // Pausado (segundo plano) o interrumpido (p. ej. una llamada o otra app que tomó el audio): se reanuda al volver a usarlo
+    const state = this.ctx.state as string;
+    if ((state === 'suspended' || state === 'interrupted') && !document.hidden) void this.ctx.resume().catch(() => undefined);
     return this.ctx;
   }
 

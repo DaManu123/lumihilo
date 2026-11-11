@@ -1,5 +1,5 @@
 import { LevelParams } from './types';
-import { DIFFICULTY_TIERS } from './adaptive';
+import { DIFFICULTY_TIERS, GameMode, MAX_TIER, MIN_TIER } from './adaptive';
 import { SkinId, sanitizeUnlockedSkins } from './skins';
 import type { PuzzleType } from './puzzles';
 
@@ -45,6 +45,43 @@ export interface PlayerProgress {
   lastFlowDailyCompleted: string | null;
   /** Aspectos comprados (el inicial siempre está disponible y no se guarda). */
   unlockedSkins: SkinId[];
+  /**
+   * Por dónde iba el jugador en los modos que no está jugando (nivel y peldaño de cada puzzle): al volver a un modo se
+   * retoma donde se dejó (ver `core/modes.ts`). El modo actual vive en `currentLevel`/`lightsLevel`/`flowLevel` y en los
+   * perfiles adaptativos.
+   */
+  modeProgress: ModeProgress;
+}
+
+/** Nivel y peldaño de cada puzzle en un modo de juego. */
+export interface ModeSnapshot {
+  levels: Record<PuzzleType, number>;
+  tiers: Record<PuzzleType, number>;
+}
+
+export type ModeProgress = Partial<Record<GameMode, ModeSnapshot>>;
+
+const SNAPSHOT_PUZZLES: readonly PuzzleType[] = ['circuits', 'lights', 'flow'];
+const SNAPSHOT_MODES: readonly GameMode[] = ['relaxed', 'normal', 'challenge'];
+
+/** Valida lo guardado de cada modo; descarta lo que no tenga forma de modo, nivel y peldaño válidos. */
+export function sanitizeModeProgress(raw: unknown): ModeProgress {
+  const out: ModeProgress = {};
+  if (typeof raw !== 'object' || raw === null) return out;
+  for (const mode of SNAPSHOT_MODES) {
+    const snap = (raw as Record<string, unknown>)[mode];
+    if (typeof snap !== 'object' || snap === null) continue;
+    const levels = (snap as Record<string, unknown>).levels as Record<string, unknown> | undefined;
+    const tiers = (snap as Record<string, unknown>).tiers as Record<string, unknown> | undefined;
+    if (typeof levels !== 'object' || levels === null || typeof tiers !== 'object' || tiers === null) continue;
+    const clean: ModeSnapshot = { levels: { circuits: 1, lights: 1, flow: 1 }, tiers: { circuits: 1, lights: 1, flow: 1 } };
+    for (const puzzle of SNAPSHOT_PUZZLES) {
+      clean.levels[puzzle] = toInt(levels[puzzle], 1, 1);
+      clean.tiers[puzzle] = Math.min(MAX_TIER, toInt(tiers[puzzle], MIN_TIER, MIN_TIER));
+    }
+    out[mode] = clean;
+  }
+  return out;
 }
 
 export function createDefaultProgress(seedBase: number): PlayerProgress {
@@ -60,6 +97,7 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
     lastLightsDailyCompleted: null,
     lastFlowDailyCompleted: null,
     unlockedSkins: [],
+    modeProgress: {},
   };
 }
 
@@ -115,6 +153,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
     lastLightsDailyCompleted: toDateKey(r.lastLightsDailyCompleted),
     lastFlowDailyCompleted: toDateKey(r.lastFlowDailyCompleted),
     unlockedSkins: sanitizeUnlockedSkins(r.unlockedSkins),
+    modeProgress: sanitizeModeProgress(r.modeProgress),
   };
 }
 

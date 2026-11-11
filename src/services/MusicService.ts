@@ -24,8 +24,11 @@ export interface MusicPlayer {
   resolve(): void;
   /** Estilo de la música; si ya suena, cambia en el siguiente compás. */
   setStyle(style: MusicStyle): void;
-  /** Puzzle que se juega: Luces (caja de música «cristal») e Hilos (cuerda pulsada «hilo») tienen su propia pista en vez del estilo elegido. */
-  setPuzzle(puzzle: PuzzleType): void;
+  /**
+   * Puzzle que se juega: Luces (caja de música «cristal») e Hilos (cuerda pulsada «hilo») tienen su propia pista en vez del
+   * estilo elegido. `null` = en el menú, donde suena el estilo elegido (así se oye al cambiarlo en Ajustes).
+   */
+  setPuzzle(puzzle: PuzzleType | null): void;
   /** Volumen en porcentaje: 100 es el estándar del juego (0 = silencio, 200 = el doble). */
   setVolume(percent: number): void;
 }
@@ -61,7 +64,7 @@ export class WebMusicPlayer implements MusicPlayer {
   private intensity = 0;
   private quietBars = 0;
   private style: MusicStyle = 'swing';
-  private puzzle: PuzzleType = 'circuits';
+  private puzzle: PuzzleType | null = null;
   private volume = 1;
   /** Vaivén suave de afinación, como el de una cinta antigua: da calidez al teclado y a la melodía. */
   private wobble: { lfo: OscillatorNode; depth: GainNode } | null = null;
@@ -128,14 +131,14 @@ export class WebMusicPlayer implements MusicPlayer {
     this.bar = 0;
   }
 
-  setPuzzle(puzzle: PuzzleType): void {
+  setPuzzle(puzzle: PuzzleType | null): void {
     const before = this.track;
     this.puzzle = puzzle;
     // La caja de música de Luces y el estilo elegido son pistas distintas: si cambia la pista, la nueva empieza su frase
     if (this.track !== before) this.bar = 0;
   }
 
-  /** Pista que suena ahora: la caja de música en Luces, y el estilo elegido en Circuitos. */
+  /** Pista que suena ahora: la caja de música en Luces, la cuerda en Hilos y el estilo elegido en Circuitos y en el menú. */
   private get track(): MusicTrack {
     return this.puzzle === 'lights' ? 'cristal' : this.puzzle === 'flow' ? 'hilo' : this.style;
   }

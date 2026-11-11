@@ -9,7 +9,8 @@ import {
   computeGameHeight,
   computeHudLayout,
   computeBoardGeometry,
-  computeMenuLayout,
+  computeHomeLayout,
+  computePlayLayout,
 } from '../src/game/layout';
 
 /** Un teléfono típico tiene ~390 dp de ancho útil; el lienzo se reduce a esa escala. */
@@ -160,43 +161,40 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
     });
   });
 
-  describe('computeMenuLayout', () => {
+  describe('menú: inicio y puzzles', () => {
     const heights = [MIN_GAME_HEIGHT, 1400, MAX_GAME_HEIGHT];
-    const boxes = (m: ReturnType<typeof computeMenuLayout>) => [...m.cards, ...m.modes, ...m.tools];
+    const inside = (r: Rect, h: number) =>
+      left(r) >= 0 && right(r) <= DESIGN_WIDTH && top(r) >= 0 && bottom(r) <= h;
 
-    it('todo cabe en el lienzo en cualquier alto', () => {
+    it('inicio: nombre, Jugar, los tres accesos y el saludo, en orden y sin pisarse', () => {
       for (const h of heights) {
-        for (const r of boxes(computeMenuLayout(DESIGN_WIDTH, h))) {
-          expect(r.x - r.w / 2).toBeGreaterThanOrEqual(0);
-          expect(r.x + r.w / 2).toBeLessThanOrEqual(DESIGN_WIDTH);
-          expect(r.y - r.h / 2).toBeGreaterThanOrEqual(0);
-          expect(r.y + r.h / 2).toBeLessThanOrEqual(h);
-        }
+        const m = computeHomeLayout(DESIGN_WIDTH, h);
+        const all = [m.play, ...m.buttons];
+        for (const r of all) expect(inside(r, h)).toBe(true);
+        for (let i = 1; i < all.length; i++) expect(top(all[i])).toBeGreaterThanOrEqual(bottom(all[i - 1]) + 12);
+        expect(m.sparksY).toBeGreaterThan(m.titleY + 40);
+        expect(top(m.play)).toBeGreaterThan(m.sparksY + 40);
+        expect(m.greetingY).toBeGreaterThan(bottom(m.buttons[2]) + 60);
+        expect(m.greetingY + 40).toBeLessThanOrEqual(h);
+        for (const r of all) expect(Math.min(r.w, r.h) * DP_PER_LOGICAL_PX).toBeGreaterThanOrEqual(MIN_TOUCH_DP);
       }
     });
 
-    it('los bloques van en orden y no se pisan: nombre, tarjetas, modos, accesos y saludo', () => {
+    it('puzzles: Volver, título, tarjetas y modos en orden, dentro del lienzo y sin pisarse', () => {
       for (const h of heights) {
-        const m = computeMenuLayout(DESIGN_WIDTH, h);
-        const top = (r: { y: number; h: number }) => r.y - r.h / 2;
-        const bottom = (r: { y: number; h: number }) => r.y + r.h / 2;
-        expect(m.sparksY).toBeGreaterThan(m.titleY);
-        expect(top(m.cards[0])).toBeGreaterThan(m.sparksY + 20);
+        const m = computePlayLayout(DESIGN_WIDTH, h);
+        for (const r of [m.backBtn, ...m.cards, ...m.modes]) expect(inside(r, h)).toBe(true);
+        expect(m.titleY).toBeGreaterThan(bottom(m.backBtn) + 10);
+        expect(top(m.cards[0])).toBeGreaterThan(m.titleY + 30);
         expect(top(m.cards[1])).toBeGreaterThanOrEqual(bottom(m.cards[0]));
         expect(top(m.cards[2])).toBeGreaterThanOrEqual(bottom(m.cards[1]));
-        expect(m.modeLabelY).toBeGreaterThan(bottom(m.cards[2]) + 14);
+        expect(m.modeLabelY).toBeGreaterThan(bottom(m.cards[2]) + 20);
         expect(top(m.modes[0])).toBeGreaterThan(m.modeLabelY + 14);
-        expect(top(m.tools[0])).toBeGreaterThanOrEqual(bottom(m.modes[0]));
-        expect(m.greetingY).toBeGreaterThan(bottom(m.tools[0]) + 30);
-        expect(m.greetingY + 40).toBeLessThanOrEqual(h);
+        expect(m.modeInfoY).toBeGreaterThan(bottom(m.modes[0]) + 20);
+        expect(m.modeInfoY + 30).toBeLessThanOrEqual(h);
+        for (const r of [...m.cards, ...m.modes]) expect(Math.min(r.w, r.h) * DP_PER_LOGICAL_PX).toBeGreaterThanOrEqual(MIN_TOUCH_DP);
+        expect(m.modes[1].x).toBe(DESIGN_WIDTH / 2);
       }
-    });
-
-    it('los botones y tarjetas superan el tamaño táctil (48 dp ≈ 88 px lógicos) y los tres botones son iguales', () => {
-      const m = computeMenuLayout();
-      for (const r of boxes(m)) expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(88);
-      expect(new Set(m.modes.map((r) => r.w)).size).toBe(1);
-      expect(m.modes[1].x).toBe(DESIGN_WIDTH / 2);
     });
   });
 });

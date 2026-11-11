@@ -110,42 +110,61 @@ export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
   };
 }
 
-export interface MenuLayout {
+/** Pantalla de inicio del menú: el nombre, «Jugar» y los accesos, y el saludo hasta abajo. */
+export interface HomeLayout {
   titleY: number;
   sparksY: number;
-  /** Una tarjeta por puzzle, de arriba abajo. */
+  /** Botón principal «Jugar». */
+  play: Rect;
+  /** Aspectos, Estadísticas y Ajustes, en columna. */
+  buttons: [Rect, Rect, Rect];
+  greetingY: number;
+}
+
+export function computeHomeLayout(width: number = DESIGN_WIDTH, height: number = MIN_GAME_HEIGHT): HomeLayout {
+  const w = Math.min(480, width - 2 * MARGIN);
+  const titleY = Math.round(height * 0.2);
+  const playY = Math.round(height * 0.44);
+  const button = (dy: number): Rect => ({ x: width / 2, y: playY + dy, w, h: 96 });
+  return {
+    titleY,
+    sparksY: titleY + 84,
+    play: { x: width / 2, y: playY, w, h: 120 },
+    buttons: [button(140), button(256), button(372)],
+    greetingY: height - 96,
+  };
+}
+
+/**
+ * Pantalla de puzzles («Jugar»): «Volver» arriba a la izquierda, el título, una tarjeta por puzzle centrada en el espacio
+ * que sobra y, en la parte de abajo, el modo (con una línea que lo explica). Lo de abajo se ancla al borde inferior.
+ */
+export interface PlayLayout {
+  backBtn: Rect;
+  sparksRight: Point;
+  titleY: number;
   cards: [Rect, Rect, Rect];
   modeLabelY: number;
   /** Relajado, Normal y Reto. */
   modes: [Rect, Rect, Rect];
-  /** Estadísticas, Aspectos y Ajustes. */
-  tools: [Rect, Rect, Rect];
-  greetingY: number;
+  modeInfoY: number;
 }
 
-/**
- * Diseño del menú principal: el nombre arriba, las tarjetas de los puzzles centradas en el espacio que sobra, los modos
- * en medio de la pantalla, los accesos (estadísticas, aspectos y ajustes) y, hasta abajo, el mensaje de bienvenida.
- * Todo lo de abajo se ancla al borde inferior, así que en pantallas altas solo crece el aire entre bloques.
- */
-export function computeMenuLayout(width: number = DESIGN_WIDTH, height: number = MIN_GAME_HEIGHT): MenuLayout {
+export function computePlayLayout(width: number = DESIGN_WIDTH, height: number = MIN_GAME_HEIGHT): PlayLayout {
   const barW = width - 2 * MARGIN;
   const gap = 12;
   const btnW = (barW - 2 * gap) / 3;
-  const row = (y: number): [Rect, Rect, Rect] =>
-    [0, 1, 2].map((i) => ({ x: width / 2 + (i - 1) * (btnW + gap), y, w: btnW, h: BUTTON_H })) as [Rect, Rect, Rect];
-  const cardH = 172;
-  const pitch = 192;
-  const center = (height - 200) / 2;
-  const cards = [-1, 0, 1].map((i) => ({ x: width / 2, y: center + i * pitch, w: barW, h: cardH })) as [Rect, Rect, Rect];
+  const modesY = height - 190;
+  const center = (height - 70) / 2;
+  const cards = [-1, 0, 1].map((i) => ({ x: width / 2, y: center + i * 196, w: barW, h: 176 })) as [Rect, Rect, Rect];
   return {
-    titleY: 104,
-    sparksY: 190,
+    backBtn: { x: MARGIN + 100, y: 56, w: 200, h: ICON_BTN },
+    sparksRight: { x: width - MARGIN, y: 56 },
+    titleY: 170,
     cards,
-    modeLabelY: height - 420,
-    modes: row(height - 350),
-    tools: row(height - 220),
-    greetingY: height - 96,
+    modeLabelY: height - 260,
+    modes: [0, 1, 2].map((i) => ({ x: width / 2 + (i - 1) * (btnW + gap), y: modesY, w: btnW, h: BUTTON_H })) as [Rect, Rect, Rect],
+    modeInfoY: height - 90,
   };
 }
 
