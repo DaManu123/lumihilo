@@ -4,6 +4,8 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.14] - 2026-11-11
+
 ### Cambiado
 - **Menú en dos pantallas** (sugerencia de un probador): la de inicio tiene el nombre, «Jugar», «Aspectos», «Estadísticas» y «Ajustes», y el saludo abajo; «Jugar» abre la pantalla de puzzles (las tres tarjetas y, abajo, el modo con una línea que lo explica). «Volver» del juego lleva a la pantalla de puzzles y, desde ahí, otro «Volver» al inicio.
 - **Cambiar de modo ya no reinicia nada.** Cada modo (Relajado, Normal, Reto) guarda su propio nivel, su dificultad y sus partidas a medias en cada puzzle: si cambias de modo y vuelves, sigues donde ibas. La primera vez que entras en un modo empiezas en su nivel 1.
