@@ -6,6 +6,7 @@ import type { HapticLevel, HapticMode } from '../core/haptics';
 import type { MusicStyle } from '../core/music';
 import type { AnimationSpeed } from '../core/accessibility';
 import type { LanguageSetting } from '../core/i18n';
+import type { GraphicsQuality } from '../core/graphics';
 import { DEFAULT_SKIN, SkinId } from '../core/skins';
 import type { PuzzleType } from '../core/puzzles';
 import { SavedGames, sanitizeSavedGames } from '../core/savedGames';
@@ -42,6 +43,10 @@ export interface UserSettings {
   hasSeenStonesTip: boolean;
   /** Ya se le explicó cómo se juega Hilos. */
   hasSeenFlowTip: boolean;
+  /** Calidad gráfica: normales (el estilo de siempre) o altos (efectos con los aspectos de la tienda). */
+  graphics: GraphicsQuality;
+  /** Ya se le avisó de que hay gráficos altos en Ajustes. */
+  hasSeenGraphicsNotice: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -64,6 +69,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   hasSeenLightsTip: false,
   hasSeenStonesTip: false,
   hasSeenFlowTip: false,
+  graphics: 'normal',
+  hasSeenGraphicsNotice: false,
 };
 
 export interface StorageService {

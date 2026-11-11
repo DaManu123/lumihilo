@@ -58,6 +58,17 @@ export const EN: Record<string, string> = {
   // Menú principal
   'Elige un puzzle': 'Choose a puzzle',
   'Música del menú y de Circuitos': 'Menu and Circuits music',
+  'Gráficos': 'Graphics',
+  'Normales': 'Normal',
+  'Altos': 'High',
+  'Altos: más batería': 'High: more battery',
+  'Nuevo: gráficos altos': 'New: high graphics',
+  'En Ajustes ya puedes elegir gráficos «Altos»: luz, brillo, texturas y partículas con los aspectos de la tienda. Gastan más batería. Pruébalos y, si tu teléfono va lento, vuelve a «Normales».':
+    'You can now choose "High" graphics in Settings: light, glow, textures and particles with the shop looks. They use more battery. Try them, and if your phone slows down, switch back to "Normal".',
+  'Ver Ajustes': 'Open Settings',
+  'Los gráficos altos no se ven con alto contraste.': 'High graphics are hidden while high contrast is on.',
+  'Este dispositivo no admite los gráficos altos.': 'This device does not support high graphics.',
+  'Equipa un aspecto de la tienda para ver los gráficos altos.': 'Equip a look from the shop to see the high graphics.',
   'Tableros pequeños y sin prisa. Cada modo guarda su avance.': 'Small boards, no rush. Each mode keeps its own progress.',
   'La dificultad se adapta a cómo juegas. Cada modo guarda su avance.': 'The difficulty adapts to how you play. Each mode keeps its own progress.',
   'Tableros grandes desde el principio. Cada modo guarda su avance.': 'Big boards from the start. Each mode keeps its own progress.',
