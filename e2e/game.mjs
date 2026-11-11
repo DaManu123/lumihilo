@@ -1177,7 +1177,12 @@ export async function runGameScenarios(out) {
     const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true };
     for (const [lang, vp] of [['es', { width: 393, height: 808 }], ['en', { width: 360, height: 640 }], ['en', { width: 393, height: 808 }], ['es', { width: 360, height: 640 }]]) {
       const name = `${lang} ${vp.width}×${vp.height}`;
-      const g = await openGame({ label: `diseno-${lang}-${vp.width}`, seed: { user_settings: { ...SEEN, language: lang }, ...RICH }, out, query: '?debug', menu: true, ...vp });
+      // Una de las pasadas con gráficos altos y un aspecto de la tienda (brillos en títulos y tarjetas)
+      const fx = lang === 'en' && vp.width === 360;
+      const seed = fx
+        ? { user_settings: { ...SEEN, language: lang, graphics: 'high', skin: 'cyberpunk' }, player_progress: { ...RICH.player_progress, unlockedSkins: ['cyberpunk'] } }
+        : { user_settings: { ...SEEN, language: lang }, ...RICH };
+      const g = await openGame({ label: `diseno-${lang}-${vp.width}`, seed, out, query: '?debug', menu: true, ...vp });
       const found = [];
       const look = async (where) => {
         await g.page.waitForTimeout(250);
@@ -1190,8 +1195,10 @@ export async function runGameScenarios(out) {
           overlay.add(sc.uiText(0, -100, 'X'.repeat(80), { size: 36, originX: 0.5 }));
           sc.addCardButton(overlay, { x: 0, y: 100, w: w - 88, h: 100 }, 'OK', () => undefined, true);
           overlay.add(sc.uiText(-100, 100, 'debajo', { size: 28 }));
+          sc.addChoiceRow(overlay, w, 0, 'Selector', [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], 'a', () => undefined);
           const list = sc.layoutIssues(); overlay.destroy(); return list; })()`);
-        check('la comprobación de diseño detecta textos que se salen y textos bajo un botón', probe.some((x) => x.startsWith('se sale')) && probe.some((x) => x.startsWith('queda debajo')), JSON.stringify(probe));
+        check('la comprobación de diseño detecta textos que se salen, textos bajo un botón y controles que se enciman',
+          probe.some((x) => x.startsWith('se sale')) && probe.some((x) => x.startsWith('queda debajo')) && probe.some((x) => x.startsWith('se enciman')), JSON.stringify(probe));
       }
       await look('inicio');
       await g.tap(...g.pos.homeStats, 500);
@@ -1209,6 +1216,9 @@ export async function runGameScenarios(out) {
       await look('vibración');
       await g.tap(...g.pos.hapticsDone, 400);
       await tapStay(g.pos.settingsDone, 400);
+      await g.page.evaluate(`${scene}.showGraphicsNotice()`);
+      await look('aviso de gráficos');
+      await tapStay(g.pos.graphicsLater, 400);
       await g.tap(...g.pos.homePlay, 500);
       g.menuScreen = 'play';
       await look('puzzles');
@@ -1232,6 +1242,87 @@ export async function runGameScenarios(out) {
       check(`${name}: ningún texto se sale de su marco, se pisa con otro ni queda debajo de un botón`, found.length === 0, found.slice(0, 6).join(' | '));
       await g.close();
     }
+  }]);
+
+  sections.push(['23. Gráficos altos: aviso de una vez, ajuste y efectos por aspecto', async () => {
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => o.visible === false ? [] : [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
+    const fxState = (g) => g.page.evaluate(`(() => { const sc = ${scene}; return { fx: !!sc.skinFx, bloom: sc.boardContainer.postPipelines.length, camera: sc.cameras.main.postPipelines.length }; })()`);
+    const stay = async (g, pos, wait) => { g.menuOpen = false; await g.tap(...pos, wait); g.menuOpen = true; };
+
+    // Un jugador nuevo no ve el aviso (y queda marcado como visto)
+    let g = await openGame({ label: 'graficos-nuevo', out, query: '?debug', menu: true });
+    await g.page.waitForTimeout(1500);
+    check('a un jugador nuevo no se le enseña el aviso de gráficos', !(await texts(g)).includes('Ver Ajustes'));
+    check('y queda marcado como visto', (await g.state()).settings?.hasSeenGraphicsNotice === true);
+    check('los gráficos empiezan en Normales, sin efectos', (await g.state()).settings?.graphics !== 'high' && !(await fxState(g)).fx);
+    await g.close();
+
+    // Quien ya jugaba lo ve una vez al abrir tras actualizar; «Ver Ajustes» abre Ajustes
+    const seed = { user_settings: { hasSeenTutorial: true }, player_progress: { ...RICH.player_progress, unlockedSkins: ['cyberpunk'] } };
+    g = await openGame({ label: 'graficos-aviso', seed, out, query: '?debug', menu: true, announce: true });
+    // Sale a los ~0,9 s de abrir; con carga tarda más: se espera a que aparezca (hasta 10 s)
+    for (let i = 0; i < 20 && !(await texts(g)).includes('Ver Ajustes'); i++) await g.page.waitForTimeout(500);
+    check('quien ya jugaba ve el aviso de gráficos altos al abrir', (await texts(g)).includes('Ver Ajustes'), (await texts(g)).slice(0, 200));
+    await g.shot('e23-aviso-graficos');
+    await stay(g, g.pos.graphicsSettings, 600);
+    const tx = await texts(g);
+    check('«Ver Ajustes» abre Ajustes con la opción Gráficos', tx.includes('Gráficos') && tx.includes('Normales') && tx.includes('Altos'), tx.slice(0, 200));
+    check('el aviso queda marcado como visto', (await g.state()).settings?.hasSeenGraphicsNotice === true);
+
+    // Con Filamento, «Altos» se guarda pero no hay efectos: un aviso explica por qué
+    await g.tap(...g.pos.setGraphicsHigh, 600);
+    check('elegir «Altos» se guarda', (await g.state()).settings?.graphics === 'high');
+    check('con Filamento no hay efectos', !(await fxState(g)).fx);
+    check('y se explica que hace falta un aspecto de la tienda', (await texts(g)).includes('Equipa un aspecto de la tienda'));
+    await stay(g, g.pos.settingsDone, 400);
+
+    // Con Cyberpunk equipado, los efectos se encienden: brillo del tablero, viñeta y ambiente
+    await g.page.evaluate(`(() => { const sc = ${scene}; const o = sc.add.container(0, 0); sc.onSkinTapped('cyberpunk', o); })()`);
+    await g.page.waitForTimeout(800);
+    let st = await fxState(g);
+    check('con un aspecto de la tienda y gráficos altos hay efectos (brillo del tablero y viñeta)', st.fx && st.bloom >= 1 && st.camera >= 1, JSON.stringify(st));
+    await g.shot('e23-cyberpunk-altos-tienda');
+    await stay(g, g.pos.skinsDone, 500);
+    await g.enter('circuits');
+    await g.shot('e23-cyberpunk-altos-juego');
+    const won = await winWithHints(g);
+    check('se puede ganar con los efectos puestos', won);
+    await g.page.waitForTimeout(1500);
+    await g.shot('e23-cyberpunk-altos-victoria');
+    await g.close();
+
+    // Al reabrir, el aviso no vuelve a salir y los efectos siguen
+    g = await openGame({ label: 'graficos-reabrir', out, query: '?debug', menu: true, announce: true,
+      seed: { user_settings: { hasSeenTutorial: true, hasSeenGraphicsNotice: true, graphics: 'high', skin: 'cyberpunk' }, player_progress: { ...RICH.player_progress, unlockedSkins: ['cyberpunk'] } } });
+    await g.page.waitForTimeout(1800);
+    check('el aviso no se repite', !(await texts(g)).includes('Ver Ajustes'));
+    check('los efectos se mantienen al reabrir', (await fxState(g)).fx);
+
+    // Volver a «Normales» quita todo: el estilo de siempre
+    await g.openSettings(500);
+    await g.tap(...g.pos.setGraphicsNormal, 600);
+    st = await fxState(g);
+    check('«Normales» quita los efectos (sin brillo, viñeta ni ambiente)', !st.fx && st.bloom === 0 && st.camera === 0, JSON.stringify(st));
+    await g.tap(...g.pos.setGraphicsHigh, 600);
+    check('y «Altos» los vuelve a poner al momento', (await fxState(g)).fx);
+    await g.tap(...g.pos.settingsDone, 400);
+    await g.close();
+
+    // Alto contraste: priman la claridad, sin efectos
+    g = await openGame({ label: 'graficos-contraste', out, query: '?debug', menu: true,
+      seed: { user_settings: { hasSeenTutorial: true, graphics: 'high', skin: 'cyberpunk', highContrast: true }, player_progress: { ...RICH.player_progress, unlockedSkins: ['cyberpunk'] } } });
+    st = await fxState(g);
+    check('con alto contraste no hay efectos', !st.fx && st.bloom === 0 && st.camera === 0, JSON.stringify(st));
+    await g.close();
+
+    // Sin animaciones: solo la luz quieta (brillo y viñeta), sin partículas
+    g = await openGame({ label: 'graficos-quietos', out, query: '?debug', menu: true, reducedMotion: 'reduce',
+      seed: { user_settings: { hasSeenTutorial: true, graphics: 'high', skin: 'solar' }, player_progress: { ...RICH.player_progress, unlockedSkins: ['solar'] } } });
+    st = await fxState(g);
+    const particles = await g.page.evaluate(`${scene}.children.getAll().filter((o) => o.type === 'ParticleEmitter').length`);
+    check('sin animaciones quedan el brillo y la viñeta, sin partículas', st.fx && st.bloom >= 1 && st.camera >= 1 && particles === 0, `${JSON.stringify(st)} partículas ${particles}`);
+    await g.close();
   }]);
 
   await runSections(sections);

@@ -98,7 +98,7 @@ export const RICH = {
  * Abre el juego en un contexto limpio. Devuelve utilidades para tocar el lienzo, leer el estado guardado
  * y contar lo que suena y vibra (se instrumentan AudioContext y navigator.vibrate antes de cargar).
  */
-export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null, scale = 1, menu = false } = {}) {
+export async function openGame({ width = 393, height = 808, mobile = true, reducedMotion = 'no-preference', seed = null, label = '', out = '.', locale = 'es-MX', query = '', beforeLoad = null, scale = 1, menu = false, announce = false } = {}) {
   const ctx = await (scenarioLog.getStore()?.browser ?? browser).newContext({
     viewport: { width, height },
     deviceScaleFactor: scale,
@@ -154,6 +154,10 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
 
   if (beforeLoad) await beforeLoad(page);
   await page.goto(URL + query);
+  // El aviso de una sola vez de los gráficos altos taparía el menú en todas las pruebas: se da por visto salvo `announce`
+  if (seed && !announce && seed.user_settings && typeof seed.user_settings === 'object' && !('hasSeenGraphicsNotice' in seed.user_settings)) {
+    seed = { ...seed, user_settings: { ...seed.user_settings, hasSeenGraphicsNotice: true } };
+  }
   if (seed) {
     await page.evaluate((s) => {
       for (const [k, v] of Object.entries(s)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
@@ -234,18 +238,21 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     // Aspectos (tarjeta de 1220 px, filas de 130 px)
     skinRow: (i) => [360, H / 2 - 385 + 130 * i], skinsDone: [360, H / 2 + 526],
     // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
-    settingsUpdates: [360, H / 2 + 429],
+    settingsUpdates: [360, H / 2 + 424],
+    // Aviso de una vez de los gráficos altos (tarjeta de 560 px)
+    graphicsLater: [215.5, H / 2 + 196], graphicsSettings: [504.5, H / 2 + 196],
     // Mini tutorial de Luces (tarjeta de 1090 px) y panel de luces (siempre en [360, 502])
     lightsTutorialOk: [360 - 144.5, H / 2 + 1090 / 2 - 84], flowTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
     // Aviso de versión nueva (tarjeta de 620 px)
     updateLater: [360 - 144.5, H / 2 + 226], updateNow: [360 + 144.5, H / 2 + 226],
-    // Ajustes (tarjeta de 1150 px)
-    setEffects: [360, H / 2 - 405], setMusic: [360, H / 2 - 321],
-    styleSwing: [220, H / 2 - 147], styleAmbient: [500, H / 2 - 147],
-    volume: (percent) => [92 + (536 * percent) / 200, H / 2 + 9],
-    setHaptics: [360, H / 2 + 109],
-    levelSoft: [360 - 186.7, H / 2 + 283], levelNormal: [360, H / 2 + 283], levelStrong: [360 + 186.7, H / 2 + 283],
-    accessibility: [215.5, H / 2 + 377], diagnose: [504.5, H / 2 + 377], settingsDone: [360, H / 2 + 491],
+    // Ajustes (tarjeta de 1160 px): gráficos arriba (control a la derecha), efectos y música en la misma fila
+    setGraphicsNormal: [415, H / 2 - 410], setGraphicsHigh: [565, H / 2 - 410],
+    setEffects: [215.5, H / 2 - 306], setMusic: [513.5, H / 2 - 306],
+    styleSwing: [220, H / 2 - 138], styleAmbient: [500, H / 2 - 138],
+    volume: (percent) => [92 + (536 * percent) / 200, H / 2 + 10],
+    setHaptics: [360, H / 2 + 102],
+    levelSoft: [360 - 186.7, H / 2 + 276], levelNormal: [360, H / 2 + 276], levelStrong: [360 + 186.7, H / 2 + 276],
+    accessibility: [215.5, H / 2 + 372], diagnose: [504.5, H / 2 + 372], settingsDone: [360, H / 2 + 496],
     // Accesibilidad (tarjeta de 990 px)
     accContrast: [360, H / 2 - 325], accMarks: [360, H / 2 - 235],
     accNormal: [173, H / 2 + 69], accFast: [360, H / 2 + 69], accOff: [547, H / 2 + 69],

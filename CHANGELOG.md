@@ -4,6 +4,13 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+### Añadido
+- **Gráficos altos** (Ajustes → Gráficos: «Normales» o «Altos»). «Normales» es el estilo de siempre y sigue siendo el de partida. Con «Altos», los aspectos de la tienda (desde Cyberpunk) suman iluminación: las piezas encendidas irradian luz (brillo), hay un halo que late detrás del tablero, viñeta en los bordes y los títulos y tarjetas brillan con el color del aspecto. Cada aspecto tiene además su propia textura animada y partículas de ambiente: Cyberpunk, líneas de escaneo y polvo de neón; Matrix, monitor CRT y símbolos que caen; Océano, reflejos de luz del agua y plancton luminoso; Solar, una corona que late y brasas que suben; Aurora, un velo de luz, estrellas que titilan y estrellas fugaces. Al jugar saltan destellos (al conectar piezas, encender luces o unir un hilo) y al ganar, una onda de luz con destellos por todo el tablero. Gastan más batería. Filamento se ve igual en los dos modos; con alto contraste no hay efectos y sin animaciones solo queda la luz quieta.
+- **Aviso de una sola vez** al abrir el juego tras actualizar: cuenta que hay gráficos altos en Ajustes («Ver Ajustes» / «Ahora no»). A quien empieza a jugar no se le enseña.
+
+### Cambiado
+- **Ajustes reacomodado** para que quepa la opción nueva: «Gráficos» arriba, y «Efectos» y «Música» en la misma fila.
+
 ## [0.2.0-beta.14] - 2026-11-11
 
 ### Cambiado

@@ -131,6 +131,8 @@ import { APP_NAME } from '../../config';
 import { pickGreeting } from '../../core/greeting';
 import { switchGameMode } from '../../core/modes';
 import { SavedGame, SavedGames, MAX_SAVED_FLOW_UNDO, hasProgress, matchesLevel } from '../../core/savedGames';
+import { GRAPHICS_LABELS, GRAPHICS_QUALITIES, GraphicsQuality, SkinFx, activeSkinFx, fxLevel, isGraphicsQuality, shouldAnnounceGraphics } from '../../core/graphics';
+import { SkinFxRuntime, addBackLight, buildSkinFx } from '../skinFx';
 
 interface CellView {
   container: Phaser.GameObjects.Container;
@@ -344,6 +346,7 @@ export class GameScene extends Phaser.Scene {
     this.settings.highContrast = this.settings.highContrast === true;
     this.settings.litMarks = this.settings.litMarks === true;
     this.settings.musicVolume = normalizeMusicVolume(this.settings.musicVolume);
+    if (!isGraphicsQuality(this.settings.graphics)) this.settings.graphics = 'normal';
     feedback.configure({
       sound: this.settings.soundEnabled,
       music: this.settings.musicEnabled,
@@ -380,7 +383,9 @@ export class GameScene extends Phaser.Scene {
     this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
     feedback.setPuzzle(null);
     this.setGameVisible(false);
+    this.applyGraphicsFx();
     this.buildMenu();
+    this.scheduleGraphicsNotice();
     // Partida a medias: se guarda al salir a segundo plano o cerrar la app (la app puede cerrarse sin avisar)
     const saveNow = () => this.persistGame();
     const onHidden = () => {
@@ -434,9 +439,140 @@ export class GameScene extends Phaser.Scene {
       alpha: hc ? 0.3 : THEME.name === 'light' ? 0.55 : 1,
       animate: !hc && !this.reducedMotion(),
     });
-    if (!result) return;
-    this.backdropObjects = result.objects;
-    this.backdropTweens = result.tweens;
+    if (result) {
+      this.backdropObjects = result.objects;
+      this.backdropTweens = result.tweens;
+    }
+    this.applyGraphicsFx();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Gráficos altos (ver core/graphics.ts y skinFx.ts)
+  // ---------------------------------------------------------------------------
+
+  private skinFx: SkinFxRuntime | null = null;
+  private boardBloom?: Phaser.FX.Bloom;
+  private backLightTween: Phaser.Tweens.Tween | null = null;
+
+  private fxContext() {
+    return {
+      quality: this.settings.graphics,
+      skin: this.settings.skin,
+      highContrast: this.settings.highContrast === true,
+      webgl: this.renderer.type === Phaser.WEBGL,
+      reducedMotion: this.reducedMotion(),
+    };
+  }
+
+  /** Efectos del aspecto en uso si los gráficos altos están activos (null si no). */
+  private activeFx(): SkinFx | null {
+    return activeSkinFx(this.fxContext());
+  }
+
+  /**
+   * Monta (o quita) los efectos de los gráficos altos: textura, ambiente y viñeta (`buildSkinFx`) y el brillo
+   * del tablero. Se llama al cambiar aspecto, tema, contraste, animaciones o calidad.
+   */
+  private applyGraphicsFx(): void {
+    this.skinFx?.destroy();
+    this.skinFx = null;
+    if (this.boardContainer && this.boardBloom) {
+      this.boardContainer.postFX.remove(this.boardBloom);
+      this.boardBloom = undefined;
+    }
+    const ctx = this.fxContext();
+    const fx = activeSkinFx(ctx);
+    if (!fx) return;
+    this.skinFx = buildSkinFx(this, fx, THEME, fxLevel(ctx));
+    if (this.boardContainer) {
+      // Lo encendido irradia luz; en el tema claro, menos (sobre un fondo claro el brillo lava los colores)
+      const strength = fx.bloom * (THEME.name === 'dark' ? 1 : 0.4);
+      this.boardBloom = this.boardContainer.postFX.addBloom(0xffffff, 1, 1, 1, strength, 4);
+    }
+  }
+
+  /** Destello de los gráficos altos sobre una casilla del tablero. */
+  private fxBurstAt(row: number, col: number, power = 1): void {
+    if (!this.skinFx) return;
+    const { cellSize, startX, startY } = this.geometry;
+    this.skinFx.burst(startX + col * cellSize, startY + row * cellSize, power);
+  }
+
+  /** Rectángulo del tablero en pantalla. */
+  private boardRect(): Rect {
+    const { cellSize, startX, startY } = this.geometry;
+    const { rows, cols } = this.board;
+    return { x: startX - cellSize / 2, y: startY - cellSize / 2, w: cols * cellSize, h: rows * cellSize };
+  }
+
+  /** Avisa una vez (tras actualizar) de que hay gráficos altos en Ajustes. Espera a que no haya otra tarjeta abierta. */
+  private scheduleGraphicsNotice(tries = 0): void {
+    if (!shouldAnnounceGraphics(this.settings)) {
+      if (!this.settings.hasSeenGraphicsNotice) {
+        // Jugador nuevo: no se le avisa (ya lo encontrará en Ajustes)
+        this.settings.hasSeenGraphicsNotice = true;
+        storage.saveSettings(this.settings);
+      }
+      return;
+    }
+    this.time.delayedCall(tries === 0 ? 900 : 1500, () => {
+      if (this.overlayOpen() || !this.inMenu) {
+        if (tries < 40) this.scheduleGraphicsNotice(tries + 1);
+        return;
+      }
+      this.showGraphicsNotice();
+    });
+  }
+
+  private showGraphicsNotice(): void {
+    this.settings.hasSeenGraphicsNotice = true;
+    storage.saveSettings(this.settings);
+    const cardH = 560;
+    const { overlay, w } = this.createCard(cardH, 205);
+    this.addCardTitle(overlay, w, cardH, t('Nuevo: gráficos altos'));
+    const body = this.uiText(
+      0,
+      -cardH / 2 + 150,
+      t('En Ajustes ya puedes elegir gráficos «Altos»: luz, brillo, texturas y partículas con los aspectos de la tienda. Gastan más batería. Pruébalos y, si tu teléfono va lento, vuelve a «Normales».'),
+      { size: 28, weight: '500', color: THEME.text, align: 'center', wrap: w - 100, originX: 0.5 }
+    );
+    body.setOrigin(0.5, 0).setLineSpacing(8);
+    overlay.add(body);
+    const btnW = (w - 88 - 18) / 2;
+    const y = cardH / 2 - 84;
+    this.addCardButton(overlay, { x: -(btnW + 18) / 2, y, w: btnW, h: 100 }, t('Ahora no'), () => overlay.destroy(), false);
+    this.addCardButton(
+      overlay,
+      { x: (btnW + 18) / 2, y, w: btnW, h: 100 },
+      t('Ver Ajustes'),
+      () => {
+        overlay.destroy();
+        this.showSettingsModal();
+      },
+      true
+    );
+  }
+
+  /** Gráficos altos: los títulos del menú irradian el color del aspecto y laten despacio. */
+  private addTitleGlow(title: Phaser.GameObjects.Text): void {
+    if (!this.activeFx() || !title.preFX) return;
+    title.preFX.padding = 24;
+    // Suave en los títulos pequeños, para que sigan nítidos
+    const strength = (title.style.fontSize && parseFloat(String(title.style.fontSize)) >= 56 ? 3 : 1.2) * (THEME.name === 'dark' ? 1 : 0.5);
+    const glow = title.preFX.addGlow(THEME.primary, strength, 0, false, 0.1, 12);
+    if (this.reducedMotion()) return;
+    const tween = this.tweens.add({ targets: glow, outerStrength: glow.outerStrength * 0.45, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    title.once('destroy', () => tween.stop());
+  }
+
+  /** Cambia la calidad gráfica y la aplica al momento. */
+  private setGraphics(quality: GraphicsQuality): void {
+    this.settings.graphics = quality;
+    storage.saveSettings(this.settings);
+    this.applyGraphicsFx();
+    this.buildBoard();
+    this.updateFlowVisuals();
+    if (this.inMenu) this.buildMenu();
   }
 
   /** Cantidad de casillas con energía (para detectar cuándo un giro conecta algo nuevo). */
@@ -988,6 +1124,17 @@ export class GameScene extends Phaser.Scene {
         }
       }
       const buttons = (object.getData('buttons') as Array<{ rect: Rect; label: Phaser.GameObjects.Text }> | undefined) ?? [];
+      // Botones y selectores no se enciman entre sí
+      const controls = [...buttons.map((b) => ({ rect: b.rect, name: b.label.text })), ...((object.getData('controls') as Array<{ rect: Rect; name: string }> | undefined) ?? [])];
+      for (let i = 0; i < controls.length; i++) {
+        for (let j = i + 1; j < controls.length; j++) {
+          const a = controls[i].rect;
+          const c = controls[j].rect;
+          const dx = Math.min(a.x + a.w / 2, c.x + c.w / 2) - Math.max(a.x - a.w / 2, c.x - c.w / 2);
+          const dy = Math.min(a.y + a.h / 2, c.y + c.h / 2) - Math.max(a.y - a.h / 2, c.y - c.h / 2);
+          if (dx > 0 && dy > 0) issues.push(`se enciman los controles «${controls[i].name}» y «${controls[j].name}»`);
+        }
+      }
       for (const { rect, label } of buttons) {
         const bx = object.x + rect.x - rect.w / 2;
         const by = object.y + rect.y - rect.h / 2;
@@ -1018,6 +1165,8 @@ export class GameScene extends Phaser.Scene {
     card.fillRoundedRect(-w / 2, -cardH / 2, w, cardH, 34);
     card.lineStyle(3, THEME.cardBorder, 1);
     card.strokeRoundedRect(-w / 2, -cardH / 2, w, cardH, 34);
+    // Gráficos altos: el borde de la tarjeta brilla con el color del aspecto
+    if (this.activeFx()) card.postFX.addGlow(THEME.primary, THEME.name === 'dark' ? 3 : 1.5, 0, false, 0.1, 14);
     overlay.add([backdrop, card]);
     return { overlay, w, backdrop };
   }
@@ -1066,10 +1215,12 @@ export class GameScene extends Phaser.Scene {
     y: number,
     label: string,
     initial: boolean,
-    onChange: (value: boolean) => void
+    onChange: (value: boolean) => void,
+    area?: { left: number; right: number }
   ): void {
-    const left = -cardW / 2 + 44;
-    const right = cardW / 2 - 44;
+    // `area`: solo una parte del ancho (dos interruptores en la misma fila, sin el texto «Activado/Desactivado»)
+    const left = area?.left ?? -cardW / 2 + 44;
+    const right = area?.right ?? cardW / 2 - 44;
     const switchW = 96;
     const switchH = 52;
     let value = initial;
@@ -1094,10 +1245,10 @@ export class GameScene extends Phaser.Scene {
 
     const text = this.uiText(left, y, label, { size: 29, weight: '600' });
     const stateText = this.uiText(right - switchW - 18, y, '', { size: FONT.small, weight: '500', color: THEME.mutedText, originX: 1 });
-    const refreshText = () => stateText.setText(value ? t('Activado') : t('Desactivado'));
+    const refreshText = () => stateText.setText(area ? '' : value ? t('Activado') : t('Desactivado'));
     refreshText();
 
-    const zone = this.hitZone({ x: 0, y, w: cardW - 40, h: 84 }, () => {
+    const zone = this.hitZone({ x: area ? (left + right) / 2 : 0, y, w: area ? right - left + 20 : cardW - 40, h: 84 }, () => {
       value = !value;
       draw();
       refreshText();
@@ -1117,12 +1268,15 @@ export class GameScene extends Phaser.Scene {
     label: string,
     options: ReadonlyArray<{ value: string; label: string }>,
     initial: string,
-    onChange: (value: string) => void
+    onChange: (value: string) => void,
+    inline?: { width: number; hint?: string }
   ): (enabled: boolean) => void {
-    const left = -cardW / 2 + 44;
-    const width = cardW - 88;
+    // `inline`: el control va a la derecha, en la misma línea que la etiqueta (y una nota corta debajo de esta)
+    const labelLeft = -cardW / 2 + 44;
+    const left = inline ? cardW / 2 - 44 - inline.width : labelLeft;
+    const width = inline ? inline.width : cardW - 88;
     const height = 88;
-    const top = y + 40;
+    const top = inline ? y - height / 2 : y + 40;
     const segW = width / options.length;
     let value = initial;
     let enabled = true;
@@ -1144,8 +1298,13 @@ export class GameScene extends Phaser.Scene {
       });
     };
 
-    group.add(this.uiText(left, y, label, { size: 29, weight: '600' }));
+    group.add(this.uiText(labelLeft, inline?.hint ? y - 16 : y, label, { size: 29, weight: '600' }));
+    if (inline?.hint) group.add(this.uiText(labelLeft, y + 20, inline.hint, { size: 22, weight: '500', color: THEME.mutedText }));
     group.add(panel);
+    // Para la comprobación de diseño: el selector no se encima con botones ni con otros selectores
+    const controls = (overlay.getData('controls') as Array<{ rect: Rect; name: string }> | undefined) ?? [];
+    controls.push({ rect: { x: left + width / 2, y: top + height / 2, w: width, h: height }, name: label });
+    overlay.setData('controls', controls);
     options.forEach((option, i) => {
       const text = this.uiText(left + i * segW + segW / 2, top + height / 2, option.label, {
         size: FONT.button,
@@ -2211,30 +2370,71 @@ export class GameScene extends Phaser.Scene {
 
   /** Ajustes: efectos, música (estilo y volumen), vibración (intensidad y prueba). Se guardan al instante. */
   private showSettingsModal(): void {
-    const cardH = 1150 + (this.updates.supported ? 104 : 0);
+    const cardH = 1160 + (this.updates.supported ? 104 : 0);
     const { overlay, w } = this.createCard(cardH, 200);
     this.addCardTitle(overlay, w, cardH, t('Ajustes'));
 
     let y = -cardH / 2 + 170;
-    this.addToggleRow(overlay, w, y, t('Efectos'), this.settings.soundEnabled, (value) => {
-      this.settings.soundEnabled = value;
-      storage.saveSettings(this.settings);
-      feedback.configure({ sound: value });
-      feedback.toggle(); // al activarlos suena una muestra
-    });
-    y += 84;
+    // Gráficos: normales (el estilo de siempre) o altos (efectos con los aspectos de la tienda)
+    this.addChoiceRow(
+      overlay,
+      w,
+      y,
+      t('Gráficos'),
+      GRAPHICS_QUALITIES.map((quality) => ({ value: quality, label: t(GRAPHICS_LABELS[quality]) })),
+      this.settings.graphics,
+      (value) => {
+        feedback.toggle();
+        this.setGraphics(value as GraphicsQuality);
+        if (value === 'high' && !this.activeFx()) {
+          // Sin efectos visibles: se explica por qué (Filamento, alto contraste o sin WebGL)
+          this.showToast(
+            this.settings.highContrast
+              ? t('Los gráficos altos no se ven con alto contraste.')
+              : this.renderer.type !== Phaser.WEBGL
+                ? t('Este dispositivo no admite los gráficos altos.')
+                : t('Equipa un aspecto de la tienda para ver los gráficos altos.')
+          );
+        }
+      },
+      { width: 320, hint: t('Altos: más batería') }
+    );
+    y += 104;
 
-    // Estilo y volumen de la música solo tienen sentido con la música encendida
+    // Efectos y música en la misma fila. Estilo y volumen de la música solo tienen sentido con la música encendida
     let setStyleEnabled: (enabled: boolean) => void = () => undefined;
     let setVolumeEnabled: (enabled: boolean) => void = () => undefined;
-    this.addToggleRow(overlay, w, y, t('Música'), this.settings.musicEnabled, (value) => {
-      this.settings.musicEnabled = value;
-      storage.saveSettings(this.settings);
-      feedback.configure({ music: value });
-      setStyleEnabled(value);
-      setVolumeEnabled(value);
-    });
-    y += 90;
+    const mid = 9;
+    this.addToggleRow(
+      overlay,
+      w,
+      y,
+      t('Efectos'),
+      this.settings.soundEnabled,
+      (value) => {
+        this.settings.soundEnabled = value;
+        storage.saveSettings(this.settings);
+        feedback.configure({ sound: value });
+        feedback.toggle(); // al activarlos suena una muestra
+      },
+      { left: -w / 2 + 44, right: -mid }
+    );
+    this.addToggleRow(
+      overlay,
+      w,
+      y,
+      t('Música'),
+      this.settings.musicEnabled,
+      (value) => {
+        this.settings.musicEnabled = value;
+        storage.saveSettings(this.settings);
+        feedback.configure({ music: value });
+        setStyleEnabled(value);
+        setVolumeEnabled(value);
+      },
+      { left: mid + 18, right: w / 2 - 44 }
+    );
+    y += 84;
 
     setStyleEnabled = this.addChoiceRow(
       overlay,
@@ -2249,7 +2449,7 @@ export class GameScene extends Phaser.Scene {
         feedback.configure({ musicStyle: this.settings.musicStyle });
       }
     );
-    y += 170;
+    y += 162;
 
     setVolumeEnabled = this.addSliderRow(overlay, w, y, t('Volumen de la música'), {
       min: MUSIC_VOLUME_MIN,
@@ -2265,7 +2465,7 @@ export class GameScene extends Phaser.Scene {
         storage.saveSettings(this.settings);
       },
     });
-    y += 170;
+    y += 162;
     setStyleEnabled(this.settings.musicEnabled);
     setVolumeEnabled(this.settings.musicEnabled);
 
@@ -2295,10 +2495,9 @@ export class GameScene extends Phaser.Scene {
       }
     );
     setIntensityEnabled(this.settings.hapticsEnabled);
-    y += 170;
+    y += 180; // el selector ocupa hasta y + 128: un respiro antes de los botones
 
     const half = (w - 88 - 18) / 2;
-    y += 8; // un respiro respecto a la fila de intensidad
     this.addCardButton(
       overlay,
       { x: -(half + 18) / 2, y, w: half, h: 88 },
@@ -2381,6 +2580,10 @@ export class GameScene extends Phaser.Scene {
         this.settings.animationSpeed = value as AnimationSpeed;
         storage.saveSettings(this.settings);
         feedback.toggle();
+        // El fondo y los efectos se mueven o se quedan quietos según las animaciones
+        this.applyBackdrop();
+        this.buildBoard();
+        this.updateFlowVisuals();
       }
     );
     y += 170;
@@ -2850,6 +3053,7 @@ export class GameScene extends Phaser.Scene {
       const layout = computeHomeLayout(width, height);
       const title = this.uiText(width / 2, layout.titleY, APP_NAME, { size: 72, display: true, color: THEME.primaryCss, originX: 0.5 });
       this.fitText(title, width - 2 * MARGIN, 40);
+      this.addTitleGlow(title);
       c.add(title);
       this.menuSparks(c, layout.sparksY, { cx: width / 2 }, FONT.display);
       this.menuButton(c, layout.play, t('Jugar'), () => this.showMenuScreen('play'), true, 40);
@@ -2880,6 +3084,7 @@ export class GameScene extends Phaser.Scene {
 
     const title = this.uiText(width / 2, layout.titleY, t('Elige un puzzle'), { size: 40, display: true, color: THEME.primaryCss, originX: 0.5 });
     this.fitText(title, width - 2 * MARGIN, 26);
+    this.addTitleGlow(title);
     c.add(title);
     PUZZLES.forEach((puzzle, i) => this.menuCard(c, layout.cards[i], puzzle));
 
@@ -3063,6 +3268,13 @@ export class GameScene extends Phaser.Scene {
     const { cellSize, startX, startY } = this.geometry;
     this.lightsGlow = undefined;
     if (this.puzzle === 'lights') this.addLightsDecor();
+    this.backLightTween?.stop();
+    this.backLightTween = null;
+    const fx = this.activeFx();
+    if (fx) {
+      const rect = { x: startX - cellSize / 2, y: startY - cellSize / 2, w: cols * cellSize, h: rows * cellSize };
+      this.backLightTween = addBackLight(this, this.boardContainer, THEME, rect, fx.backLight, !this.reducedMotion());
+    }
 
     for (let r = 0; r < rows; r++) {
       const rowViews: CellView[] = [];
@@ -3475,7 +3687,12 @@ export class GameScene extends Phaser.Scene {
 
     // Sonido y vibración: la nota de la casilla y, si el giro enciende algo nuevo, una campanita
     feedback.rotate(view.row, view.col);
-    if (this.poweredCount() > poweredBefore) feedback.connected(view.row, view.col);
+    if (this.poweredCount() > poweredBefore) {
+      feedback.connected(view.row, view.col);
+      this.fxBurstAt(view.row, view.col, 1);
+    } else {
+      this.fxBurstAt(view.row, view.col, 0.3);
+    }
 
     // Animación fluida de giro
     const targetAngle = view.container.angle + step * 90;
@@ -3533,6 +3750,7 @@ export class GameScene extends Phaser.Scene {
     for (const [r, c] of affected) {
       const view = this.cellViews[r]?.[c];
       if (!view || this.lightBlocked[r]?.[c]) continue;
+      if (forward && this.lightGrid[r][c]) this.fxBurstAt(r, c, 0.5);
       if (this.lightGrid[r][c] && !this.reducedMotion()) {
         this.tweens.addCounter({
           from: 1,
@@ -3631,7 +3849,10 @@ export class GameScene extends Phaser.Scene {
       this.lastFlowCell = step;
       if (result === 'cut') feedback.flowCut();
       feedback.flowStep(path().length);
-      if (result === 'completed') feedback.flowConnected();
+      if (result === 'completed') {
+        feedback.flowConnected();
+        this.fxBurstAt(step.row, step.col, 1.2);
+      }
     }
     if (changed) this.updateFlowVisuals();
   }
@@ -4208,7 +4429,10 @@ export class GameScene extends Phaser.Scene {
 
     // Primero la luz recorre el circuito (con su melodía); después suena el acorde y aparece el resultado
     const pulseMs = this.playWinPulse();
-    this.time.delayedCall(Math.max(0, pulseMs - 360), () => feedback.win());
+    this.time.delayedCall(Math.max(0, pulseMs - 360), () => {
+      feedback.win();
+      this.skinFx?.celebrate(this.boardRect());
+    });
     this.time.delayedCall(Math.min(1100, pulseMs * 0.8), () => this.showVictoryModal(evaluation, info));
   }
 
