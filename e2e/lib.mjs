@@ -206,7 +206,8 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     await page.reload();
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1300);
-    g.menuOpen = true; // la app siempre abre en el menú principal
+    g.menuOpen = true; // la app siempre abre en el menú, en su pantalla de inicio
+    g.menuScreen = 'home';
     if (!menu) await g.enter();
   };
   g.audio = () => page.evaluate(() => ({ osc: window.__osc, vib: window.__vib, src: window.__src }));
@@ -225,10 +226,11 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     tutorialNext: [360 + 144.5, H / 2 + 1090 / 2 - 84], tutorialDone: [360, H / 2 + 1090 / 2 - 84], help: [136, 158],
     // Estadísticas (tarjeta de 900 px): solo los números y «Cerrar»
     statsClose: [360, H / 2 + 900 / 2 - 84],
-    // Menú principal (ver computeMenuLayout): tarjetas de puzzles, modos y accesos
-    menuCard: (i) => [360, (H - 200) / 2 + (i - 1) * 192],
-    menuMode: (i) => [360 + (i - 1) * 228, H - 350],
-    menuStats: [132, H - 220], menuSkins: [360, H - 220], menuSettings: [588, H - 220],
+    // Menú, pantalla de inicio (computeHomeLayout): «Jugar» y los accesos en columna
+    homePlay: [360, Math.round(H * 0.44)], homeSkins: [360, Math.round(H * 0.44) + 140],
+    homeStats: [360, Math.round(H * 0.44) + 256], homeSettings: [360, Math.round(H * 0.44) + 372],
+    // Menú, pantalla de puzzles (computePlayLayout): «Volver», tarjetas y modos
+    playBack: [124, 56], menuCard: (i) => [360, (H - 70) / 2 + (i - 1) * 196], menuMode: (i) => [360 + (i - 1) * 228, H - 190],
     // Aspectos (tarjeta de 1220 px, filas de 130 px)
     skinRow: (i) => [360, H / 2 - 385 + 130 * i], skinsDone: [360, H / 2 + 526],
     // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
@@ -257,20 +259,35 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
   const savedPuzzle = () => page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('user_settings') ?? '{}')?.puzzle ?? 'circuits'; } catch { return 'circuits'; }
   });
+  // El menú tiene dos pantallas: la de inicio («Jugar» y los accesos) y la de puzzles (tarjetas y modo)
   g.menuOpen = true;
+  g.menuScreen = 'home';
+  /** Desde el juego, «Volver» lleva a la pantalla de puzzles. */
   g.openMenu = async (wait = 500) => {
     if (g.menuOpen) return;
-    await g.tap(...g.pos.back, wait); // botón «Volver»
+    await g.tap(...g.pos.back, wait);
     g.menuOpen = true;
+    g.menuScreen = 'play';
+  };
+  g.toPlayScreen = async (wait = 500) => {
+    await g.openMenu();
+    if (g.menuScreen === 'home') await g.tap(...g.pos.homePlay, wait);
+    g.menuScreen = 'play';
+  };
+  g.toHome = async (wait = 500) => {
+    await g.openMenu();
+    if (g.menuScreen === 'play') await g.tap(...g.pos.playBack, wait);
+    g.menuScreen = 'home';
   };
   g.enter = async (puzzle, wait = 700) => {
     const index = Math.max(0, PUZZLE_ORDER.indexOf(puzzle ?? (await savedPuzzle())));
+    await g.toPlayScreen();
     g.menuOpen = false;
     await g.tap(...g.pos.menuCard(index), wait);
   };
   g.playPuzzle = async (puzzle, wait = 900) => { await g.openMenu(); await g.enter(puzzle, wait); };
-  g.openSettings = async (wait = 500) => { await g.openMenu(); await g.tap(...g.pos.menuSettings, wait); };
-  g.openSkins = async (wait = 600) => { await g.openMenu(); await g.tap(...g.pos.menuSkins, wait); };
+  g.openSettings = async (wait = 500) => { await g.toHome(); await g.tap(...g.pos.homeSettings, wait); };
+  g.openSkins = async (wait = 600) => { await g.toHome(); await g.tap(...g.pos.homeSkins, wait); };
   if (!menu) await g.enter();
   return g;
 }

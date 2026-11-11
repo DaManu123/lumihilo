@@ -4,6 +4,17 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+## [0.2.0-beta.14] - 2026-11-11
+
+### Cambiado
+- **Menú en dos pantallas** (sugerencia de un probador): la de inicio tiene el nombre, «Jugar», «Aspectos», «Estadísticas» y «Ajustes», y el saludo abajo; «Jugar» abre la pantalla de puzzles (las tres tarjetas y, abajo, el modo con una línea que lo explica). «Volver» del juego lleva a la pantalla de puzzles y, desde ahí, otro «Volver» al inicio.
+- **Cambiar de modo ya no reinicia nada.** Cada modo (Relajado, Normal, Reto) guarda su propio nivel, su dificultad y sus partidas a medias en cada puzzle: si cambias de modo y vuelves, sigues donde ibas. La primera vez que entras en un modo empiezas en su nivel 1.
+- **La música del menú es el estilo elegido.** Al cambiar entre Swing y Ambiental en Ajustes se oye al momento; Luces e Hilos siguen con su propia música al jugarlos. En Ajustes la opción se llama ahora «Música del menú y de Circuitos».
+
+### Corregido
+- **Cambiar el estilo de la música «no hacía nada»** si se venía de jugar Luces o Hilos: en el menú seguía sonando la música de ese puzzle. Además, el audio se reanuda si Android lo interrumpe (una llamada u otra app) al volver a la app.
+- **Textos que se salían de las tarjetas:** el título «Hay que llenar todo el tablero» se salía del marco y una frase de esa pantalla quedaba tapada por el botón. Ahora los títulos y los textos de los botones y del menú se achican solos si no caben, la segunda pantalla del tutorial de Hilos se reacomodó, y una prueba nueva revisa todas las tarjetas, tutoriales, el menú y la barra del juego, en español e inglés y en dos tamaños de pantalla: ningún texto se sale de su marco, se pisa con otro ni queda debajo de un botón.
+
 ## [0.2.0-beta.13] - 2026-11-10
 
 ### Añadido

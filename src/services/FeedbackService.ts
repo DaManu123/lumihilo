@@ -114,8 +114,8 @@ export class FeedbackService {
     this.vibrate(() => this.haptics.mediumTap());
   }
 
-  /** Puzzle que se juega: en Luces la música cambia a su caja de música. */
-  setPuzzle(puzzle: PuzzleType): void {
+  /** Puzzle que se juega (null = menú): Luces e Hilos tienen su propia música; Circuitos y el menú, el estilo elegido. */
+  setPuzzle(puzzle: PuzzleType | null): void {
     this.music.setPuzzle(puzzle);
   }
 

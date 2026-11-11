@@ -120,7 +120,8 @@ import {
   BoardGeometry,
   computeHudLayout,
   computeBoardGeometry,
-  computeMenuLayout,
+  computeHomeLayout,
+  computePlayLayout,
 } from '../layout';
 import { storage, feedback, UserSettings, RotationDirection, createUpdateService, UpdateService } from '../../services';
 import { APP_VERSION } from '../../config';
@@ -128,6 +129,7 @@ import { UpdateInfo, isUpdateAvailable } from '../../core/updates';
 import { parseLastCheck, retryDelay, serializeLastCheck, shouldRecheck } from '../../core/updateRetry';
 import { APP_NAME } from '../../config';
 import { pickGreeting } from '../../core/greeting';
+import { switchGameMode } from '../../core/modes';
 import { SavedGame, SavedGames, MAX_SAVED_FLOW_UNDO, hasProgress, matchesLevel } from '../../core/savedGames';
 
 interface CellView {
@@ -333,7 +335,7 @@ export class GameScene extends Phaser.Scene {
     setActiveTheme(this.settings.theme, this.settings.highContrast === true, this.settings.skin);
     this.rotationDirection = this.settings.rotationDirection === 'ccw' ? 'ccw' : 'cw';
     this.puzzle = isPuzzleType(this.settings.puzzle) ? this.settings.puzzle : 'circuits';
-    this.savedGames = storage.loadSavedGames();
+    this.savedGames = storage.loadSavedGames(this.profiles.circuits.mode);
     // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
     if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
     if (!isHapticMode(this.settings.hapticsMode)) this.settings.hapticsMode = 'all';
@@ -362,6 +364,9 @@ export class GameScene extends Phaser.Scene {
     this.headerContainer = this.add.container(0, 0);
     this.boardContainer = this.add.container(0, 0);
     this.controlsContainer = this.add.container(0, 0);
+    // Para la comprobación de diseño: los textos del encabezado y de las barras no se salen de la pantalla ni se pisan
+    this.headerContainer.setData('screen', { w: width, h: this.cameras.main.height });
+    this.controlsContainer.setData('screen', { w: width, h: this.cameras.main.height });
 
     // El nivel debe existir antes de construir la interfaz (el HUD lee sus datos)
     this.loadPuzzleState(this.puzzle);
@@ -371,7 +376,9 @@ export class GameScene extends Phaser.Scene {
     this.scheduleUpdateCheck();
     // La app siempre abre en el menú principal; el puzzle (y su tutorial) se abre al elegirlo
     this.inMenu = true;
+    this.menuScreen = 'home';
     this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
+    feedback.setPuzzle(null);
     this.setGameVisible(false);
     this.buildMenu();
     // Partida a medias: se guarda al salir a segundo plano o cerrar la app (la app puede cerrarse sin avisar)
@@ -918,6 +925,83 @@ export class GameScene extends Phaser.Scene {
   // Tarjetas modales (tutorial, estadísticas, victoria)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Reduce la letra de un texto hasta que quepa en `maxWidth` (sin bajar de `minSize`); si aun así no cabe, lo parte en
+   * líneas. Así ningún texto se sale de su marco, ni con frases largas ni en inglés.
+   */
+  private fitText(text: Phaser.GameObjects.Text, maxWidth: number, minSize = 24): void {
+    let size = parseFloat(String(text.style.fontSize));
+    while (text.width > maxWidth && size > minSize) {
+      size -= 2;
+      text.setFontSize(size);
+    }
+    if (text.width > maxWidth) text.setWordWrapWidth(maxWidth);
+  }
+
+  /** Título de una tarjeta: centrado arriba y achicado si no cabe a lo ancho. */
+  private addCardTitle(overlay: Phaser.GameObjects.Container, w: number, cardH: number, text: string): Phaser.GameObjects.Text {
+    const title = this.uiText(0, -cardH / 2 + 70, text, { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 });
+    this.fitText(title, w - 72, 26);
+    title.setAlign('center');
+    overlay.add(title);
+    return title;
+  }
+
+  /** Anota un botón de una tarjeta o del menú (para comprobar que ningún texto queda debajo de él). */
+  private registerButton(container: Phaser.GameObjects.Container, rect: Rect, label: Phaser.GameObjects.Text): void {
+    const list = (container.getData('buttons') as Array<{ rect: Rect; label: Phaser.GameObjects.Text }> | undefined) ?? [];
+    list.push({ rect, label });
+    container.setData('buttons', list);
+  }
+
+  /**
+   * Comprobación de diseño (la usan las pruebas del navegador): textos de las tarjetas abiertas y del menú que se salen de
+   * su marco, que se pisan entre sí o que quedan debajo de un botón. Devuelve una descripción por problema.
+   */
+  layoutIssues(): string[] {
+    const issues: string[] = [];
+    const margin = 6;
+    for (const object of this.children.getAll()) {
+      if (!(object instanceof Phaser.GameObjects.Container) || !object.visible || !object.active) continue;
+      const card = object.getData('card') as { w: number; h: number } | undefined;
+      const screen = object.getData('screen') as { w: number; h: number } | undefined;
+      if (!card && !screen) continue;
+      const frame = card
+        ? { x: object.x - card.w / 2, y: object.y - card.h / 2, w: card.w, h: card.h }
+        : { x: 0, y: 0, w: screen!.w, h: screen!.h };
+      const texts = object.list.filter(
+        (o): o is Phaser.GameObjects.Text => o instanceof Phaser.GameObjects.Text && o.visible && o.alpha > 0 && o.text.trim() !== ''
+      );
+      const boxes = texts.map((text) => ({ text, b: text.getBounds() }));
+      for (const { text, b } of boxes) {
+        if (b.x < frame.x + margin - 1 || b.right > frame.x + frame.w - margin + 1 || b.y < frame.y - 1 || b.bottom > frame.y + frame.h + 1) {
+          issues.push(`se sale del marco: «${text.text.replace(/\n/g, ' ')}»`);
+        }
+      }
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i].b;
+          const c = boxes[j].b;
+          const dx = Math.min(a.right, c.right) - Math.max(a.x, c.x);
+          const dy = Math.min(a.bottom, c.bottom) - Math.max(a.y, c.y);
+          if (dx > 3 && dy > 3) issues.push(`se pisan: «${boxes[i].text.text.replace(/\n/g, ' ')}» y «${boxes[j].text.text.replace(/\n/g, ' ')}»`);
+        }
+      }
+      const buttons = (object.getData('buttons') as Array<{ rect: Rect; label: Phaser.GameObjects.Text }> | undefined) ?? [];
+      for (const { rect, label } of buttons) {
+        const bx = object.x + rect.x - rect.w / 2;
+        const by = object.y + rect.y - rect.h / 2;
+        for (const { text, b } of boxes) {
+          if (text === label) continue;
+          const dx = Math.min(b.right, bx + rect.w) - Math.max(b.x, bx);
+          const dy = Math.min(b.bottom, by + rect.h) - Math.max(b.y, by);
+          if (dx > 3 && dy > 3) issues.push(`queda debajo del botón «${label.text}»: «${text.text.replace(/\n/g, ' ')}»`);
+        }
+      }
+    }
+    return issues;
+  }
+
   /** Crea una tarjeta modal con fondo atenuado. Devuelve el contenedor y el ancho de la tarjeta. */
   private createCard(
     cardH: number,
@@ -926,6 +1010,7 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const w = Math.min(width - 2 * MARGIN, 648);
     const overlay = this.add.container(width / 2, height / 2).setDepth(depth);
+    overlay.setData('card', { w, h: cardH });
 
     const backdrop = this.add.rectangle(0, 0, width, height, 0x000000, 0.72).setInteractive();
     const card = this.add.graphics();
@@ -1220,6 +1305,7 @@ export class GameScene extends Phaser.Scene {
       originX: 0.5,
     });
     overlay.add([g, text, this.hitZone(rect, onTap)]);
+    this.registerButton(overlay, rect, text);
   }
 
   private updates = createUpdateService();
@@ -1372,7 +1458,7 @@ export class GameScene extends Phaser.Scene {
   private showUpdateModal(info: UpdateInfo, onUpdate: () => void, inApp = false): void {
     const cardH = 620;
     const { overlay, w } = this.createCard(cardH, 300);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Hay una versión nueva'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Hay una versión nueva'));
     const body = this.uiText(0, -cardH / 2 + 150, t('Ya está disponible Lumihilo {0}. Tú tienes la {1}.', info.version, APP_VERSION), {
       size: 28,
       weight: '600',
@@ -1464,7 +1550,7 @@ export class GameScene extends Phaser.Scene {
       this.showLightsTutorialPage(overlay, w, cardH, page);
       return;
     }
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Luces'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Cómo se juega Luces'));
 
     // Tablero de ejemplo 3×3: la cruz del centro está apagada y las esquinas, encendidas
     const size = 116;
@@ -1562,14 +1648,7 @@ export class GameScene extends Phaser.Scene {
    */
   private showLightsTutorialPage(overlay: Phaser.GameObjects.Container, w: number, cardH: number, page: 2 | 3): void {
     const alive = () => overlay.active;
-    overlay.add(
-      this.uiText(0, -cardH / 2 + 70, page === 2 ? t('Dos toques se anulan') : t('Truco: fila por fila'), {
-        size: 36,
-        display: true,
-        color: THEME.primaryCss,
-        originX: 0.5,
-      })
-    );
+    this.addCardTitle(overlay, w, cardH, page === 2 ? t('Dos toques se anulan') : t('Truco: fila por fila'));
     const size = 104;
     const step = size + 14;
     const top = -cardH / 2 + 150 + size / 2;
@@ -1842,7 +1921,7 @@ export class GameScene extends Phaser.Scene {
       this.showCircuitsTutorial((page + 1) as 2 | 3);
     };
     const titles = [t('Cómo se juega Circuitos'), t('El sentido del giro'), t('Trucos para Circuitos')];
-    overlay.add(this.uiText(0, -cardH / 2 + 70, titles[page - 1], { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, titles[page - 1]);
     this.addTutorialFooter(overlay, w, cardH, page, total, next, finish);
 
     if (page === 1) {
@@ -1992,7 +2071,7 @@ export class GameScene extends Phaser.Scene {
     const rowH = 58;
     const cardH = 150 + rows.length * rowH + 40 + 130;
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Estadísticas'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Estadísticas'));
 
     let y = -cardH / 2 + 160;
     rows.forEach(([label, value, icon], i) => {
@@ -2011,7 +2090,7 @@ export class GameScene extends Phaser.Scene {
     const rowH = 130;
     const cardH = 160 + SKINS.length * rowH + 150 + 130;
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Aspectos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Aspectos'));
 
     const left = -w / 2 + 44;
     const right = w / 2 - 44;
@@ -2134,7 +2213,7 @@ export class GameScene extends Phaser.Scene {
   private showSettingsModal(): void {
     const cardH = 1150 + (this.updates.supported ? 104 : 0);
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Ajustes'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Ajustes'));
 
     let y = -cardH / 2 + 170;
     this.addToggleRow(overlay, w, y, t('Efectos'), this.settings.soundEnabled, (value) => {
@@ -2161,7 +2240,7 @@ export class GameScene extends Phaser.Scene {
       overlay,
       w,
       y,
-      t('Estilo de la música'),
+      t('Música del menú y de Circuitos'),
       MUSIC_STYLES.map((style) => ({ value: style, label: t(MUSIC_STYLE_LABELS[style]) })),
       this.settings.musicStyle,
       (value) => {
@@ -2255,7 +2334,7 @@ export class GameScene extends Phaser.Scene {
   private showAccessibilityModal(): void {
     const cardH = 990;
     const { overlay, w } = this.createCard(cardH, 200);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Accesibilidad'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Accesibilidad'));
 
     let y = -cardH / 2 + 170;
     this.addToggleRow(overlay, w, y, t('Alto contraste'), this.settings.highContrast, (value) => {
@@ -2337,7 +2416,7 @@ export class GameScene extends Phaser.Scene {
   private showHapticsModal(): void {
     const cardH = 1150;
     const { overlay, w } = this.createCard(cardH, 210);
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Vibración'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Vibración'));
 
     const left = -w / 2 + 44;
     const info = this.uiText(left, -cardH / 2 + 130, t('Leyendo los ajustes del teléfono…'), {
@@ -2564,7 +2643,7 @@ export class GameScene extends Phaser.Scene {
     const json = JSON.stringify(this.savedGames);
     if (json === this.lastSavedJson) return;
     this.lastSavedJson = json;
-    storage.saveSavedGames(this.savedGames);
+    storage.saveSavedGames(this.savedGames, this.profile.mode);
   }
 
   /** Devuelve el tablero recién cargado a como se dejó. False (sin tocar nada) si la partida no es de este nivel. */
@@ -2613,11 +2692,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------------------
-  // Menú principal
+  // Menú: inicio y puzzles
   // ---------------------------------------------------------------------------
 
   private menuContainer?: Phaser.GameObjects.Container;
   private inMenu = false;
+  /** Pantalla del menú: la de inicio (nombre, Jugar y accesos) o la de puzzles (tarjetas y modo). */
+  private menuScreen: 'home' | 'play' = 'home';
   private menuGreeting = '';
 
   /** Muestra u oculta lo que hay del juego (encabezado, tablero y controles) detrás del menú. */
@@ -2627,16 +2708,28 @@ export class GameScene extends Phaser.Scene {
     this.controlsContainer.setVisible(visible);
   }
 
-  /** Sale de la partida al menú principal (la partida a medias se guarda). */
+  /** Sale de la partida a la pantalla de puzzles (la partida a medias se guarda). */
   private goToMenu(): void {
     if (this.inMenu || this.isWon) return;
     this.flowDrag = null;
     this.dismissToast();
     this.persistGame();
     this.inMenu = true;
-    this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
+    this.menuScreen = 'play';
+    feedback.setPuzzle(null);
     this.setGameVisible(false);
     this.buildMenu();
+  }
+
+  /** Cambia de pantalla dentro del menú; al volver al inicio se elige otro saludo. */
+  private showMenuScreen(screen: 'home' | 'play'): void {
+    if (!this.inMenu) return;
+    if (screen === 'home' && this.menuScreen !== 'home') {
+      this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
+    }
+    this.menuScreen = screen;
+    // Se difiere para no destruir el botón mientras se procesa su propio toque
+    this.time.delayedCall(0, () => this.buildMenu());
   }
 
   /** Entra a un puzzle desde el menú: retoma su partida a medias o empieza su nivel actual. */
@@ -2652,13 +2745,22 @@ export class GameScene extends Phaser.Scene {
       this.buildBoard();
       this.updateFlowVisuals();
     }
+    // Cada puzzle con su música (en el menú suena el estilo elegido)
+    feedback.setPuzzle(puzzle);
     this.checkAndShowTutorial();
     this.maybeShowLightsTutorial();
     this.maybeShowFlowTutorial();
   }
 
-  /** Botón del menú: con contorno, o relleno si es la opción elegida. */
-  private menuButton(c: Phaser.GameObjects.Container, rect: Rect, label: string, onTap: () => void, selected = false): void {
+  /** Botón del menú: con contorno, o relleno si es la opción elegida o la principal. */
+  private menuButton(
+    c: Phaser.GameObjects.Container,
+    rect: Rect,
+    label: string,
+    onTap: () => void,
+    selected = false,
+    size: number = FONT.button
+  ): void {
     const g = this.add.graphics();
     if (selected) {
       g.fillStyle(THEME.primary, 1);
@@ -2670,12 +2772,15 @@ export class GameScene extends Phaser.Scene {
       g.strokeRoundedRect(rect.x - rect.w / 2, rect.y - rect.h / 2, rect.w, rect.h, 26);
     }
     const text = this.uiText(rect.x, rect.y, label, {
-      size: FONT.button,
+      size,
+      display: size > FONT.button,
       weight: '700',
       color: selected ? THEME.onPrimary : THEME.text,
       originX: 0.5,
     });
+    this.fitText(text, rect.w - 28, 20);
     c.add([g, text, this.hitZone(rect, onTap)]);
+    this.registerButton(c, rect, text);
   }
 
   /** Tarjeta de un puzzle: icono, nombre, qué se hace, por dónde va y si hay partida a medias. */
@@ -2698,47 +2803,84 @@ export class GameScene extends Phaser.Scene {
       flow: t('Une parejas y llena todo'),
     };
     const dailyDone = lastDailyOf(this.progress, puzzle) === dateKey(new Date());
-    c.add([
-      panel,
-      icon,
-      this.uiText(left + 150, rect.y - 42, t(PUZZLE_LABELS[puzzle]), { size: 34, display: true }),
-      this.uiText(left + 150, rect.y - 2, descriptions[puzzle], { size: FONT.small, weight: '500', color: THEME.mutedText }),
-      this.uiText(left + 150, rect.y + 38, inProgress ? t('Partida en curso') : t('Nivel {0}', levelOf(this.progress, puzzle)), {
-        size: FONT.small,
-        weight: '700',
-        color: THEME.primaryCss,
-      }),
-      this.uiText(left + rect.w - 28, rect.y - 42, inProgress ? t('Continuar') : t('Jugar'), { size: FONT.button, weight: '700', originX: 1 }),
-      this.uiText(left + rect.w - 28, rect.y + 38, dailyDone ? t('Diario hecho') : t('Diario disponible'), {
-        size: FONT.small,
-        weight: '500',
-        color: THEME.mutedText,
-        originX: 1,
-      }),
-      this.hitZone(rect, () => this.playPuzzle(puzzle)),
-    ]);
+    const textLeft = left + 150;
+    const rightEdge = left + rect.w - 28;
+    const action = this.uiText(rightEdge, rect.y - 42, inProgress ? t('Continuar') : t('Jugar'), { size: FONT.button, weight: '700', originX: 1 });
+    const daily = this.uiText(rightEdge, rect.y + 40, dailyDone ? t('Diario hecho') : t('Diario disponible'), {
+      size: FONT.small,
+      weight: '500',
+      color: THEME.mutedText,
+      originX: 1,
+    });
+    const name = this.uiText(textLeft, rect.y - 42, t(PUZZLE_LABELS[puzzle]), { size: 34, display: true });
+    const description = this.uiText(textLeft, rect.y, descriptions[puzzle], { size: FONT.small, weight: '500', color: THEME.mutedText });
+    const state = this.uiText(textLeft, rect.y + 40, inProgress ? t('Partida en curso') : t('Nivel {0}', levelOf(this.progress, puzzle)), {
+      size: FONT.small,
+      weight: '700',
+      color: THEME.primaryCss,
+    });
+    // Cada fila comparte el ancho con lo que tiene a la derecha: si no cabe (p. ej. en inglés), la letra se achica
+    this.fitText(name, rightEdge - action.width - 20 - textLeft, 24);
+    this.fitText(description, rightEdge - textLeft, 20);
+    this.fitText(state, rightEdge - daily.width - 20 - textLeft, 20);
+    c.add([panel, icon, name, description, state, action, daily, this.hitZone(rect, () => this.playPuzzle(puzzle))]);
   }
 
-  /** (Re)dibuja el menú principal con la paleta, el idioma y los datos de ahora. */
+  /** Chispas con su icono, alineadas a la derecha en `right` (o centradas en `cx`). */
+  private menuSparks(c: Phaser.GameObjects.Container, y: number, at: { right?: number; cx?: number }, size: number): void {
+    const text = this.uiText(0, y, formatSparks(this.progress.sparks), { size, display: true, color: THEME.primaryCss, originX: 0 });
+    const iconSize = size + 2;
+    const total = iconSize + 12 + text.width;
+    const startX = at.right !== undefined ? at.right - total : (at.cx ?? 0) - total / 2;
+    text.setX(startX + iconSize + 12);
+    const icon = this.add.graphics();
+    drawIcon(icon, 'spark', startX + iconSize / 2, y, iconSize, THEME.primary);
+    c.add([icon, text]);
+  }
+
+  /** (Re)dibuja el menú con la paleta, el idioma y los datos de ahora. */
   private buildMenu(): void {
     this.menuContainer?.destroy(true);
     const { width, height } = this.cameras.main;
-    const layout = computeMenuLayout(width, height);
     const c = this.add.container(0, 0).setDepth(90);
+    c.setData('screen', { w: width, h: height });
     this.menuContainer = c;
 
-    c.add(this.uiText(width / 2, layout.titleY, APP_NAME, { size: 60, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    if (this.menuScreen === 'home') {
+      const layout = computeHomeLayout(width, height);
+      const title = this.uiText(width / 2, layout.titleY, APP_NAME, { size: 72, display: true, color: THEME.primaryCss, originX: 0.5 });
+      this.fitText(title, width - 2 * MARGIN, 40);
+      c.add(title);
+      this.menuSparks(c, layout.sparksY, { cx: width / 2 }, FONT.display);
+      this.menuButton(c, layout.play, t('Jugar'), () => this.showMenuScreen('play'), true, 40);
+      this.menuButton(c, layout.buttons[0], t('Aspectos'), () => this.showSkinsModal());
+      this.menuButton(c, layout.buttons[1], t('Estadísticas'), () => this.showStatsModal());
+      this.menuButton(c, layout.buttons[2], t('Ajustes'), () => this.showSettingsModal());
+      c.add(
+        this.uiText(width / 2, layout.greetingY, t(this.menuGreeting), {
+          size: 26,
+          weight: '500',
+          color: THEME.mutedText,
+          align: 'center',
+          wrap: width - 2 * MARGIN - 40,
+          originX: 0.5,
+        })
+      );
+      return;
+    }
 
-    const sparks = this.uiText(width / 2 + 18, layout.sparksY, formatSparks(this.progress.sparks), {
-      size: FONT.display,
-      display: true,
-      color: THEME.primaryCss,
-      originX: 0.5,
-    });
-    const sparksIcon = this.add.graphics();
-    drawIcon(sparksIcon, 'spark', width / 2 + 18 - sparks.width / 2 - 28, layout.sparksY, 34, THEME.primary);
-    c.add([sparksIcon, sparks]);
+    const layout = computePlayLayout(width, height);
+    // «Volver» al inicio, igual que el del juego
+    const back = layout.backBtn;
+    const backIcon = this.add.graphics();
+    drawIcon(backIcon, 'back', back.x - back.w / 2 + 52, back.y, 40, THEME.primary);
+    c.add([this.glassPanel(back, 24), backIcon, this.uiText(back.x - back.w / 2 + 92, back.y, t('Volver'), { size: FONT.button, weight: '700' })]);
+    c.add(this.hitZone(back, () => this.showMenuScreen('home')));
+    this.menuSparks(c, back.y, { right: layout.sparksRight.x }, FONT.stats);
 
+    const title = this.uiText(width / 2, layout.titleY, t('Elige un puzzle'), { size: 40, display: true, color: THEME.primaryCss, originX: 0.5 });
+    this.fitText(title, width - 2 * MARGIN, 26);
+    c.add(title);
     PUZZLES.forEach((puzzle, i) => this.menuCard(c, layout.cards[i], puzzle));
 
     c.add(this.uiText(width / 2, layout.modeLabelY, t('Modo'), { size: FONT.small, weight: '600', color: THEME.mutedText, originX: 0.5 }));
@@ -2746,18 +2888,18 @@ export class GameScene extends Phaser.Scene {
     modes.forEach((mode, i) => {
       this.menuButton(c, layout.modes[i], this.modeLabel(mode), () => this.setGameMode(mode), this.profile.mode === mode);
     });
-
-    this.menuButton(c, layout.tools[0], t('Estadísticas'), () => this.showStatsModal());
-    this.menuButton(c, layout.tools[1], t('Aspectos'), () => this.showSkinsModal());
-    this.menuButton(c, layout.tools[2], t('Ajustes'), () => this.showSettingsModal());
-
+    const info: Record<GameMode, string> = {
+      relaxed: t('Tableros pequeños y sin prisa. Cada modo guarda su avance.'),
+      normal: t('La dificultad se adapta a cómo juegas. Cada modo guarda su avance.'),
+      challenge: t('Tableros grandes desde el principio. Cada modo guarda su avance.'),
+    };
     c.add(
-      this.uiText(width / 2, layout.greetingY, t(this.menuGreeting), {
-        size: 26,
+      this.uiText(width / 2, layout.modeInfoY, info[this.profile.mode], {
+        size: FONT.small,
         weight: '500',
         color: THEME.mutedText,
         align: 'center',
-        wrap: width - 2 * MARGIN - 40,
+        wrap: width - 2 * MARGIN - 20,
         originX: 0.5,
       })
     );
@@ -2780,25 +2922,25 @@ export class GameScene extends Phaser.Scene {
     this.updateFlowVisuals();
   }
 
-  /** Cambia el modo de juego (desde el menú). Es del jugador, no de un puzzle: se cambia en los tres perfiles. */
+  /**
+   * Cambia el modo de juego (desde el menú). Es del jugador, no de un puzzle: cambia en los tres. Cada modo guarda su
+   * nivel, su peldaño y sus partidas a medias (`core/modes.ts`): al volver a un modo se retoma donde se dejó.
+   */
   private setGameMode(nextMode: GameMode): void {
     if (nextMode === this.profile.mode) return;
-    for (const puzzle of PUZZLES) {
-      const profile = this.profiles[puzzle];
-      profile.mode = nextMode;
-      if (nextMode === 'relaxed') profile.currentTier = 1;
-      if (nextMode === 'normal') profile.currentTier = Math.max(2, Math.min(profile.currentTier, 6));
-      if (nextMode === 'challenge') profile.currentTier = Math.max(5, profile.currentTier);
-      storage.saveProfile(profile, puzzle);
-      // Cambiar de modo reinicia la progresión de niveles de cada puzzle
-      this.progress = withLevel(this.progress, puzzle, 1);
-    }
+    this.persistGame(); // la partida a medias queda guardada en su modo
+    const switched = switchGameMode(this.progress, this.profiles, nextMode);
+    this.progress = switched.progress;
+    this.profiles = switched.profiles;
     storage.saveProgress(this.progress);
-    // Las partidas a medias eran de otra dificultad: ya no valen
-    this.savedGames = {};
-    storage.saveSavedGames(this.savedGames);
-    this.isDaily = false;
-    this.startLevel(1);
+    for (const puzzle of PUZZLES) storage.saveProfile(this.profiles[puzzle], puzzle);
+    this.savedGames = storage.loadSavedGames(nextMode);
+    this.lastSavedJson = JSON.stringify(this.savedGames);
+    this.loadPuzzleState(this.puzzle);
+    if (this.inMenu) feedback.setPuzzle(null);
+    this.buildUi();
+    this.buildBoard();
+    this.updateFlowVisuals();
     if (this.inMenu) this.buildMenu();
   }
 
@@ -2836,7 +2978,7 @@ export class GameScene extends Phaser.Scene {
     if (saved) {
       // La partida guardada ya no corresponde a este nivel: se descarta
       delete this.savedGames[puzzle];
-      storage.saveSavedGames(this.savedGames);
+      storage.saveSavedGames(this.savedGames, this.profile.mode);
       if (resumeDaily) {
         this.isDaily = false;
         this.loadLevel(this.puzzleLevel());
@@ -3656,7 +3798,7 @@ export class GameScene extends Phaser.Scene {
     const cardH = 1090;
     const { overlay, w } = this.createCard(cardH, 250);
     const { level: demo, red, blue, blueShort } = this.flowDemoLevel();
-    const size = page === 1 ? 116 : 88;
+    const size = page === 1 ? 116 : 84;
     const finish = () => {
       this.settings.hasSeenFlowTip = true;
       storage.saveSettings(this.settings);
@@ -3664,7 +3806,7 @@ export class GameScene extends Phaser.Scene {
     };
 
     if (page === 1) {
-      overlay.add(this.uiText(0, -cardH / 2 + 70, t('Cómo se juega Hilos'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+      this.addCardTitle(overlay, w, cardH, t('Cómo se juega Hilos'));
       const step = size + Math.round(size * 0.12);
       const top = -cardH / 2 + 150 + size / 2;
       const board = this.addFlowDemoBoard(overlay, demo, 0, top, size);
@@ -3748,7 +3890,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Segunda pantalla: el mismo tablero, resuelto de dos formas
-    overlay.add(this.uiText(0, -cardH / 2 + 70, t('Hay que llenar todo el tablero'), { size: 36, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, t('Hay que llenar todo el tablero'));
     const intro = this.uiText(0, -cardH / 2 + 124, t('Las dos formas unen las dos parejas, pero solo una gana.'), {
       size: 28,
       weight: '500',
@@ -3759,14 +3901,14 @@ export class GameScene extends Phaser.Scene {
     intro.setOrigin(0.5, 0).setAlign('center');
     overlay.add(intro);
 
-    const rowGap = 330;
+    const rowGap = 310;
     const boardCx = -w / 2 + 44 + (size + Math.round(size * 0.12)) * 1.5;
     const examples: Array<{ paths: FlowCell[][]; good: boolean; caption: string }> = [
       { paths: [red, blue], good: true, caption: t('Todas las casillas llenas: ¡ganas!') },
-      { paths: [red, blueShort], good: false, caption: t('Quedan casillas vacías: no ganas, aunque las parejas estén unidas.') },
+      { paths: [red, blueShort], good: false, caption: t('Quedan casillas vacías (con un aro que late): no ganas, aunque las parejas estén unidas.') },
     ];
     examples.forEach((example, i) => {
-      const top = -cardH / 2 + 250 + size / 2 + i * rowGap;
+      const top = -cardH / 2 + 240 + size / 2 + i * rowGap;
       const board = this.addFlowDemoBoard(overlay, demo, boardCx, top, size);
       board.render(example.paths, !example.good);
       const textX = boardCx + board.width / 2 + 28;
@@ -3777,17 +3919,8 @@ export class GameScene extends Phaser.Scene {
       overlay.add(caption);
     });
 
-    const lines = [t('Las casillas vacías se marcan con un aro que late.'), t('¿Atascado? La pista también te ayuda a llenarlo.')];
-    let y = -cardH / 2 + 250 + size / 2 + 2 * rowGap - 70;
-    for (const line of lines) {
-      const dot = this.add.graphics();
-      dot.fillStyle(THEME.primary, 1);
-      dot.fillCircle(-w / 2 + 56, y + 17, 7);
-      const text = this.uiText(-w / 2 + 84, y, line, { size: 28, weight: '500', wrap: w - 140 });
-      text.setOrigin(0, 0);
-      overlay.add([dot, text]);
-      y += text.height + 22;
-    }
+    // La pista, como nota bajo los dos ejemplos (la explicación del aro va en el pie del ejemplo que no gana)
+    this.addTutorialTip(overlay, w, -cardH / 2 + 240 + size / 2 + rowGap + 2 * (size + Math.round(size * 0.12)) + size / 2 + 30, t('¿Atascado? La pista también te ayuda a llenarlo.'));
     this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Entendido'), finish, true);
   }
 

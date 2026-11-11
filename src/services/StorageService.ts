@@ -1,6 +1,6 @@
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
-import { AdaptiveProfile, createDefaultProfile, profileFromShared } from '../core/adaptive';
+import { AdaptiveProfile, GameMode, createDefaultProfile, profileFromShared } from '../core/adaptive';
 import { PlayerProgress, sanitizeProgress } from '../core/progress';
 import type { HapticLevel, HapticMode } from '../core/haptics';
 import type { MusicStyle } from '../core/music';
@@ -255,9 +255,14 @@ export class HybridStorageService implements StorageService {
     this.set('player_progress', JSON.stringify(progress));
   }
 
-  /** Partidas en curso de cada puzzle (ver `core/savedGames.ts`). */
-  loadSavedGames(): SavedGames {
-    const raw = this.get('saved_games');
+  /** Clave de las partidas a medias de un modo (la de Normal es la de siempre). */
+  private savedGamesKey(mode: GameMode): string {
+    return mode === 'normal' ? 'saved_games' : `saved_games_${mode}`;
+  }
+
+  /** Partidas en curso de cada puzzle en un modo de juego (ver `core/savedGames.ts`): cada modo guarda las suyas. */
+  loadSavedGames(mode: GameMode = 'normal'): SavedGames {
+    const raw = this.get(this.savedGamesKey(mode));
     if (!raw) return {};
     try {
       return sanitizeSavedGames(JSON.parse(raw));
@@ -266,9 +271,10 @@ export class HybridStorageService implements StorageService {
     }
   }
 
-  saveSavedGames(games: SavedGames): void {
-    if (Object.keys(games).length === 0) this.remove('saved_games');
-    else this.set('saved_games', JSON.stringify(games));
+  saveSavedGames(games: SavedGames, mode: GameMode = 'normal'): void {
+    const key = this.savedGamesKey(mode);
+    if (Object.keys(games).length === 0) this.remove(key);
+    else this.set(key, JSON.stringify(games));
   }
 
   loadSettings(): UserSettings {

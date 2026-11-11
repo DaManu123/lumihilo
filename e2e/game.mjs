@@ -326,6 +326,26 @@ export async function runGameScenarios(out) {
     await g.reload();
     s = await g.state();
     check('estilo y volumen persisten al recargar', s.settings?.musicStyle === 'swing' && s.settings?.musicVolume === 130);
+
+    // Lo que vio un probador: tras jugar Luces, cambiar el estilo en Ajustes (desde el menú) no se oía. En el menú suena
+    // el estilo elegido, así que el cambio se oye al momento; Luces conserva su caja de música
+    await g.tap(...g.pos.hint, 450);
+    await g.playPuzzle('lights');
+    await g.tap(...g.pos.tutorialSkip, 500);
+    await g.openSettings(500);
+    await g.tap(...g.pos.styleAmbient, 400);
+    await g.page.waitForTimeout(7000);
+    const quiet = (await g.audio()).src;
+    await g.page.waitForTimeout(4000);
+    check('en el menú, elegir Ambiental se oye (sin percusión) aunque se viniera de Luces', (await g.audio()).src === quiet);
+    await g.tap(...g.pos.styleSwing, 400);
+    await g.page.waitForTimeout(5000);
+    check('en el menú, volver a Swing se oye al momento (vuelve la percusión)', (await g.audio()).src > quiet);
+    await g.tap(...g.pos.settingsDone, 400); // vuelve a entrar a Luces
+    await g.page.waitForTimeout(6000);
+    const inLights = (await g.audio()).src;
+    await g.page.waitForTimeout(4000);
+    check('al volver a Luces suena su caja de música (sin percusión)', (await g.audio()).src === inLights);
     await g.close();
   }]);
 
@@ -502,6 +522,9 @@ export async function runGameScenarios(out) {
     await g.page.goto('http://localhost:4173/?debug');
     await g.page.waitForSelector('canvas');
     await g.page.waitForTimeout(1500);
+    g.menuOpen = true; // la app abre en el menú: hay que entrar al puzzle
+    g.menuScreen = 'home';
+    await g.enter('circuits');
     const won = await winWithHints(g);
     let resultTexts = await walkTexts(g.page);
     for (let i = 0; i < 20 && !/aspecto \d+/.test(resultTexts); i++) { await g.page.waitForTimeout(500); resultTexts = await walkTexts(g.page); } // la tarjeta tarda más con carga
@@ -998,12 +1021,12 @@ export async function runGameScenarios(out) {
     const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true };
     let g = await openGame({ label: 'menu', seed: { user_settings: SEEN, ...RICH }, out, query: '?debug', menu: true });
 
-    // La app abre en el menú: nombre, tres puzzles, modos, accesos y un saludo de la hora del dispositivo
+    // La app abre en la pantalla de inicio del menú: nombre, Jugar, Aspectos, Estadísticas, Ajustes y un saludo
     let i = await info(g);
     const tx = await texts(g);
     check('la app abre en el menú principal', i.inMenu === true);
-    check('el menú muestra el nombre y los tres puzzles', ['Lumihilo', 'Circuitos', 'Luces', 'Hilos'].every((w) => tx.includes(w)), tx);
-    check('el menú muestra los modos y los accesos', ['Relajado', 'Normal', 'Reto', 'Estadísticas', 'Aspectos', 'Ajustes'].every((w) => tx.includes(w)));
+    check('el inicio muestra el nombre, Jugar y los accesos', ['Lumihilo', 'Jugar', 'Aspectos', 'Estadísticas', 'Ajustes'].every((w) => tx.includes(w)), tx);
+    check('el inicio no muestra todavía los puzzles ni los modos', !['Circuitos', 'Relajado'].some((w) => tx.includes(w)));
     const parts = {
       morning: ['Buenos días'],
       afternoon: ['Buenas tardes'],
@@ -1014,6 +1037,14 @@ export async function runGameScenarios(out) {
     check('el saludo es de la franja de la hora del dispositivo', parts[part].some((w) => tx.includes(w)), `hora ${i.hour}`);
     check('el menú no es el juego: no se ven el cronómetro ni los toques', !/\d+ toques?/.test(tx));
     await g.shot('e21-menu');
+    await g.tap(...g.pos.homePlay, 600);
+    g.menuScreen = 'play';
+    const play = await texts(g);
+    check('«Jugar» abre la pantalla de puzzles con las tres tarjetas y los modos', ['Elige un puzzle', 'Circuitos', 'Luces', 'Hilos', 'Relajado', 'Normal', 'Reto', 'Volver'].every((w) => play.includes(w)), play);
+    await g.shot('e21-menu-puzzles');
+    await g.tap(...g.pos.playBack, 600);
+    g.menuScreen = 'home';
+    check('«Volver» de la pantalla de puzzles regresa al inicio', (await texts(g)).includes('Jugar') && !(await texts(g)).includes('Elige un puzzle'));
 
     // Entrar a Circuitos, jugar y volver: la partida se conserva
     await g.enter('circuits');
@@ -1026,7 +1057,8 @@ export async function runGameScenarios(out) {
     check('se juegan tres toques', circuits.taps === 3, `${circuits.taps}`);
     await g.tap(...g.pos.back, 500); // botón «Volver»
     g.menuOpen = true;
-    check('el botón Volver (flecha arriba a la izquierda) vuelve al menú', (await info(g)).inMenu === true);
+    g.menuScreen = 'play';
+    check('el botón Volver (flecha arriba a la izquierda) vuelve a la pantalla de puzzles', (await info(g)).inMenu === true && (await texts(g)).includes('Elige un puzzle'));
     const back = await texts(g);
     check('Circuitos ya muestra Partida en curso y Continuar', back.includes('Partida en curso') && back.includes('Continuar'));
     await g.shot('e21-menu-en-curso');
@@ -1091,27 +1123,40 @@ export async function runGameScenarios(out) {
     check('reiniciar deja el nivel sin jugadas', i.taps === 0);
     check('y borra la partida guardada de ese puzzle', await g.page.evaluate(() => !JSON.parse(localStorage.getItem('saved_games') ?? '{}').lights));
 
-    // Cambiar de modo desde el menú
+    // Cambiar de modo y volver no reinicia nada: cada modo guarda su nivel, su dificultad y sus partidas
     await g.openMenu();
+    const levelBefore = (await g.state()).progress.currentLevel;
     await g.tap(...g.pos.menuMode(2), 600);
     i = await info(g);
     check('elegir Reto cambia el modo y se queda en el menú', i.mode === 'challenge' && i.inMenu === true, `${i.mode}`);
-    check('cambiar de modo descarta las partidas a medias', await g.page.evaluate(() => localStorage.getItem('saved_games') === null));
+    await g.shot('e21-modo-reto');
     await g.enter('circuits');
     i = await info(g);
-    check('Circuitos arranca de cero en el nuevo modo', i.taps === 0 && i.mode === 'challenge');
+    check('en Reto, Circuitos empieza en su propio nivel sin jugadas', i.taps === 0 && i.mode === 'challenge' && (await g.state()).progress.currentLevel === 1);
+    await g.tap(200, 900, 450);
+    await g.openMenu();
+    await g.tap(...g.pos.menuMode(1), 600); // Normal
+    await g.enter('circuits');
+    i = await info(g);
+    check('al volver a Normal, Circuitos retoma su nivel y su partida (toques y piezas)', i.mode === 'normal' && i.taps === 3 && JSON.stringify(i.rotations) === JSON.stringify(circuits.rotations) && (await g.state()).progress.currentLevel === levelBefore, `${i.taps}`);
+    await g.openMenu();
+    await g.tap(...g.pos.menuMode(2), 600);
+    await g.enter('circuits');
+    i = await info(g);
+    check('y al volver a Reto, su partida también sigue ahí', i.mode === 'challenge' && i.taps === 1, `${i.taps}`);
+    check('cada modo guarda sus partidas aparte', await g.page.evaluate(() => !!localStorage.getItem('saved_games') && !!localStorage.getItem('saved_games_challenge')));
     await g.close();
 
     // Estadísticas y Ajustes ya no van juntos: cada uno se abre aparte desde el menú
     g = await openGame({ label: 'menu-accesos', seed: { user_settings: SEEN }, out, query: '?debug', menu: true });
-    await g.tap(...g.pos.menuStats, 500);
+    await g.tap(...g.pos.homeStats, 500);
     const all = await texts(g);
     const st = all.slice(all.lastIndexOf('Estadísticas |')); // solo la tarjeta (el menú sigue debajo)
     check('Estadísticas solo muestra números y Cerrar', st.includes('Racha actual') && st.includes('Cerrar') && !st.includes('Aspectos') && !st.includes('Ajustes'), st);
     await g.shot('e21-estadisticas');
     await g.tap(...g.pos.statsClose, 400);
     check('cerrar Estadísticas deja el menú', (await info(g)).inMenu === true);
-    await g.tap(...g.pos.menuSettings, 500);
+    await g.tap(...g.pos.homeSettings, 500);
     check('Ajustes se abre desde el menú', (await texts(g)).includes('Efectos de sonido') || (await texts(g)).includes('Música'));
     await g.shot('e21-ajustes');
     g.menuOpen = false; // aquí se quiere comprobar que Ajustes vuelve al menú, no reentrar al puzzle
@@ -1127,6 +1172,67 @@ export async function runGameScenarios(out) {
     await g.close();
   }]);
 
+  sections.push(['22. Diseño: ningún texto se sale de su marco ni se pisa (ES y EN, dos pantallas)', async () => {
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true };
+    for (const [lang, vp] of [['es', { width: 393, height: 808 }], ['en', { width: 360, height: 640 }], ['en', { width: 393, height: 808 }], ['es', { width: 360, height: 640 }]]) {
+      const name = `${lang} ${vp.width}×${vp.height}`;
+      const g = await openGame({ label: `diseno-${lang}-${vp.width}`, seed: { user_settings: { ...SEEN, language: lang }, ...RICH }, out, query: '?debug', menu: true, ...vp });
+      const found = [];
+      const look = async (where) => {
+        await g.page.waitForTimeout(250);
+        for (const issue of await g.page.evaluate(`${scene}.layoutIssues()`)) found.push(`${where}: ${issue}`);
+      };
+      const tapStay = async (pos, wait) => { g.menuOpen = false; await g.tap(...pos, wait); g.menuOpen = true; }; // cerrar sin reentrar al puzzle
+      if (lang === 'es' && vp.width === 393) {
+        // Control: la comprobación detecta un texto que se sale y uno que queda debajo de un botón
+        const probe = await g.page.evaluate(`(() => { const sc = ${scene}; const { overlay, w } = sc.createCard(400, 300);
+          overlay.add(sc.uiText(0, -100, 'X'.repeat(80), { size: 36, originX: 0.5 }));
+          sc.addCardButton(overlay, { x: 0, y: 100, w: w - 88, h: 100 }, 'OK', () => undefined, true);
+          overlay.add(sc.uiText(-100, 100, 'debajo', { size: 28 }));
+          const list = sc.layoutIssues(); overlay.destroy(); return list; })()`);
+        check('la comprobación de diseño detecta textos que se salen y textos bajo un botón', probe.some((x) => x.startsWith('se sale')) && probe.some((x) => x.startsWith('queda debajo')), JSON.stringify(probe));
+      }
+      await look('inicio');
+      await g.tap(...g.pos.homeStats, 500);
+      await look('estadísticas');
+      await g.tap(...g.pos.statsClose, 400);
+      await g.tap(...g.pos.homeSkins, 600);
+      await look('aspectos');
+      await tapStay(g.pos.skinsDone, 500);
+      await g.tap(...g.pos.homeSettings, 500);
+      await look('ajustes');
+      await g.tap(...g.pos.accessibility, 600);
+      await look('accesibilidad');
+      await g.tap(...g.pos.accDone, 400);
+      await g.tap(...g.pos.diagnose, 900);
+      await look('vibración');
+      await g.tap(...g.pos.hapticsDone, 400);
+      await tapStay(g.pos.settingsDone, 400);
+      await g.tap(...g.pos.homePlay, 500);
+      g.menuScreen = 'play';
+      await look('puzzles');
+      if (lang === 'en' && vp.width === 360) await g.shot('e22-puzzles-en-pequena');
+      for (const puzzle of ['circuits', 'lights', 'flow']) {
+        await g.enter(puzzle);
+        await look(`juego ${puzzle}`);
+        await g.tap(...g.pos.help, 700);
+        const pages = puzzle === 'flow' ? 2 : 3;
+        for (let page = 1; page <= pages; page++) {
+          await look(`tutorial ${puzzle} ${page}`);
+          if (page < pages) await g.tap(...(puzzle === 'flow' ? g.pos.flowTutorialOk : g.pos.tutorialNext), 700);
+        }
+        if (puzzle === 'flow') await g.shot(`e22-hilos-llenar-${lang}-${vp.width}`);
+        await g.tap(...g.pos.tutorialDone, 500);
+        await g.openMenu();
+      }
+      await g.enter('circuits');
+      const won = await winWithHints(g);
+      if (won) await look('victoria');
+      check(`${name}: ningún texto se sale de su marco, se pisa con otro ni queda debajo de un botón`, found.length === 0, found.slice(0, 6).join(' | '));
+      await g.close();
+    }
+  }]);
 
   await runSections(sections);
 
