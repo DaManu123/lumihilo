@@ -205,6 +205,12 @@ export class FeedbackService {
     this.sound(() => this.audio.note(winStepNote(step), { volume: 0.32 }));
   }
 
+  /** Estrella ganada en la tarjeta de resultado: una nota más aguda por cada una. */
+  star(index: number): void {
+    this.sound(() => this.audio.note(winStepNote(5 + index * 2), { volume: 0.4 }));
+    this.vibrate(() => this.haptics.lightTap());
+  }
+
   /** Circuito completo: acorde, vibración de éxito y la música se serena y resuelve. */
   win(): void {
     this.sound(() => this.audio.chord(WIN_CHORD, { volume: 0.6 }));

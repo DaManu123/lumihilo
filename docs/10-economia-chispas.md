@@ -1,6 +1,6 @@
 # 10 · Economía de las Chispas
 
-Las Chispas se ganan resolviendo niveles y se gastan en **pistas** (10 cada una) y en los **aspectos** de la tienda. Los precios se calcularon con un modelo de ritmo de juego que vive en `tests/economy.test.ts` y se ejecuta con el resto de las pruebas: si alguien cambia las recompensas o los precios y el ritmo deja de ser razonable, la prueba falla.
+Las Chispas se ganan resolviendo niveles y se gastan en **pistas** (la primera de cada nivel es gratis; las siguientes, 10 cada una) y en los **aspectos** de la tienda. Los precios se calcularon con un modelo de ritmo de juego que vive en `tests/economy.test.ts` y se ejecuta con el resto de las pruebas: si alguien cambia las recompensas o los precios y el ritmo deja de ser razonable, la prueba falla.
 
 ## Cuánto se gana
 
@@ -13,15 +13,17 @@ Las Chispas se ganan resolviendo niveles y se gastan en **pistas** (10 cada una)
 | Aspecto equipado | **+5 % / +10 % / +15 % / +20 % / +25 %** (Cyberpunk / Matrix / Océano / Solar / Aurora) del subtotal del nivel |
 | Reto diario, la primera vez de cada día | **el doble** (también del bonus del aspecto) |
 
-Los puzzles **Luces** e **Hilos** pagan igual que Circuitos (misma fórmula; sus récords de tiempo son aparte), salvo el bono de rapidez: el tiempo que cuenta como «rápido» es el tiempo esperado de cada puzzle (`expectedSecondsFor` en `adaptive.ts`: Luces da más tiempo para pensar y en Hilos crece con el tablero), el mismo que usa la dificultad. Cada puzzle tiene su reto diario, y cada uno paga doble la primera vez de cada día. Usar pistas quita los bonos de eficiencia y rapidez, y cada pista cuesta 10: por eso quien juega sin ayuda gana varias veces más que quien juega con pistas.
+Los puzzles **Luces** e **Hilos** pagan igual que Circuitos (misma fórmula; sus récords de tiempo son aparte), salvo el bono de rapidez: el tiempo que cuenta como «rápido» es el tiempo esperado de cada puzzle (`expectedSecondsFor` en `adaptive.ts`: Luces da más tiempo para pensar y en Hilos crece con el tablero), el mismo que usa la dificultad. Cada puzzle tiene su reto diario, y cada uno paga doble la primera vez de cada día. Usar pistas quita los bonos de eficiencia y rapidez (y una estrella), y a partir de la segunda del nivel cada una cuesta 10: por eso quien juega sin ayuda gana bastante más que quien juega con pistas.
+
+**Pistas (desde la versión siguiente a la beta.15, `core/hintOffer.ts`):** la primera pista de cada nivel es gratis, para que nadie se quede atorado por no tener Chispas; ya cuesta lo suyo, porque quita los bonos. Si el jugador se queda sin Chispas, la pista se recarga sola y sale gratis cada 30 segundos de juego. Los **primeros niveles** de cada puzzle (`core/intro.ts`) pagan como el primer nivel de habilidad.
 
 ## Perfiles de jugador (por día)
 
 | Perfil | Tiempo | Niveles + reto | Chispas netas al día |
 |---|---|---|---|
-| Ocasional (muchas pistas, eficiencia 70 %) | 8 min | 6 + 1 | 52 |
-| Habitual (1 pista cada 5 niveles, eficiencia 85 %) | 12 min | 10 + 1 | 153 |
-| Dedicado (casi sin pistas, eficiencia 95 %) | 30 min | 25 + 1 | 437 |
+| Ocasional (muchas pistas, eficiencia 70 %) | 8 min | 6 + 1 | 79 |
+| Habitual (1 pista cada 5 niveles, eficiencia 85 %) | 12 min | 10 + 1 | 177 |
+| Dedicado (casi sin pistas, eficiencia 95 %) | 30 min | 25 + 1 | 464 |
 
 ## Precios y tiempo para conseguirlos
 
@@ -29,15 +31,15 @@ Se compran en orden, partiendo de las 30 Chispas iniciales y llevando puesto el 
 
 | Aspecto | Precio | Bonus | Ocasional | Habitual | Dedicado |
 |---|---|---|---|---|---|
-| Cyberpunk | 150 | +5 % | 2,3 días | 0,8 días | 0,3 días |
-| Matrix | 350 | +10 % | 8,7 días | 3,0 días | 1,0 días |
-| Océano | 550 | +15 % | 18,3 días | 6,2 días | 2,2 días |
-| Solar | 800 | +20 % | 31,7 días | 10,8 días | 3,8 días |
-| Aurora | 1000 | +25 % | 47,7 días | 16,2 días | 5,7 días |
+| Cyberpunk | 150 | +5 % | 1,5 días | 0,7 días | 0,3 días |
+| Matrix | 350 | +10 % | 5,8 días | 2,6 días | 1,0 días |
+| Océano | 550 | +15 % | 12,1 días | 5,4 días | 2,1 días |
+| Solar | 800 | +20 % | 21,0 días | 9,3 días | 3,6 días |
+| Aurora | 1000 | +25 % | 31,6 días | 14,0 días | 5,3 días |
 
 Objetivos que cumple la tabla (y que comprueban las pruebas):
-- El primer aspecto se consigue **el mismo día** con juego habitual y en **tres días como máximo** con juego ocasional.
-- Con juego habitual, la colección completa se consigue en **unas tres semanas**; un jugador dedicado, en **menos de una**; uno ocasional, en **menos de ocho semanas**. Aurora es la meta a largo plazo.
+- El primer aspecto se consigue **el mismo día** con juego habitual y en **dos días** con juego ocasional.
+- Con juego habitual, la colección completa se consigue en **unas dos semanas**; un jugador dedicado, en **menos de una**; uno ocasional, en **unas cuatro semanas y media**. Aurora es la meta a largo plazo.
 - Cada aspecto cuesta más que el anterior, así que siempre hay una meta siguiente.
 
 ## Bonus de los aspectos

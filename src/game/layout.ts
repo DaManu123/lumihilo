@@ -110,12 +110,19 @@ export function computeHudLayout(width: number = DESIGN_WIDTH): HudLayout {
   };
 }
 
-/** Pantalla de inicio del menú: el nombre, «Jugar» y los accesos, y el saludo hasta abajo. */
+/**
+ * Pantalla de inicio del menú: el nombre, las Chispas y la racha; el botón principal (un toque y a jugar: «Jugar» para
+ * quien empieza, «Continuar» para quien vuelve), «Elegir puzzle», los accesos y el saludo hasta abajo.
+ */
 export interface HomeLayout {
   titleY: number;
   sparksY: number;
-  /** Botón principal «Jugar». */
+  /** Línea de la racha y las estrellas, bajo las Chispas. */
+  streakY: number;
+  /** Botón principal: entra directo a jugar. */
   play: Rect;
+  /** «Elegir puzzle»: la pantalla de puzzles y modos. */
+  puzzles: Rect;
   /** Aspectos, Estadísticas y Ajustes, en columna. */
   buttons: [Rect, Rect, Rect];
   greetingY: number;
@@ -123,14 +130,16 @@ export interface HomeLayout {
 
 export function computeHomeLayout(width: number = DESIGN_WIDTH, height: number = MIN_GAME_HEIGHT): HomeLayout {
   const w = Math.min(480, width - 2 * MARGIN);
-  const titleY = Math.round(height * 0.2);
-  const playY = Math.round(height * 0.44);
+  const titleY = Math.round(height * 0.17);
+  const playY = Math.round(height * 0.42);
   const button = (dy: number): Rect => ({ x: width / 2, y: playY + dy, w, h: 96 });
   return {
     titleY,
     sparksY: titleY + 84,
-    play: { x: width / 2, y: playY, w, h: 120 },
-    buttons: [button(140), button(256), button(372)],
+    streakY: titleY + 140,
+    play: { x: width / 2, y: playY, w, h: 132 },
+    puzzles: button(146),
+    buttons: [button(262), button(378), button(494)],
     greetingY: height - 96,
   };
 }

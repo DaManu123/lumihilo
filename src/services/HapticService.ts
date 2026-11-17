@@ -58,6 +58,10 @@ interface GameHapticsPlugin {
   downloadUpdate(options: { url: string; version: string }): Promise<void>;
   installUpdate(options: { version: string }): Promise<{ status: 'started' | 'needs-permission' }>;
   addListener(event: 'updateProgress', listener: (data: { received: number; total: number }) => void): Promise<PluginListenerHandle>;
+  /** Botón «atrás» de Android (ver `BackService`). */
+  addListener(event: 'backButton', listener: () => void): Promise<PluginListenerHandle>;
+  /** Manda la app a segundo plano. */
+  exitApp(): Promise<void>;
 }
 
 /** Plugin nativo propio (android/.../GameHapticsPlugin.java); en el navegador no existe. */

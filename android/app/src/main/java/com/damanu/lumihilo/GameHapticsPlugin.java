@@ -16,6 +16,8 @@ import android.provider.Settings;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 
+import androidx.activity.OnBackPressedCallback;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -47,6 +49,43 @@ import org.json.JSONException;
  */
 @CapacitorPlugin(name = "GameHaptics")
 public class GameHapticsPlugin extends Plugin {
+
+    /**
+     * Botón «atrás» de Android: se le pasa al juego (evento "backButton") para que cierre la tarjeta abierta o
+     * retroceda una pantalla. Si el juego aún no escucha, la app se va a segundo plano en vez de quedarse sin responder.
+     */
+    @Override
+    public void load() {
+        try {
+            getActivity().getOnBackPressedDispatcher().addCallback(getActivity(), new OnBackPressedCallback(true) {
+                @Override
+                public void handleOnBackPressed() {
+                    try {
+                        if (hasListeners("backButton")) {
+                            notifyListeners("backButton", new JSObject());
+                        } else {
+                            getActivity().moveTaskToBack(true);
+                        }
+                    } catch (Throwable ignored) {
+                        // un fallo aquí no debe cerrar la app
+                    }
+                }
+            });
+        } catch (Throwable ignored) {
+            // sin botón «atrás» propio: Android usa su comportamiento normal
+        }
+    }
+
+    /** Manda la app a segundo plano (lo pide el juego cuando «atrás» ya no tiene a dónde volver). */
+    @PluginMethod
+    public void exitApp(PluginCall call) {
+        try {
+            getActivity().moveTaskToBack(true);
+        } catch (Throwable ignored) {
+            // nada que hacer
+        }
+        call.resolve();
+    }
 
     private Vibrator vibrator() {
         Context context = getContext();

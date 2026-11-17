@@ -231,8 +231,9 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     // Estadísticas (tarjeta de 900 px): solo los números y «Cerrar»
     statsClose: [360, H / 2 + 900 / 2 - 84],
     // Menú, pantalla de inicio (computeHomeLayout): «Jugar» y los accesos en columna
-    homePlay: [360, Math.round(H * 0.44)], homeSkins: [360, Math.round(H * 0.44) + 140],
-    homeStats: [360, Math.round(H * 0.44) + 256], homeSettings: [360, Math.round(H * 0.44) + 372],
+    // homeMain = botón principal («Jugar»/«Continuar»: entra directo a jugar); homePlay = «Elegir puzzle»
+    homeMain: [360, Math.round(H * 0.42)], homePlay: [360, Math.round(H * 0.42) + 146], homeSkins: [360, Math.round(H * 0.42) + 262],
+    homeStats: [360, Math.round(H * 0.42) + 378], homeSettings: [360, Math.round(H * 0.42) + 494],
     // Menú, pantalla de puzzles (computePlayLayout): «Volver», tarjetas y modos
     playBack: [124, 56], menuCard: (i) => [360, (H - 70) / 2 + (i - 1) * 196], menuMode: (i) => [360 + (i - 1) * 228, H - 190],
     // Aspectos (tarjeta de 1220 px, filas de 130 px)
@@ -307,26 +308,26 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
 export async function winWithHints(g, maxTaps = 120) {
   const start = (await g.state()).progress;
   const baseSolved = start.stats.levelsSolved;
-  let charged = 0;
   let last = start.sparks;
   for (let i = 0; i < maxTaps; i++) {
     await g.tap(...g.pos.hint, 0);
-    await g.page
-      .waitForFunction((prev) => JSON.parse(localStorage.getItem('player_progress')).sparks !== prev, last, { timeout: 5000 })
-      .catch(() => undefined); // si el toque se ignoró (la pieza aún giraba) no hay cobro; con varios navegadores a la vez el cobro puede tardar
+    // La primera pista de cada nivel es gratis (no cambia el saldo): solo se espera el cobro de las siguientes
+    if (i > 0) {
+      await g.page
+        .waitForFunction((prev) => JSON.parse(localStorage.getItem('player_progress')).sparks !== prev, last, { timeout: 5000 })
+        .catch(() => undefined); // si el toque se ignoró (la pieza aún giraba) no hay cobro; con varios navegadores a la vez el cobro puede tardar
+    }
     await g.page.waitForTimeout(450); // giro de la pieza + guardado de la victoria
     const after = await g.state();
     const sparks = after.progress.sparks;
     if (after.progress.stats.levelsSolved > baseSolved) {
-      charged += 1; // la pista ganadora ya estaba cobrada; lo que sobre es la recompensa del nivel
-      // Con ?debug se lee del juego cuántas pistas se usaron: deducirlo de los cambios de saldo falla con mucha carga
+      // Con ?debug se lee del juego cuántas pistas se usaron: deducirlo de los toques falla con mucha carga
       const exact = await g.page.evaluate(() => window.__game?.scene?.scenes?.find((sc) => sc.handleCellTap)?.hintsUsed);
-      if (Number.isInteger(exact)) charged = exact;
-      const reward = sparks - (start.sparks - 10 * charged);
+      const hints = Number.isInteger(exact) ? exact : i + 1;
+      const reward = sparks - (start.sparks - 10 * Math.max(0, hints - 1));
       await g.page.waitForTimeout(1600); // pulso de luz + tarjeta de resultados
-      return { hints: charged, reward, after };
+      return { hints, reward, after };
     }
-    if (sparks < last) charged += Math.round((last - sparks) / 10);
     last = sparks;
   }
   return null;
