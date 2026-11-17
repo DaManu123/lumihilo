@@ -2,7 +2,7 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
-## [Sin publicar]
+## [0.2.0-beta.16] - 2026-11-17
 
 Revisión del juego pensando en quien lo abre por primera vez (un niño, alguien con dos minutos libres, una persona mayor): que se entienda sin leer, que nadie se quede atorado y que ganar se sienta bien.
 
