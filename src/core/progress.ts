@@ -15,6 +15,8 @@ export interface PlayerStats {
   levelsSolved: number;
   perfectSolves: number;
   dailyCompleted: number;
+  /** Estrellas ganadas en total (1 a 3 por nivel resuelto; ver `core/stars.ts`). */
+  stars: number;
   /** Mejor tiempo (segundos) por tier de dificultad; el tiempo solo es comparable dentro de un mismo tier. */
   bestTimeByTier: Record<string, number>;
 }
@@ -91,7 +93,7 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
     lightsLevel: 1,
     flowLevel: 1,
     sparks: STARTING_SPARKS,
-    stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, bestTimeByTier: {} },
+    stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, stars: 0, bestTimeByTier: {} },
     streak: { current: 0, best: 0, lastActiveDate: null },
     lastDailyCompleted: null,
     lastLightsDailyCompleted: null,
@@ -142,6 +144,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
       levelsSolved: toInt(stats.levelsSolved, 0),
       perfectSolves: toInt(stats.perfectSolves, 0),
       dailyCompleted: toInt(stats.dailyCompleted, 0),
+      stars: toInt(stats.stars, 0),
       bestTimeByTier,
     },
     streak: {
@@ -315,6 +318,8 @@ export interface LevelOutcome {
   today: string;
   /** Clave del récord de tiempo; por defecto, el nivel de habilidad (el puzzle Luces usa la suya). */
   recordKey?: string;
+  /** Estrellas ganadas en este nivel (se suman al total). */
+  stars?: number;
 }
 
 /** Último día en que se completó el reto diario de un puzzle. */
@@ -359,6 +364,7 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
       levelsSolved: progress.stats.levelsSolved + 1,
       perfectSolves: progress.stats.perfectSolves + (withoutHints && outcome.tapEfficiency >= 0.99 ? 1 : 0),
       dailyCompleted: progress.stats.dailyCompleted + (firstDailyToday ? 1 : 0),
+      stars: progress.stats.stars + Math.max(0, Math.floor(outcome.stars ?? 0)),
       bestTimeByTier,
     },
     streak: registerActivity(progress.streak, outcome.today),

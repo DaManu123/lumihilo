@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { HINT_COST, computeSparksReward, dailyTier } from '../src/core/progress';
+import { computeSparksReward, dailyTier } from '../src/core/progress';
 import { SKINS } from '../src/core/skins';
 
 /**
  * Ritmo de Chispas. Perfiles de jugador (por día): cuántos niveles resuelve, con qué nivel de habilidad, qué tan
- * bien (eficiencia de toques), cuántos con bonus de rapidez y cuántos con pistas (cada pista cuesta 10).
+ * bien (eficiencia de toques), cuántos con bonus de rapidez y cuántos con pistas (la primera de cada nivel es gratis; solo quita los bonos).
  * El reto diario paga el doble la primera vez de cada día. Ver docs/10-economia-chispas.md.
  */
 interface Profile {
@@ -28,7 +28,8 @@ function sparksPerLevel(p: Profile, tier: number, multiplier = 1): number {
   const slow = computeSparksReward({ tier, tapEfficiency: p.efficiency, elapsedSeconds: 9999, minTaps: 10, hintsUsed: 0, isNewRecord: false, multiplier });
   const hinted = computeSparksReward({ tier, tapEfficiency: p.efficiency, elapsedSeconds: 9999, minTaps: 10, hintsUsed: 1, isNewRecord: false, multiplier });
   const unhinted = p.fastShare * clean.total + (1 - p.fastShare) * slow.total;
-  return (1 - p.hintShare) * unhinted + p.hintShare * (hinted.total - HINT_COST * multiplier);
+  // La primera pista de cada nivel es gratis (ver `core/hintOffer.ts`): con una pista solo se pierden los bonos
+  return (1 - p.hintShare) * unhinted + p.hintShare * hinted.total;
 }
 
 export function sparksPerDay(p: Profile): number {

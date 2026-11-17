@@ -47,15 +47,19 @@ export async function runGameScenarios(out) {
     await g.close();
   }]);
 
-  sections.push(['3. Pistas: coste y saldo insuficiente', async () => {
-    const g = await openGame({ label: 'pistas', seed: SEEN_TUTORIAL, out });
-    await g.tap(...g.pos.hint, 450);
+  sections.push(['3. Pistas: la primera gratis, coste y saldo insuficiente', async () => {
+    // Nivel 4: ya pasados los niveles de entrada (un 4×4 con piezas de sobra para cuatro pistas)
+    const g = await openGame({ label: 'pistas', seed: { ...SEEN_TUTORIAL, player_progress: { ...RICH.player_progress, currentLevel: 4, sparks: 30 } }, out });
+    await g.tap(...g.pos.hint, 700);
     let s = await g.state();
-    check('la primera pista cuesta 10 Chispas (30 → 20)', s.progress.sparks === 20, `saldo ${s.progress.sparks}`);
-    await g.tap(...g.pos.hint, 450);
-    await g.tap(...g.pos.hint, 450);
+    check('la primera pista del nivel es gratis (30 → 30)', s.progress.sparks === 30, `saldo ${s.progress.sparks}`);
+    await g.tap(...g.pos.hint, 700);
     s = await g.state();
-    check('tres pistas dejan el saldo en 0', s.progress.sparks === 0, `saldo ${s.progress.sparks}`);
+    check('la segunda cuesta 10 Chispas (30 → 20)', s.progress.sparks === 20, `saldo ${s.progress.sparks}`);
+    await g.tap(...g.pos.hint, 700);
+    await g.tap(...g.pos.hint, 700);
+    s = await g.state();
+    check('dos pistas más dejan el saldo en 0', s.progress.sparks === 0, `saldo ${s.progress.sparks}`);
     await g.tap(...g.pos.hint, 450);
     s = await g.state();
     check('sin saldo no se cobra ni se queda negativo', s.progress.sparks === 0);
@@ -64,23 +68,24 @@ export async function runGameScenarios(out) {
   }]);
 
   sections.push(['4. Resolver un nivel: progreso, racha y exploit de pistas', async () => {
-    const g = await openGame({ label: 'victoria', seed: { ...SEEN_TUTORIAL, ...RICH }, out, query: '?debug' });
+    const g = await openGame({ label: 'victoria', seed: { ...SEEN_TUTORIAL, player_progress: { ...RICH.player_progress, currentLevel: 4 } }, out, query: '?debug' });
     const r = await winWithHints(g);
     check('se puede resolver el nivel solo con pistas', !!r, r ? `${r.hints} pistas` : 'no se resolvió');
     if (r) {
       const s = r.after;
-      check('cuenta un nivel resuelto y avanza al nivel 2', s.progress.stats.levelsSolved === 1 && s.progress.currentLevel === 2);
+      check('cuenta un nivel resuelto y avanza al nivel 5', s.progress.stats.levelsSolved === 1 && s.progress.currentLevel === 5);
       check('inicia la racha en 1 día', s.progress.streak.current === 1 && s.progress.streak.lastActiveDate === today(), s.progress.streak.lastActiveDate);
       check('con pistas NO cuenta como resolución perfecta ni como récord', s.progress.stats.perfectSolves === 0 && Object.keys(s.progress.stats.bestTimeByTier).length === 0);
       check('con pistas la recompensa no incluye bonos de eficiencia ni rapidez', r.reward > 0 && r.reward <= 12, `recompensa ${r.reward}`);
       check('con 2 o más pistas el rating baja (no se premia la ayuda)', (s.profile?.rating ?? 1000) < 1000, `rating ${s.profile?.rating}`);
       await g.shot('e4-victoria');
       // Siguiente nivel (tarjeta de 6 filas: 902 px de alto)
-      await g.tap(360, g.dims.h / 2 + 902 / 2 - 196, 700);
+      await g.page.keyboard.press('Enter'); // siguiente nivel
+      await g.page.waitForTimeout(700);
       await g.shot('e4-nivel-2');
       await g.reload();
       const s2 = await g.state();
-      check('al recargar retoma en el nivel 2', s2.progress.currentLevel === 2);
+      check('al recargar retoma en el nivel 5', s2.progress.currentLevel === 5);
     }
     await g.close();
   }]);
@@ -98,8 +103,8 @@ export async function runGameScenarios(out) {
       check('el reto diario NO avanza el nivel normal', s.progress.currentLevel === 1, `nivel ${s.progress.currentLevel}`);
       check('la primera vez paga el doble (sin bonos por usar pistas)', r1.reward > 0 && r1.reward % 2 === 0, `recompensa ${r1.reward}`);
       await g.shot('e5-diario-victoria');
-      // Repetir el reto (tarjeta de 6 filas con desglose: 902 px)
-      await g.tap(360, g.dims.h / 2 + 902 / 2 - 80, 800);
+      // Repetir el reto (tarjeta de resultado con 4 filas: 500 + 4 × 58 + 270 = 1002 px)
+      await g.tap(360, g.dims.h / 2 + 1002 / 2 - 80, 800);
       const r2 = await winWithHints(g, 120);
       check('repetir el reto no paga Chispas', r2 && r2.reward === 0, r2 ? `recompensa ${r2.reward}` : 'no se resolvió');
       check('repetir el reto no suma otro reto completado', r2 && r2.after.progress.stats.dailyCompleted === 1);
@@ -125,9 +130,12 @@ export async function runGameScenarios(out) {
     });
     check('el juego arranca aunque el almacenamiento esté corrupto', !!(await g.page.$('canvas')));
     await g.tap(...g.pos.tutorialOk);
-    await g.tap(...g.pos.hint, 450);
+    await g.tap(...g.pos.dir, 450);
+    // La primera pista es gratis; la segunda cobra 10 de las 30 Chispas iniciales (o gana el nivel, si era la última pieza)
+    await g.tap(...g.pos.hint, 800);
+    await g.tap(...g.pos.hint, 800);
     const s = await g.state();
-    check('se recupera con valores por defecto y sigue funcionando', s.progress?.sparks === 20, JSON.stringify(s.progress && s.progress.sparks));
+    check('se recupera con valores por defecto y sigue funcionando', s.settings?.rotationDirection === 'ccw' && (s.progress?.sparks === 20 || s.progress?.stats?.levelsSolved >= 1), JSON.stringify(s.progress && s.progress.sparks));
     await g.close();
   }]);
 
@@ -151,9 +159,9 @@ export async function runGameScenarios(out) {
     const box = await (await g.page.$('canvas')).boundingBox();
     const fits = box.x >= -1 && box.y >= -1 && box.x + box.width <= vp.width + 1 && box.y + box.height <= vp.height + 1;
     check(`${vp.name}: el lienzo cabe en la pantalla`, fits, `lienzo ${Math.round(box.width)}x${Math.round(box.height)} en ${vp.width}x${vp.height}`);
-    await g.tap(...g.pos.hint, 450);
+    await g.tap(...g.pos.dir, 450);
     const s = await g.state();
-    check(`${vp.name}: los botones responden al toque`, s.progress.sparks === 20);
+    check(`${vp.name}: los botones responden al toque`, s.settings?.rotationDirection === 'ccw', JSON.stringify(s.settings?.rotationDirection));
     await g.shot(`e9-${vp.width}x${vp.height}`);
     await g.close();
   }
@@ -565,9 +573,9 @@ export async function runGameScenarios(out) {
     await g.shot('e18-aviso-actualizacion');
     await g.tap(...g.pos.updateLater, 500);
     check('"Ahora no" cierra el aviso y se puede seguir jugando', !(await cardOpen(g)));
-    await g.tap(...g.pos.hint, 450);
+    await g.tap(...g.pos.dir, 450);
     let s = await g.state();
-    check('el juego sigue funcionando tras rechazar', s.progress.sparks < 30);
+    check('el juego sigue funcionando tras rechazar', s.settings?.rotationDirection === 'ccw');
     await g.page.reload();
     await g.page.waitForSelector('canvas');
     await settle(g);
@@ -769,11 +777,13 @@ export async function runGameScenarios(out) {
     await g.close();
 
     // Sin Chispas la pista de Luces no se cobra ni juega por ti
-    g = await openGame({ label: 'luces-pobre', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, player_progress: { ...RICH.player_progress, sparks: 5 } }, out, query: '?debug' });
+    g = await openGame({ label: 'luces-pobre', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, player_progress: { ...RICH.player_progress, lightsLevel: 7, sparks: 5 } }, out, query: '?debug' });
+    await g.tap(...g.pos.hint, 700); // la primera del nivel es gratis
+    check('la primera pista de Luces es gratis', (await g.state()).progress.sparks === 5);
     st = await lightsState(g);
     await g.tap(...g.pos.hint, 500);
     const after = await lightsState(g);
-    check('sin Chispas la pista no toca nada', JSON.stringify(after.grid) === JSON.stringify(st.grid));
+    check('sin Chispas la segunda pista no toca nada', JSON.stringify(after.grid) === JSON.stringify(st.grid));
     check('y no cobra', (await g.state()).progress.sparks === 5);
 
     // Cada puzzle tiene su reto diario: en Luces el botón abre el reto de Luces (sin cambiar de puzzle)
@@ -816,7 +826,7 @@ export async function runGameScenarios(out) {
     }
 
     // Piedras: desde el nivel de habilidad 3 hay casillas bloqueadas que ni cambian ni cuentan
-    g = await openGame({ label: 'luces-piedras', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, profile_adaptive: { currentTier: 6 } }, out, query: '?debug' });
+    g = await openGame({ label: 'luces-piedras', seed: { user_settings: { ...SEEN, puzzle: 'lights' }, profile_adaptive: { currentTier: 6 }, player_progress: { ...RICH.player_progress, lightsLevel: 7 } }, out, query: '?debug' });
     await g.page.waitForTimeout(1200);
     const stones = await g.page.evaluate(() => {
       const sc = window.__game.scene.scenes.find((x) => x.handleCellTap);
@@ -886,7 +896,7 @@ export async function runGameScenarios(out) {
     await g.close();
 
     // Trazar, deshacer, bloqueos y cortes
-    g = await openGame({ label: 'hilos-juego', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
+    g = await openGame({ label: 'hilos-juego', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, player_progress: { ...RICH.player_progress, flowLevel: 4 } }, out, query: '?debug' });
     let info = await flowInfo(g);
     check('el tablero de Hilos está en marcha', info.puzzle === 'flow' && info.pairs >= 3 && info.size >= 4, JSON.stringify({ p: info.puzzle, n: info.pairs, s: info.size }));
     await g.shot('e20-hilos');
@@ -921,12 +931,12 @@ export async function runGameScenarios(out) {
     await g.close();
 
     // Pista, victoria y progreso aparte
-    g = await openGame({ label: 'hilos-victoria', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, ...RICH }, out, query: '?debug' });
+    g = await openGame({ label: 'hilos-victoria', seed: { user_settings: { ...SEEN, puzzle: 'flow' }, player_progress: { ...RICH.player_progress, flowLevel: 4 } }, out, query: '?debug' });
     const sparksBefore = (await g.state()).progress.sparks;
     const levelBefore = await g.state();
     await g.tap(...g.pos.hint, 700);
     s = await g.state();
-    check('la pista cuesta 10 Chispas y une una pareja', s.progress.sparks === sparksBefore - 10 && (await connected(g)) === 1, `${sparksBefore} → ${s.progress.sparks}, unidas ${await connected(g)}`);
+    check('la primera pista es gratis y une una pareja', s.progress.sparks === sparksBefore && (await connected(g)) === 1, `${sparksBefore} → ${s.progress.sparks}, unidas ${await connected(g)}`);
     info = await flowInfo(g);
     for (let i = 0; i < info.pairs; i++) {
       const cur = await flowInfo(g);
@@ -941,7 +951,7 @@ export async function runGameScenarios(out) {
     check('sale el resultado «Todo unido»', (await texts(g)).includes('Todo unido'), (await texts(g)).slice(0, 200));
     await g.shot('e20-hilos-victoria');
     s = await g.state();
-    check('sube el nivel de Hilos y no el de Circuitos ni el de Luces', s.progress.flowLevel === 2 && s.progress.currentLevel === (levelBefore.progress.currentLevel ?? 1) && s.progress.lightsLevel === (levelBefore.progress.lightsLevel ?? 1), `hilos ${s.progress.flowLevel}, circuitos ${s.progress.currentLevel} (antes ${levelBefore.progress.currentLevel}), luces ${s.progress.lightsLevel} (antes ${levelBefore.progress.lightsLevel})`);
+    check('sube el nivel de Hilos y no el de Circuitos ni el de Luces', s.progress.flowLevel === 5 && s.progress.currentLevel === (levelBefore.progress.currentLevel ?? 1) && s.progress.lightsLevel === (levelBefore.progress.lightsLevel ?? 1), `hilos ${s.progress.flowLevel}, circuitos ${s.progress.currentLevel} (antes ${levelBefore.progress.currentLevel}), luces ${s.progress.lightsLevel} (antes ${levelBefore.progress.lightsLevel})`);
     check('guarda un récord de tiempo con su propia clave', Object.keys(s.progress.stats.bestTimeByTier).some((k) => k.startsWith('F')) || s.progress.stats.levelsSolved >= 1);
     await g.close();
 
@@ -1322,6 +1332,111 @@ export async function runGameScenarios(out) {
     st = await fxState(g);
     const particles = await g.page.evaluate(`${scene}.children.getAll().filter((o) => o.type === 'ParticleEmitter').length`);
     check('sin animaciones quedan el brillo y la viñeta, sin partículas', st.fx && st.bloom >= 1 && st.camera >= 1 && particles === 0, `${JSON.stringify(st)} partículas ${particles}`);
+    await g.close();
+  }]);
+
+  sections.push(['24. Para todos: primeros niveles, pista gratis, estrellas, «Continuar» y «atrás»', async () => {
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => o.visible === false ? [] : [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
+    const sc = (g, expr) => g.page.evaluate(`(() => { const sc = ${scene}; return ${expr}; })()`);
+    const game = '({ inMenu: sc.inMenu, screen: sc.menuScreen, puzzle: sc.puzzle, level: sc.currentLevelIndex, rows: sc.board.rows, cols: sc.board.cols, minTaps: sc.currentLevelData.minTaps, hints: sc.hintsUsed, won: sc.isWon, sparks: sc.progress.sparks })';
+
+    // Jugador nuevo: un toque en «Jugar» y ya está en un primer nivel pequeño, con su tutorial
+    let g = await openGame({ label: 'todos-nuevo', out, query: '?debug', menu: true, seed: { player_progress: { ...RICH.player_progress, sparks: 30 } } });
+    let tx = await texts(g);
+    check('inicio de quien empieza: «Jugar», «Empieza con un nivel fácil» y «Elegir puzzle»', tx.includes('Jugar') && tx.includes('Empieza con un nivel fácil') && tx.includes('Elegir puzzle'), tx.slice(0, 200));
+    await g.shot('e24-inicio-nuevo');
+    g.menuOpen = false;
+    await g.tap(...g.pos.homeMain, 1200);
+    let st = await sc(g, game);
+    tx = await texts(g);
+    check('«Jugar» entra directo a Circuitos, con su tutorial', !st.inMenu && st.puzzle === 'circuits' && tx.includes('Cómo se juega Circuitos'), JSON.stringify(st));
+    check('el primer nivel de Circuitos es un 3×3', st.rows === 3 && st.cols === 3 && st.level === 1, JSON.stringify(st));
+    check('el tutorial ya habla de la pista gratis', tx.includes('la primera de cada nivel es gratis'));
+    await g.page.keyboard.press('Escape');
+    await g.page.waitForTimeout(500);
+    tx = await texts(g);
+    check('«atrás» (Escape) cierra el tutorial y lo da por visto', !tx.includes('Cómo se juega Circuitos') && (await g.state()).settings?.hasSeenTutorial === true);
+    check('el botón de pista dice «Gratis»', tx.includes('Gratis'), tx.slice(0, 300));
+    await g.shot('e24-primer-nivel');
+    await g.tap(...g.pos.hint, 800);
+    st = await sc(g, game);
+    check('la primera pista del nivel no cuesta Chispas', st.hints === 1 && st.sparks === 30, JSON.stringify(st));
+    // Los primeros niveles de Luces e Hilos también son pequeños
+    const lights = await sc(g, `(sc.loadPuzzleState('lights'), ${game})`);
+    check('el primer nivel de Luces es un 3×3 que se resuelve con un toque', lights.rows === 3 && lights.minTaps === 1, JSON.stringify(lights));
+    const flow = await sc(g, `(sc.loadPuzzleState('flow'), { rows: sc.board.rows, pairs: sc.flowLevelData.pairs.length })`);
+    check('el primer nivel de Hilos es un 3×3 con dos hilos', flow.rows === 3 && flow.pairs === 2, JSON.stringify(flow));
+    await g.close();
+
+    // En el modo Reto no hay niveles de entrada: tableros grandes desde el principio
+    g = await openGame({ label: 'todos-reto', out, query: '?debug', seed: { user_settings: { hasSeenTutorial: true }, profile_adaptive: { mode: 'challenge', currentTier: 5 }, player_progress: { ...RICH.player_progress } } });
+    st = await sc(g, game);
+    check('en Reto el nivel 1 no es de entrada (5×5 o más)', st.rows >= 5 && st.level === 1, JSON.stringify(st));
+    await g.close();
+
+    // Pistas: la primera gratis, la segunda cuesta 10 y, sin Chispas, se recarga sola
+    g = await openGame({ label: 'todos-pistas', out, query: '?debug', seed: { user_settings: { hasSeenTutorial: true }, player_progress: { ...RICH.player_progress, currentLevel: 3, sparks: 15 } } });
+    st = await sc(g, game);
+    check('el tercer nivel de Circuitos (último de entrada) es un 4×4', st.rows === 4 && st.level === 3, JSON.stringify(st));
+    await g.tap(...g.pos.hint, 800);
+    st = await sc(g, game);
+    check('primera pista: gratis', st.hints === 1 && st.sparks === 15, JSON.stringify(st));
+    await g.tap(...g.pos.hint, 800);
+    st = await sc(g, game);
+    check('segunda pista: cuesta 10 Chispas', st.hints === 2 && st.sparks === 5, JSON.stringify(st));
+    await g.tap(...g.pos.hint, 500);
+    st = await sc(g, game);
+    tx = await texts(g);
+    check('sin Chispas la pista no sale todavía y un aviso dice cuánto falta', st.hints === 2 && st.sparks === 5 && tx.includes('Tu pista gratis llega'), `${JSON.stringify(st)} ${tx.slice(-160)}`);
+    await g.shot('e24-pista-recarga');
+    await sc(g, '(sc.lastHintAt = sc.elapsedTime - 30, sc.updateHintButtonState(), 1)');
+    check('pasada la recarga el botón vuelve a decir «Gratis»', (await texts(g)).includes('Gratis'));
+    await g.tap(...g.pos.hint, 800);
+    st = await sc(g, game);
+    check('y la pista de rescate sale gratis: nadie se queda atorado', st.hints === 3 && st.sparks === 5 && !st.won, JSON.stringify(st));
+
+    // Ganar con pistas: una estrella, y los niveles de entrada no mueven la dificultad
+    await sc(g, '(sc.progress.sparks = 900, sc.updateHintButtonState(), 1)');
+    const won = await winWithHints(g);
+    check('se gana el nivel con pistas', won);
+    for (let i = 0; i < 20 && !(await texts(g)).includes('Circuito completo'); i++) await g.page.waitForTimeout(500); // la tarjeta tarda más con carga
+    tx = await texts(g);
+    let saved = await g.state();
+    check('ganar con varias pistas da una estrella y se guarda', saved.progress?.stats?.stars === 1, JSON.stringify(saved.progress?.stats));
+    check('la tarjeta de resultado dice cómo ganar más estrellas', tx.includes('Sin pistas ganas más estrellas.'), tx.slice(-300));
+    check('un nivel de entrada no cambia la dificultad', (saved.profile?.currentTier ?? 2) === 2 && !tx.includes('Dificultad'), JSON.stringify(saved.profile));
+    await g.shot('e24-resultado-estrellas');
+
+    // «Atrás»: resultado → siguiente nivel → puzzles → inicio, y «Continuar» vuelve de un toque
+    await g.page.keyboard.press('Escape');
+    await g.page.waitForTimeout(900);
+    st = await sc(g, game);
+    check('«atrás» en el resultado pasa al siguiente nivel, ya con la dificultad normal', st.level === 4 && !st.won && st.rows === 4, JSON.stringify(st));
+    await g.page.keyboard.press('Escape');
+    await g.page.waitForTimeout(600);
+    st = await sc(g, game);
+    check('«atrás» en el juego lleva a la pantalla de puzzles', st.inMenu && st.screen === 'play', JSON.stringify(st));
+    await g.page.keyboard.press('Escape');
+    await g.page.waitForTimeout(600);
+    st = await sc(g, game);
+    tx = await texts(g);
+    check('«atrás» en puzzles lleva al inicio', st.inMenu && st.screen === 'home', JSON.stringify(st));
+    check('el inicio de quien vuelve: «Continuar» con a dónde lleva y sus estrellas', tx.includes('Continuar') && tx.includes('Circuitos, nivel 4') && tx.includes('1 estrella'), tx.slice(0, 260));
+    await g.shot('e24-inicio-continuar');
+    const handled = await sc(g, 'sc.handleBack()');
+    check('en el inicio «atrás» ya no tiene a dónde volver (Android manda la app a segundo plano)', handled === false);
+    g.menuOpen = false;
+    await g.tap(...g.pos.homeMain, 900);
+    st = await sc(g, game);
+    check('«Continuar» entra al juego de un toque', !st.inMenu && st.puzzle === 'circuits' && st.level === 4, JSON.stringify(st));
+    // «Atrás» cierra las tarjetas del menú
+    await g.openSettings(500);
+    check('Ajustes abierto', (await texts(g)).includes('Volumen de la música'));
+    await g.page.keyboard.press('Escape');
+    await g.page.waitForTimeout(500);
+    st = await sc(g, game);
+    check('«atrás» cierra Ajustes y se queda en el inicio', !(await texts(g)).includes('Volumen de la música') && st.inMenu && st.screen === 'home', JSON.stringify(st));
     await g.close();
   }]);
 

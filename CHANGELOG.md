@@ -4,6 +4,22 @@ Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](ht
 
 ## [Sin publicar]
 
+Revisión del juego pensando en quien lo abre por primera vez (un niño, alguien con dos minutos libres, una persona mayor): que se entienda sin leer, que nadie se quede atorado y que ganar se sienta bien.
+
+### Añadido
+- **Primeros niveles fáciles en cada puzzle.** Antes el nivel 1 ya era un tablero de 16 piezas (y en Luces, uno que casi nadie resuelve a la primera). Ahora Circuitos empieza con tres niveles pequeños (3×3 y un 4×4 sencillo); Luces, con seis (el primero se resuelve con un solo toque y van subiendo de a uno); Hilos, con tres (3×3 con dos y tres hilos, y 4×4 con hilos cortos). Después sigue la dificultad de siempre, que se adapta al jugador. No aplican en el modo Reto ni en el reto diario, y no mueven la dificultad ni los récords.
+- **La primera pista de cada nivel es gratis** (el botón dice «Gratis»). Sigue quitando los bonos de Chispas, así que resolverlo solo paga más. Las siguientes cuestan 10 Chispas, como antes.
+- **Nadie se queda atorado sin Chispas:** si no alcanzan para una pista, se recarga sola y sale gratis cada 30 segundos (el botón muestra la cuenta atrás).
+- **Recordatorio de la pista:** tras 30 segundos sin mover nada en un nivel, un aviso recuerda que hay una pista gratis (una vez por nivel).
+- **Estrellas.** Cada nivel resuelto da de una a tres: tres sin pistas y con pocos toques de más; dos sin pistas o con una sola; una con más pistas. El tiempo no cuenta. Se suman en Estadísticas y en la pantalla de inicio.
+- **Botón «atrás» de Android** (y tecla Escape en computadora): cierra la tarjeta abierta; desde el juego va a la pantalla de puzzles, de ahí al inicio, y en el inicio manda la app a segundo plano. Antes no hacía nada.
+
+### Cambiado
+- **Pantalla de resultado nueva:** arriba las estrellas (aparecen una a una, con su nota) y las Chispas ganadas en grande, contando hacia arriba; una línea dice cómo ganar más estrellas; debajo, solo los datos que importan (tiempo, toques, pistas, racha). Se quitó la fila de «Eficiencia».
+- **Inicio de un toque:** el botón principal entra directo a jugar. Para quien empieza dice «Jugar» y abre el primer nivel de Circuitos; para quien vuelve dice «Continuar» y debajo a dónde lleva («Luces, nivel 7»). La pantalla de puzzles y modos está en «Elegir puzzle». Bajo las Chispas se ven la racha y las estrellas.
+- El tutorial de Circuitos ya no dice que la pista cuesta 10 Chispas, sino que la primera de cada nivel es gratis.
+- Economía: con la primera pista gratis, quien usa pistas gana algo más (jugador ocasional: de 52 a 79 Chispas al día); la colección completa sale en unas 2 semanas con juego habitual. Tabla al día en `docs/10-economia-chispas.md`.
+
 ## [0.2.0-beta.15] - 2026-11-11
 
 ### Añadido

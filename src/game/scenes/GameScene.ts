@@ -14,10 +14,10 @@ import {
   getLevelParamsForProfile,
   evaluateAndAdapt,
   effectiveTier,
+  MIN_TIER,
   PerformanceEvaluation,
 } from '../../core/adaptive';
 import {
-  HINT_COST,
   PlayerProgress,
   SparksReward,
   applyLevelOutcome,
@@ -123,12 +123,15 @@ import {
   computeHomeLayout,
   computePlayLayout,
 } from '../layout';
-import { storage, feedback, UserSettings, RotationDirection, createUpdateService, UpdateService } from '../../services';
+import { storage, feedback, listenBack, UserSettings, RotationDirection, createUpdateService, UpdateService } from '../../services';
 import { APP_VERSION } from '../../config';
 import { UpdateInfo, isUpdateAvailable } from '../../core/updates';
 import { parseLastCheck, retryDelay, serializeLastCheck, shouldRecheck } from '../../core/updateRetry';
 import { APP_NAME } from '../../config';
 import { pickGreeting } from '../../core/greeting';
+import { introCircuitsParams, introFlowParams, introLightsParams, introRecordKey, isIntroLevel } from '../../core/intro';
+import { HintOffer, hintOffer, shouldNudgeHint } from '../../core/hintOffer';
+import { MAX_STARS, Stars, starsAdvice, starsFor } from '../../core/stars';
 import { switchGameMode } from '../../core/modes';
 import { SavedGame, SavedGames, MAX_SAVED_FLOW_UNDO, hasProgress, matchesLevel } from '../../core/savedGames';
 import { GRAPHICS_LABELS, GRAPHICS_QUALITIES, GraphicsQuality, SkinFx, activeSkinFx, fxLevel, isGraphicsQuality, shouldAnnounceGraphics } from '../../core/graphics';
@@ -183,6 +186,7 @@ interface VictoryInfo {
   streak: number;
   streakIncreased: boolean;
   difficultyChange: 'up' | 'down' | null;
+  stars: Stars;
 }
 
 interface TextOptions {
@@ -269,6 +273,14 @@ export class GameScene extends Phaser.Scene {
   private hintsUsed = 0;
   private elapsedTime = 0;
   private timerEvent?: Phaser.Time.TimerEvent;
+  /** Segundo de juego de la última pista del nivel (la de rescate se recarga desde ahí). */
+  private lastHintAt = 0;
+  /** Lo último que se pintó en el botón de pista (para no redibujarlo cada segundo sin cambios). */
+  private hintSegState = '';
+  /** Recordatorio de la pista: desde cuándo no hay jugadas, con cuántos toques, y si ya salió en este nivel. */
+  private idleSince = 0;
+  private idleTapMark = 0;
+  private hintNudged = false;
   private moveHistory: MoveRecord[] = [];
   private rotationDirection: RotationDirection = 'cw';
 
@@ -393,9 +405,12 @@ export class GameScene extends Phaser.Scene {
     };
     document.addEventListener('visibilitychange', onHidden);
     window.addEventListener('pagehide', saveNow);
+    // «Atrás» de Android y Escape en computadora
+    const stopBack = listenBack(() => this.handleBack());
     this.events.once('shutdown', () => {
       document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('pagehide', saveNow);
+      stopBack();
     });
     // Hilos se juega arrastrando: el movimiento y el soltar se siguen en toda la pantalla (el dedo puede salirse del tablero)
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.flowPointerMove(pointer));
@@ -410,6 +425,8 @@ export class GameScene extends Phaser.Scene {
         if (!this.isWon && !this.inMenu) {
           this.elapsedTime++;
           this.updateHud();
+          this.updateHintButtonState();
+          this.maybeNudgeHint();
           if (this.elapsedTime % 10 === 0) this.persistGame();
         }
       },
@@ -849,6 +866,7 @@ export class GameScene extends Phaser.Scene {
     ]);
     this.undoSeg = undo;
     this.hintSeg = hint;
+    this.hintSegState = '';
     this.setSegment(reset, { label: t('Reiniciar'), kind: 'reset' });
 
     this.createDirectionButton(this.hud.dirBtn);
@@ -1000,17 +1018,64 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Qué cuesta la siguiente pista ahora mismo (la primera del nivel es gratis; sin Chispas se recarga sola). */
+  private currentHintOffer(): HintOffer {
+    return hintOffer({ hintsUsed: this.hintsUsed, sparks: this.progress.sparks, secondsSinceLastHint: this.elapsedTime - this.lastHintAt });
+  }
+
+  /** Cobra la pista (o la da gratis) y la anota. False, con su aviso, si aún se está recargando. */
+  private payForHint(): boolean {
+    const offer = this.currentHintOffer();
+    if (offer.waitSeconds > 0) {
+      feedback.denied();
+      this.showToast(t('Te quedaste sin Chispas.\nTu pista gratis llega en {0} s.', offer.waitSeconds));
+      return false;
+    }
+    if (offer.cost > 0) {
+      const afterPurchase = spendSparks(this.progress, offer.cost);
+      if (!afterPurchase) return false;
+      this.progress = afterPurchase;
+      storage.saveProgress(this.progress);
+    }
+    this.hintsUsed++;
+    this.lastHintAt = this.elapsedTime;
+    this.hintNudged = true;
+    feedback.hint();
+    return true;
+  }
+
   private updateHintButtonState(): void {
     if (!this.hintSeg) return;
-    const canHint = this.progress.sparks >= HINT_COST && !this.isWon;
+    const offer = this.currentHintOffer();
+    const canHint = offer.waitSeconds === 0 && !this.isWon;
+    const state = offer.waitSeconds > 0 ? `w${offer.waitSeconds}` : `${offer.cost}|${canHint}`;
+    if (state === this.hintSegState) return;
+    this.hintSegState = state;
     this.setSegment(this.hintSeg, {
       label: t('Pista'),
       kind: 'bulb',
-      sub: String(HINT_COST),
-      subIcon: 'spark',
+      // Gratis (la primera del nivel o la de rescate), lo que cuesta, o lo que falta para la de rescate
+      sub: offer.waitSeconds > 0 ? this.formatTime(offer.waitSeconds) : offer.cost === 0 ? t('Gratis') : String(offer.cost),
+      subIcon: offer.cost > 0 ? 'spark' : undefined,
       iconColor: canHint ? THEME.primary : THEME.wireOff,
       labelColor: canHint ? THEME.text : THEME.mutedText,
     });
+  }
+
+  /** Tras un rato sin jugadas recuerda, una vez por nivel, que hay una pista gratis. */
+  private maybeNudgeHint(): void {
+    if (this.tapCount !== this.idleTapMark) {
+      this.idleTapMark = this.tapCount;
+      this.idleSince = this.elapsedTime;
+    }
+    const secondsIdle = this.elapsedTime - this.idleSince;
+    if (!shouldNudgeHint({ secondsIdle, alreadyNudged: this.hintNudged, isWon: this.isWon, hintsUsed: this.hintsUsed })) return;
+    if (this.overlayOpen() || this.flowDrag) {
+      this.idleSince = this.elapsedTime; // con una tarjeta abierta no se está jugando: se vuelve a contar al cerrarla
+      return;
+    }
+    this.hintNudged = true;
+    this.showToast(t('¿Atascado? Toca Pista: la primera es gratis.'));
   }
 
   /** Aviso breve y no bloqueante sobre el tablero. */
@@ -1573,6 +1638,7 @@ export class GameScene extends Phaser.Scene {
   private async installUpdateInApp(info: UpdateInfo): Promise<void> {
     const cardH = 560;
     const { overlay, w } = this.createCard(cardH, 300);
+    overlay.setData('dismiss', 'locked'); // «atrás» no interrumpe la descarga
     const title = this.uiText(0, -cardH / 2 + 70, t('Descargando la actualización'), { size: 34, display: true, color: THEME.primaryCss, wrap: w - 88, originX: 0.5 });
     title.setOrigin(0.5, 0.5).setAlign('center');
     const status = this.uiText(0, -cardH / 2 + 150, t('Lumihilo {0}', info.version), { size: 28, weight: '600', color: THEME.text, wrap: w - 88, originX: 0.5 });
@@ -1704,6 +1770,7 @@ export class GameScene extends Phaser.Scene {
       overlay.destroy();
       this.showLightsTutorial((page + 1) as 2 | 3);
     };
+    overlay.setData('dismiss', finishLights);
     this.addTutorialFooter(overlay, w, cardH, page, total, nextLights, finishLights);
     if (page !== 1) {
       this.showLightsTutorialPage(overlay, w, cardH, page);
@@ -2075,6 +2142,7 @@ export class GameScene extends Phaser.Scene {
       storage.saveSettings(this.settings);
       overlay.destroy();
     };
+    overlay.setData('dismiss', finish);
     const next = () => {
       overlay.destroy();
       this.showCircuitsTutorial((page + 1) as 2 | 3);
@@ -2145,7 +2213,7 @@ export class GameScene extends Phaser.Scene {
         t('Gira las piezas hasta que todas queden conectadas a la fuente.'),
         t('Cuando todo el circuito se enciende, ganas.'),
       ]);
-      this.addTutorialTip(overlay, w, y + 4, t('¿Atascado? La pista coloca bien una pieza por 10 Chispas.'));
+      this.addTutorialTip(overlay, w, y + 4, t('¿Atascado? Usa la pista: la primera de cada nivel es gratis.'));
       return;
     }
 
@@ -2219,6 +2287,7 @@ export class GameScene extends Phaser.Scene {
       [t('Racha actual'), days(shownStreak)],
       [t('Mejor racha'), days(streak.best)],
       [t('Niveles resueltos'), String(stats.levelsSolved)],
+      [t('Estrellas'), String(stats.stars)],
       [t('Sin pistas y sin fallos'), String(stats.perfectSolves)],
       [t('Retos diarios'), String(stats.dailyCompleted)],
       [t('Puzzle'), t(PUZZLE_LABELS[this.puzzle])],
@@ -2704,6 +2773,10 @@ export class GameScene extends Phaser.Scene {
     this.hintsUsed = 0;
     this.elapsedTime = 0;
     this.moveHistory = [];
+    this.lastHintAt = 0;
+    this.idleSince = 0;
+    this.idleTapMark = 0;
+    this.hintNudged = false;
 
     if (this.timerEvent) this.timerEvent.paused = false;
 
@@ -2721,13 +2794,18 @@ export class GameScene extends Phaser.Scene {
       this.currentParams = dailyParams(this.dailyKey);
       this.currentLevelData = generateLevel(this.currentParams, dailySeed(this.dailyKey));
     } else {
-      this.currentParams = getLevelParamsForProfile(this.profile);
+      this.currentParams = this.isIntro() ? introCircuitsParams(levelIndex) : getLevelParamsForProfile(this.profile);
       this.currentLevelData = generateLevel(
         this.currentParams,
         levelSeed(this.progress.seedBase, levelIndex)
       );
     }
     this.board = this.currentLevelData.board;
+  }
+
+  /** ¿El nivel cargado es uno de los de entrada (pequeños, de práctica)? Ver `core/intro.ts`. */
+  private isIntro(): boolean {
+    return isIntroLevel({ puzzle: this.puzzle, level: this.currentLevelIndex, mode: this.profile.mode, isDaily: this.isDaily });
   }
 
   /** Nivel por el que va el jugador en el puzzle activo. */
@@ -2738,7 +2816,7 @@ export class GameScene extends Phaser.Scene {
   /** Carga un nivel de Luces: el tablero de luces y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
   private loadLightsLevel(levelIndex: number): void {
     // El reto diario no depende del jugador: misma dificultad y semilla para todos ese día
-    const params = lightsParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
+    const params = this.isIntro() ? introLightsParams(levelIndex) : lightsParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
     const level: LightsLevel = generateLights(
       params,
       this.isDaily ? dailyLightsSeed(this.dailyKey) : levelSeed((this.progress.seedBase ^ 0x9e3779b9) >>> 0, levelIndex)
@@ -2769,7 +2847,7 @@ export class GameScene extends Phaser.Scene {
   /** Carga un nivel de Hilos: los hilos y un tablero «vacío» de Circuitos solo para reutilizar la geometría. */
   private loadFlowLevel(levelIndex: number): void {
     // El reto diario no depende del jugador: misma dificultad y semilla para todos ese día
-    const params = flowParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
+    const params = this.isIntro() ? introFlowParams(levelIndex) : flowParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
     const level = generateFlow(
       params,
       this.isDaily ? dailyFlowSeed(this.dailyKey) : levelSeed((this.progress.seedBase ^ 0x7f4a7c15) >>> 0, levelIndex)
@@ -2891,6 +2969,10 @@ export class GameScene extends Phaser.Scene {
     this.hintsUsed = saved.hints;
     this.elapsedTime = saved.elapsed;
     this.moveHistory = moves;
+    // La recarga de la pista gratis y el recordatorio cuentan desde que se retoma la partida
+    this.lastHintAt = saved.elapsed;
+    this.idleSince = saved.elapsed;
+    this.idleTapMark = saved.taps;
     return true;
   }
 
@@ -2909,6 +2991,35 @@ export class GameScene extends Phaser.Scene {
     this.headerContainer.setVisible(visible);
     this.boardContainer.setVisible(visible);
     this.controlsContainer.setVisible(visible);
+  }
+
+  /**
+   * «Atrás» (botón de Android o Escape): cierra la tarjeta de más arriba; sin tarjetas, del juego va a la pantalla de
+   * puzzles y de ahí al inicio. Devuelve false cuando ya no hay a dónde volver (en Android la app pasa a segundo plano).
+   * Una tarjeta puede decir cómo se cierra con `setData('dismiss', fn)`, o que no se cierra con `'locked'`.
+   */
+  private handleBack(): boolean {
+    const open = this.children
+      .getAll()
+      .filter((o) => o !== this.toast && ((o as { depth?: number }).depth ?? 0) >= 100) as Array<Phaser.GameObjects.GameObject & { depth: number }>;
+    if (open.length > 0) {
+      const top = open.reduce((a, b) => (b.depth >= a.depth ? b : a));
+      const dismiss: unknown = top.getData?.('dismiss');
+      if (dismiss === 'locked') return true;
+      if (typeof dismiss === 'function') (dismiss as () => void)();
+      else if (top.getData?.('card')) top.destroy();
+      return true;
+    }
+    if (this.isWon) return true; // la tarjeta de resultado está por salir
+    if (!this.inMenu) {
+      this.goToMenu();
+      return true;
+    }
+    if (this.menuScreen === 'play') {
+      this.showMenuScreen('home');
+      return true;
+    }
+    return false;
   }
 
   /** Sale de la partida a la pantalla de puzzles (la partida a medias se guarda). */
@@ -2986,6 +3097,18 @@ export class GameScene extends Phaser.Scene {
     this.registerButton(c, rect, text);
   }
 
+  /** Botón principal del inicio: relleno, con el nombre de la acción en grande y debajo a dónde lleva. */
+  private menuMainButton(c: Phaser.GameObjects.Container, rect: Rect, label: string, detail: string, onTap: () => void): void {
+    const g = this.add.graphics();
+    g.fillStyle(THEME.primary, 1);
+    g.fillRoundedRect(rect.x - rect.w / 2, rect.y - rect.h / 2, rect.w, rect.h, 30);
+    const text = this.uiText(rect.x, rect.y - 20, label, { size: 40, display: true, weight: '700', color: THEME.onPrimary, originX: 0.5 });
+    this.fitText(text, rect.w - 28, 24);
+    const sub = this.uiText(rect.x, rect.y + 32, detail, { size: FONT.small, weight: '600', color: THEME.onPrimary, originX: 0.5 });
+    this.fitText(sub, rect.w - 28, 18);
+    c.add([g, text, sub, this.hitZone(rect, onTap)]);
+  }
+
   /** Tarjeta de un puzzle: icono, nombre, qué se hace, por dónde va y si hay partida a medias. */
   private menuCard(c: Phaser.GameObjects.Container, rect: Rect, puzzle: PuzzleType): void {
     const saved = this.savedGames[puzzle];
@@ -3056,7 +3179,28 @@ export class GameScene extends Phaser.Scene {
       this.addTitleGlow(title);
       c.add(title);
       this.menuSparks(c, layout.sparksY, { cx: width / 2 }, FONT.display);
-      this.menuButton(c, layout.play, t('Jugar'), () => this.showMenuScreen('play'), true, 40);
+      // Racha y estrellas: lo que el jugador lleva ganado, a la vista al abrir
+      const streakDays = currentStreak(this.progress.streak, dateKey(new Date()));
+      const summary = [
+        streakDays > 0 ? t(streakDays === 1 ? 'Racha de {0} día' : 'Racha de {0} días', streakDays) : '',
+        this.progress.stats.stars > 0 ? t(this.progress.stats.stars === 1 ? '{0} estrella' : '{0} estrellas', this.progress.stats.stars) : '',
+      ].filter(Boolean);
+      if (summary.length > 0) {
+        const line = this.uiText(width / 2, layout.streakY, summary.join(', '), { size: 26, weight: '600', color: THEME.mutedText, originX: 0.5 });
+        this.fitText(line, width - 2 * MARGIN, 20);
+        c.add(line);
+      }
+      // Un toque y a jugar: quien empieza entra directo a su primer nivel; quien vuelve, a donde lo dejó
+      const isNew = this.progress.stats.levelsSolved === 0 && !PUZZLES.some((puzzle) => this.savedGames[puzzle] && hasProgress(this.savedGames[puzzle]!));
+      const resumeName = t(PUZZLE_LABELS[this.puzzle]);
+      this.menuMainButton(
+        c,
+        layout.play,
+        isNew ? t('Jugar') : t('Continuar'),
+        isNew ? t('Empieza con un nivel fácil') : this.isDaily ? t('{0}, reto diario', resumeName) : t('{0}, nivel {1}', resumeName, this.puzzleLevel()),
+        () => this.playPuzzle(isNew ? 'circuits' : this.puzzle)
+      );
+      this.menuButton(c, layout.puzzles, t('Elegir puzzle'), () => this.showMenuScreen('play'));
       this.menuButton(c, layout.buttons[0], t('Aspectos'), () => this.showSkinsModal());
       this.menuButton(c, layout.buttons[1], t('Estadísticas'), () => this.showStatsModal());
       this.menuButton(c, layout.buttons[2], t('Ajustes'), () => this.showSettingsModal());
@@ -3879,16 +4023,7 @@ export class GameScene extends Phaser.Scene {
       this.showToast(t('Todo está unido.'));
       return;
     }
-    const afterPurchase = spendSparks(this.progress, HINT_COST);
-    if (!afterPurchase) {
-      feedback.denied();
-      this.showToast(t('Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.', HINT_COST));
-      return;
-    }
-    this.progress = afterPurchase;
-    storage.saveProgress(this.progress);
-    this.hintsUsed++;
-    feedback.hint();
+    if (!this.payForHint()) return;
     // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
     this.moveHistory = [];
     this.flowUndo = [];
@@ -4025,6 +4160,7 @@ export class GameScene extends Phaser.Scene {
       storage.saveSettings(this.settings);
       overlay.destroy();
     };
+    overlay.setData('dismiss', finish);
 
     if (page === 1) {
       this.addCardTitle(overlay, w, cardH, t('Cómo se juega Hilos'));
@@ -4219,17 +4355,7 @@ export class GameScene extends Phaser.Scene {
     const view = this.cellViews[target.row][target.col];
     if (view.isRotating) return; // espera a que termine el giro; no se cobra
 
-    const afterPurchase = spendSparks(this.progress, HINT_COST);
-    if (!afterPurchase) {
-      feedback.denied();
-      this.showToast(t('Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.', HINT_COST));
-      return;
-    }
-
-    this.progress = afterPurchase;
-    storage.saveProgress(this.progress);
-    this.hintsUsed++;
-    feedback.hint();
+    if (!this.payForHint()) return;
 
     // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
     this.moveHistory = [];
@@ -4270,16 +4396,7 @@ export class GameScene extends Phaser.Scene {
       this.showToast(t('Todo está encendido.'));
       return;
     }
-    const afterPurchase = spendSparks(this.progress, HINT_COST);
-    if (!afterPurchase) {
-      feedback.denied();
-      this.showToast(t('Necesitas {0} Chispas para una pista.\nResuelve niveles para ganar más.', HINT_COST));
-      return;
-    }
-    this.progress = afterPurchase;
-    storage.saveProgress(this.progress);
-    this.hintsUsed++;
-    feedback.hint();
+    if (!this.payForHint()) return;
     // La pista altera el tablero: el historial de deshacer anterior ya no sería coherente
     this.moveHistory = [];
     this.updateUndoButtonState();
@@ -4360,8 +4477,10 @@ export class GameScene extends Phaser.Scene {
 
     const today = dateKey(new Date());
     const minTaps = this.currentLevelData.minTaps;
-    const playedTier = this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile);
-    const recordKey = recordKeyFor(this.puzzle, playedTier);
+    // Los niveles de entrada son de práctica: pagan como el primer peldaño y no mueven la dificultad ni los récords
+    const intro = this.isIntro();
+    const playedTier = this.isDaily ? dailyTier(this.dailyKey) : intro ? MIN_TIER : effectiveTier(this.profile);
+    const recordKey = intro ? introRecordKey(this.puzzle) : recordKeyFor(this.puzzle, playedTier);
 
     // Evaluar desempeño; el reto diario NO altera el perfil adaptativo (es igual para todos)
     const { updatedProfile, evaluation } = evaluateAndAdapt(this.profile, {
@@ -4372,10 +4491,11 @@ export class GameScene extends Phaser.Scene {
       elapsedSeconds: this.elapsedTime,
       hintsUsed: this.hintsUsed,
     });
-    if (!this.isDaily) {
+    if (!this.isDaily && !intro) {
       this.profile = updatedProfile;
       storage.saveProfile(this.profile, this.puzzle);
     }
+    const stars = starsFor({ puzzle: this.puzzle, hintsUsed: this.hintsUsed, tapEfficiency: evaluation.tapEfficiency });
 
     // Recompensa de Chispas: el reto diario paga doble la primera vez de cada día y nada al repetirlo
     const countsAsTodaysDaily = this.isDaily && this.dailyKey === today;
@@ -4408,6 +4528,7 @@ export class GameScene extends Phaser.Scene {
       dailyPuzzle: this.puzzle,
       today,
       recordKey,
+      stars,
     });
     if (!this.isDaily) {
       // Al ganar, el jugador retoma en el siguiente nivel si cierra la app
@@ -4424,7 +4545,8 @@ export class GameScene extends Phaser.Scene {
       streak: currentStreak(this.progress.streak, today),
       streakIncreased: this.progress.streak.current > streakBefore,
       difficultyChange:
-        this.isDaily || evaluation.newTier === playedTier ? null : evaluation.newTier > playedTier ? 'up' : 'down',
+        this.isDaily || intro || evaluation.newTier === playedTier ? null : evaluation.newTier > playedTier ? 'up' : 'down',
+      stars,
     };
 
     // Primero la luz recorre el circuito (con su melodía); después suena el acorde y aparece el resultado
@@ -4436,17 +4558,16 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(Math.min(1100, pulseMs * 0.8), () => this.showVictoryModal(evaluation, info));
   }
 
-  private showVictoryModal(evaluation: PerformanceEvaluation, info: VictoryInfo): void {
+  private showVictoryModal(_evaluation: PerformanceEvaluation, info: VictoryInfo): void {
     const { reward } = info;
 
+    // Lo importante va arriba y en grande (estrellas y Chispas); los datos, en pocas filas debajo
     const minTaps = this.currentLevelData.minTaps;
-    const efficiency = Math.round(evaluation.tapEfficiency * 100);
-    const rows: Array<{ label: string; value: string; color?: string; icon?: IconKind }> = [
+    const rows: Array<{ label: string; value: string; color?: string }> = [
       { label: t('Tiempo'), value: this.formatTime(this.elapsedTime), color: info.isNewRecord ? THEME.primaryCss : undefined },
     ];
     if (info.isNewRecord) rows.push({ label: t('Récord personal'), value: t('Nuevo'), color: THEME.primaryCss });
     rows.push({ label: t('Toques'), value: t('{0}  (mínimo {1})', this.tapCount, minTaps) });
-    rows.push({ label: this.hintsUsed > 0 ? t('Eficiencia (sin pistas)') : t('Eficiencia'), value: this.hintsUsed > 0 ? '—' : `${efficiency} %` });
     if (this.hintsUsed > 0) rows.push({ label: t('Pistas usadas'), value: String(this.hintsUsed) });
     if (info.difficultyChange) {
       rows.push({
@@ -4454,16 +4575,6 @@ export class GameScene extends Phaser.Scene {
         value: info.difficultyChange === 'up' ? t('Sube un nivel') : t('Baja un nivel'),
       });
     }
-    rows.push(
-      info.isDaily && !info.firstDailyToday
-        ? { label: t('Chispas'), value: t('Ya cobradas hoy') }
-        : {
-            label: reward.multiplier === 2 ? t('Chispas (doble por el reto)') : t('Chispas'),
-            value: `+${reward.total}`,
-            color: THEME.primaryCss,
-            icon: 'spark',
-          }
-    );
     if (info.streak > 0) {
       rows.push({
         label: t('Racha'),
@@ -4473,10 +4584,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     // La tarjeta se ajusta a la cantidad de filas
-    const breakdownH = reward.total > 0 ? 84 : 24;
-    const cardH = 200 + rows.length * 58 + breakdownH + 270;
+    const headH = 500;
+    const cardH = headH + rows.length * 58 + 270;
     const { overlay, w, backdrop } = this.createCard(cardH, 200);
     overlay.setAlpha(0);
+    const top = -cardH / 2;
 
     // Siguiente nivel con un solo gesto: botón, toque fuera de la tarjeta o Enter / Espacio
     let armed = false;
@@ -4500,10 +4612,15 @@ export class GameScene extends Phaser.Scene {
       keyboard?.off('keydown-ENTER', goNext);
       keyboard?.off('keydown-SPACE', goNext);
     });
+    // «Atrás» hace lo mismo que el botón principal
+    overlay.setData('dismiss', () => {
+      armed = true;
+      goNext();
+    });
 
-    overlay.add(this.uiText(0, -cardH / 2 + 70, this.puzzle === 'lights' ? t('Todo encendido') : this.puzzle === 'flow' ? t('Todo unido') : t('Circuito completo'), { size: 34, display: true, color: THEME.primaryCss, originX: 0.5 }));
+    this.addCardTitle(overlay, w, cardH, this.puzzle === 'lights' ? t('Todo encendido') : this.puzzle === 'flow' ? t('Todo unido') : t('Circuito completo'));
     overlay.add(
-      this.uiText(0, -cardH / 2 + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
+      this.uiText(0, top + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
         size: 28,
         weight: '500',
         color: THEME.mutedText,
@@ -4511,30 +4628,97 @@ export class GameScene extends Phaser.Scene {
       })
     );
 
-    let y = -cardH / 2 + 200;
+    // Estrellas: las ganadas aparecen una a una, cada una con su nota
+    const starY = top + 226;
+    const starSize = 104;
+    const animate = !this.reducedMotion();
+    for (let i = 0; i < MAX_STARS; i++) {
+      const x = (i - (MAX_STARS - 1) / 2) * 138;
+      // La del centro va un poco más arriba y más grande, como en un podio
+      const y = starY - (i === 1 ? 14 : 0);
+      const size = i === 1 ? starSize + 16 : starSize;
+      const empty = this.add.graphics({ x, y });
+      drawIcon(empty, 'star', 0, 0, size, THEME.divider);
+      overlay.add(empty);
+      if (i >= info.stars) continue;
+      const star = this.add.graphics({ x, y });
+      drawIcon(star, 'star', 0, 0, size, THEME.primary);
+      overlay.add(star);
+      if (!animate) continue;
+      star.setScale(0);
+      this.tweens.add({
+        targets: star,
+        scale: 1,
+        delay: 380 + i * 260,
+        duration: 340,
+        ease: 'Back.easeOut',
+        onStart: () => {
+          if (overlay.active) feedback.star(i);
+        },
+      });
+    }
+    const advice = starsAdvice({ stars: info.stars, hintsUsed: this.hintsUsed });
+    const adviceText = this.uiText(0, top + 318, advice ? t(advice) : t('Sin pistas y con pocos toques: perfecto.'), {
+      size: FONT.small,
+      weight: '500',
+      color: THEME.mutedText,
+      originX: 0.5,
+    });
+    this.fitText(adviceText, w - 72, 20);
+    overlay.add(adviceText);
+
+    // Chispas ganadas, en grande, contando hacia arriba
+    const paid = !(info.isDaily && !info.firstDailyToday);
+    const sparksY = top + 392;
+    if (paid) {
+      const amount = this.uiText(0, sparksY, `+${reward.total}`, { size: 52, display: true, color: THEME.primaryCss, originX: 0 });
+      const iconSize = 46;
+      const total = iconSize + 14 + amount.width;
+      amount.setX(-total / 2 + iconSize + 14);
+      const icon = this.add.graphics();
+      drawIcon(icon, 'spark', -total / 2 + iconSize / 2, sparksY, iconSize, THEME.primary, THEME.surface);
+      overlay.add([icon, amount]);
+      if (animate && reward.total > 0) {
+        amount.setText('+0');
+        this.tweens.addCounter({
+          from: 0,
+          to: reward.total,
+          delay: 420,
+          duration: 700,
+          ease: 'Cubic.easeOut',
+          onUpdate: (tween) => {
+            if (amount.active) amount.setText(`+${Math.round(tween.getValue() ?? 0)}`);
+          },
+          onComplete: () => {
+            if (amount.active) amount.setText(`+${reward.total}`);
+          },
+        });
+      }
+      const breakdown = [
+        reward.multiplier === 2 ? t('doble por el reto') : '',
+        t('Base {0}', reward.base),
+        reward.efficiencyBonus > 0 ? t('eficiencia {0}', reward.efficiencyBonus) : '',
+        reward.speedBonus > 0 ? t('rapidez {0}', reward.speedBonus) : '',
+        reward.recordBonus > 0 ? t('récord {0}', reward.recordBonus) : '',
+        reward.skinBonus > 0 ? t('aspecto {0}', reward.skinBonus) : '',
+      ].filter(Boolean);
+      const breakdownText = this.uiText(0, top + 446, t('Chispas') + ': ' + breakdown.join(' + '), {
+        size: FONT.small,
+        weight: '500',
+        color: THEME.mutedText,
+        originX: 0.5,
+      });
+      this.fitText(breakdownText, w - 72, 20);
+      overlay.add(breakdownText);
+    } else {
+      overlay.add(this.uiText(0, sparksY + 20, t('Chispas del reto: ya cobradas hoy'), { size: 28, weight: '600', color: THEME.mutedText, originX: 0.5 }));
+    }
+
+    let y = top + headH + 14;
     rows.forEach((row, i) => {
-      this.addRow(overlay, w, y, row.label, row.value, { valueColor: row.color, icon: row.icon, last: i === rows.length - 1 });
+      this.addRow(overlay, w, y, row.label, row.value, { valueColor: row.color, last: i === rows.length - 1 });
       y += 58;
     });
-
-    if (reward.total > 0) {
-      overlay.add(
-        this.uiText(
-          0,
-          y + 14,
-          [
-            t('Base {0}', reward.base),
-            reward.efficiencyBonus > 0 ? t('eficiencia {0}', reward.efficiencyBonus) : '',
-            reward.speedBonus > 0 ? t('rapidez {0}', reward.speedBonus) : '',
-            reward.recordBonus > 0 ? t('récord {0}', reward.recordBonus) : '',
-            reward.skinBonus > 0 ? t('aspecto {0}', reward.skinBonus) : '',
-          ]
-            .filter(Boolean)
-            .join(' + '),
-          { size: FONT.small, weight: '500', color: THEME.mutedText, originX: 0.5, align: 'center', wrap: w - 80 }
-        )
-      );
-    }
 
     // Botón principal: siguiente nivel, o volver al juego si venía del reto diario
     this.addCardButton(

@@ -15,6 +15,7 @@ export type IconKind =
   | 'undo'
   | 'bulb'
   | 'spark'
+  | 'star'
   | 'home'
   | 'menu'
   | 'back'
@@ -94,6 +95,20 @@ export function drawIcon(
       const pts: Phaser.Types.Math.Vector2Like[] = [];
       for (let i = 0; i < 8; i++) {
         const a = (Math.PI / 4) * i - Math.PI / 2;
+        const r = i % 2 === 0 ? outer : inner;
+        pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+      }
+      g.fillPoints(pts, true);
+      break;
+    }
+
+    case 'star': {
+      // Estrella de cinco puntas (las que se ganan al resolver un nivel)
+      const outer = s * 0.5;
+      const inner = s * 0.21;
+      const pts: Phaser.Types.Math.Vector2Like[] = [];
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI / 5) * i - Math.PI / 2;
         const r = i % 2 === 0 ? outer : inner;
         pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
       }

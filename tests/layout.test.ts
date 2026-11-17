@@ -166,14 +166,15 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
     const inside = (r: Rect, h: number) =>
       left(r) >= 0 && right(r) <= DESIGN_WIDTH && top(r) >= 0 && bottom(r) <= h;
 
-    it('inicio: nombre, Jugar, los tres accesos y el saludo, en orden y sin pisarse', () => {
+    it('inicio: nombre, botón principal, Elegir puzzle, los tres accesos y el saludo, en orden y sin pisarse', () => {
       for (const h of heights) {
         const m = computeHomeLayout(DESIGN_WIDTH, h);
-        const all = [m.play, ...m.buttons];
+        const all = [m.play, m.puzzles, ...m.buttons];
         for (const r of all) expect(inside(r, h)).toBe(true);
         for (let i = 1; i < all.length; i++) expect(top(all[i])).toBeGreaterThanOrEqual(bottom(all[i - 1]) + 12);
         expect(m.sparksY).toBeGreaterThan(m.titleY + 40);
-        expect(top(m.play)).toBeGreaterThan(m.sparksY + 40);
+        expect(m.streakY).toBeGreaterThan(m.sparksY + 30);
+        expect(top(m.play)).toBeGreaterThan(m.streakY + 40);
         expect(m.greetingY).toBeGreaterThan(bottom(m.buttons[2]) + 60);
         expect(m.greetingY + 40).toBeLessThanOrEqual(h);
         for (const r of all) expect(Math.min(r.w, r.h) * DP_PER_LOGICAL_PX).toBeGreaterThanOrEqual(MIN_TOUCH_DP);
