@@ -2,7 +2,7 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
-## [Sin publicar]
+## [0.2.0-beta.17] - 2026-11-23
 
 ### Añadido
 - **Cuarto puzzle: Claves.** Hay un número secreto y hay que adivinarlo. Se escribe un número con un teclado grande y, en cada intento, el juego dice cuántas cifras están **en su lugar** (círculo lleno) y cuántas están **en otro lugar** (anillo). Cada intento se revela con emoción: las cifras se dan vuelta una a una con una nota que sube, los contadores se llenan punto a punto y, si falta una sola cifra, el último punto se hace esperar con un redoble. Al acertar, la clave se enciende y se abre.
