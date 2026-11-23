@@ -235,25 +235,25 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     homeMain: [360, Math.round(H * 0.42)], homePlay: [360, Math.round(H * 0.42) + 146], homeSkins: [360, Math.round(H * 0.42) + 262],
     homeStats: [360, Math.round(H * 0.42) + 378], homeSettings: [360, Math.round(H * 0.42) + 494],
     // Menú, pantalla de puzzles (computePlayLayout): «Volver», tarjetas y modos
-    playBack: [124, 56], menuCard: (i) => [360, (H - 70) / 2 + (i - 1) * 196], menuMode: (i) => [360 + (i - 1) * 228, H - 190],
+    playBack: [124, 56], menuCard: (i) => [360, (214 + H - 290) / 2 + (i - 1.5) * Math.min(196, Math.floor((H - 290 - 214) / 4))], menuMode: (i) => [360 + (i - 1) * 228, H - 190],
     // Aspectos (tarjeta de 1220 px, filas de 130 px)
     skinRow: (i) => [360, H / 2 - 385 + 130 * i], skinsDone: [360, H / 2 + 526],
-    // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1254 px
-    settingsUpdates: [360, H / 2 + 424],
+    // Ajustes con el botón «Buscar actualizaciones» (solo en la app y con ?debug&update): tarjeta de 1092 px
+    settingsUpdates: [360, H / 2 + 343],
     // Aviso de una vez de los gráficos altos (tarjeta de 560 px)
     graphicsLater: [215.5, H / 2 + 196], graphicsSettings: [504.5, H / 2 + 196],
     // Mini tutorial de Luces (tarjeta de 1090 px) y panel de luces (siempre en [360, 502])
     lightsTutorialOk: [360 - 144.5, H / 2 + 1090 / 2 - 84], flowTutorialOk: [360, H / 2 + 1090 / 2 - 84], lightsPanel: [360, 502],
     // Aviso de versión nueva (tarjeta de 620 px)
     updateLater: [360 - 144.5, H / 2 + 226], updateNow: [360 + 144.5, H / 2 + 226],
-    // Ajustes (tarjeta de 1160 px): gráficos arriba (control a la derecha), efectos y música en la misma fila
-    setGraphicsNormal: [415, H / 2 - 410], setGraphicsHigh: [565, H / 2 - 410],
-    setEffects: [215.5, H / 2 - 306], setMusic: [513.5, H / 2 - 306],
-    styleSwing: [220, H / 2 - 138], styleAmbient: [500, H / 2 - 138],
-    volume: (percent) => [92 + (536 * percent) / 200, H / 2 + 10],
-    setHaptics: [360, H / 2 + 102],
-    levelSoft: [360 - 186.7, H / 2 + 276], levelNormal: [360, H / 2 + 276], levelStrong: [360 + 186.7, H / 2 + 276],
-    accessibility: [215.5, H / 2 + 372], diagnose: [504.5, H / 2 + 372], settingsDone: [360, H / 2 + 496],
+    // Ajustes (tarjeta de 998 px): gráficos arriba (control a la derecha), efectos y música en la misma fila (sin elegir
+    // tema: la música suena al azar)
+    setGraphicsNormal: [415, H / 2 - 329], setGraphicsHigh: [565, H / 2 - 329],
+    setEffects: [215.5, H / 2 - 225], setMusic: [513.5, H / 2 - 225],
+    volume: (percent) => [92 + (536 * percent) / 200, H / 2 - 71],
+    setHaptics: [360, H / 2 + 21],
+    levelSoft: [360 - 186.7, H / 2 + 195], levelNormal: [360, H / 2 + 195], levelStrong: [360 + 186.7, H / 2 + 195],
+    accessibility: [215.5, H / 2 + 291], diagnose: [504.5, H / 2 + 291], settingsDone: [360, H / 2 + 415],
     // Accesibilidad (tarjeta de 990 px)
     accContrast: [360, H / 2 - 325], accMarks: [360, H / 2 - 235],
     accNormal: [173, H / 2 + 69], accFast: [360, H / 2 + 69], accOff: [547, H / 2 + 69],
@@ -261,9 +261,21 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     // Diagnóstico de vibración (tarjeta de 1150 px)
     modeAll: [136, H / 2 + 199], modeSystem: [248, H / 2 + 199], modeMotor: [360, H / 2 + 199], modeTouch: [472, H / 2 + 199], modeAlarm: [584, H / 2 + 199],
     hapticsTest: [360 - 144.5, H / 2 + 491], hapticsDone: [360 + 144.5, H / 2 + 491],
+    // Teclado de Claves (computeCodeLayout): `1 2 3 4 5 Borrar` y `6 7 8 9 0 Probar`, anclado abajo
+    codeKey: (key) => {
+      const keyW = (672 - 150 - 50) / 5;
+      const row2 = H - 24 - 48;
+      const row1 = row2 - 106;
+      const at = (col, y) => [24 + keyW / 2 + col * (keyW + 10), y];
+      if (key === 'erase') return [24 + 672 - 75, row1];
+      if (key === 'submit') return [24 + 672 - 75, row2];
+      if (key >= 1 && key <= 5) return at(key - 1, row1);
+      if (key >= 6) return at(key - 6, row2);
+      return at(4, row2);
+    },
   };
   // Menú principal: la app siempre abre en él. Salvo `menu: true`, se entra al puzzle guardado para jugar
-  const PUZZLE_ORDER = ['circuits', 'lights', 'flow'];
+  const PUZZLE_ORDER = ['circuits', 'lights', 'flow', 'code'];
   const savedPuzzle = () => page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem('user_settings') ?? '{}')?.puzzle ?? 'circuits'; } catch { return 'circuits'; }
   });

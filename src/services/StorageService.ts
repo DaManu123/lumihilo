@@ -3,7 +3,6 @@ import { Capacitor } from '@capacitor/core';
 import { AdaptiveProfile, GameMode, createDefaultProfile, profileFromShared } from '../core/adaptive';
 import { PlayerProgress, sanitizeProgress } from '../core/progress';
 import type { HapticLevel, HapticMode } from '../core/haptics';
-import type { MusicStyle } from '../core/music';
 import type { AnimationSpeed } from '../core/accessibility';
 import type { LanguageSetting } from '../core/i18n';
 import type { GraphicsQuality } from '../core/graphics';
@@ -19,7 +18,6 @@ export interface UserSettings {
   rotationDirection: RotationDirection;
   soundEnabled: boolean;
   musicEnabled: boolean;
-  musicStyle: MusicStyle;
   /** Volumen de la música en porcentaje (0 a 200): 100 es el estándar. */
   musicVolume: number;
   hapticsEnabled: boolean;
@@ -35,7 +33,7 @@ export interface UserSettings {
   language: LanguageSetting;
   /** Aspecto (paleta) equipado; solo se usa si está comprado. */
   skin: SkinId;
-  /** Puzzle al que se juega: Circuitos o Luces. */
+  /** Puzzle al que se juega (el último que se abrió). */
   puzzle: PuzzleType;
   /** Ya se le explicó cómo se juega Luces. */
   hasSeenLightsTip: boolean;
@@ -43,6 +41,10 @@ export interface UserSettings {
   hasSeenStonesTip: boolean;
   /** Ya se le explicó cómo se juega Hilos. */
   hasSeenFlowTip: boolean;
+  /** Ya se le explicó cómo se juega Claves. */
+  hasSeenCodeTip: boolean;
+  /** Ya se le avisó de que, desde cierto nivel, Claves solo da los dos números (sin pintar cada cifra). */
+  hasSeenCodeCountsTip: boolean;
   /** Calidad gráfica: normales (el estilo de siempre) o altos (efectos con los aspectos de la tienda). */
   graphics: GraphicsQuality;
   /** Ya se le avisó de que hay gráficos altos en Ajustes. */
@@ -54,7 +56,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   rotationDirection: 'cw',
   soundEnabled: true,
   musicEnabled: true,
-  musicStyle: 'swing',
   musicVolume: 100,
   hapticsEnabled: true,
   hapticsLevel: 'normal',
@@ -69,6 +70,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   hasSeenLightsTip: false,
   hasSeenStonesTip: false,
   hasSeenFlowTip: false,
+  hasSeenCodeTip: false,
+  hasSeenCodeCountsTip: false,
   graphics: 'normal',
   hasSeenGraphicsNotice: false,
 };
@@ -233,7 +236,8 @@ export class HybridStorageService implements StorageService {
     };
     const circuits = read(this.profileKey('circuits')) ?? createDefaultProfile('normal');
     if (puzzle === 'circuits') return circuits;
-    return read(this.profileKey(puzzle)) ?? profileFromShared(circuits);
+    // Claves llegó después: empieza en el peldaño inicial del modo (no hereda el de Circuitos, que puede ser alto)
+    return read(this.profileKey(puzzle)) ?? (puzzle === 'code' ? createDefaultProfile(circuits.mode) : profileFromShared(circuits));
   }
 
   saveProfile(profile: AdaptiveProfile, puzzle: PuzzleType = 'circuits'): void {

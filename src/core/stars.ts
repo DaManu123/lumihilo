@@ -18,8 +18,8 @@ export function starsFor(input: { puzzle: PuzzleType; hintsUsed: number; tapEffi
 }
 
 /** Qué hacer para ganar más estrellas la próxima vez (clave de traducción), o null si ya son tres. */
-export function starsAdvice(input: { stars: Stars; hintsUsed: number }): string | null {
+export function starsAdvice(input: { stars: Stars; hintsUsed: number; puzzle?: PuzzleType }): string | null {
   if (input.stars === 3) return null;
   if (input.hintsUsed > 0) return 'Sin pistas ganas más estrellas.';
-  return 'Con menos toques ganas las tres estrellas.';
+  return input.puzzle === 'code' ? 'Con menos intentos ganas las tres estrellas.' : 'Con menos toques ganas las tres estrellas.';
 }

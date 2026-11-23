@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MUSIC_STYLES,
-  MUSIC_STYLE_LABELS,
   MUSIC_VOLUME_DEFAULT,
   MUSIC_VOLUME_MAX,
   barEvents,
   barSeconds,
   beatSeconds,
-  isMusicStyle,
+  MUSIC_TRACKS,
+  isMusicTrack,
   musicGainScale,
   normalizeMusicVolume,
 } from '../src/core/music';
@@ -21,10 +20,10 @@ const count = (events: ReturnType<typeof swingBarEvents>, voice: string) => even
 const total = (intensity: number, seed = 21) => BARS.reduce((n, b) => n + swingBarEvents(b, intensity, seed).length, 0);
 
 describe('Música: estilos y volumen', () => {
-  it('hay dos estilos con su etiqueta y se reconocen solo los válidos', () => {
-    expect(MUSIC_STYLES).toEqual(['swing', 'ambient']);
-    expect(MUSIC_STYLES.map((s) => MUSIC_STYLE_LABELS[s])).toEqual(['Swing', 'Ambiental']);
-    for (const bad of ['', 'rock', null, undefined, 1]) expect(isMusicStyle(bad)).toBe(false);
+  it('hay nueve temas y se reconocen solo los válidos', () => {
+    expect(MUSIC_TRACKS).toHaveLength(9);
+    for (const track of MUSIC_TRACKS) expect(isMusicTrack(track)).toBe(true);
+    for (const bad of ['', 'rock', null, undefined, 1]) expect(isMusicTrack(bad)).toBe(false);
   });
 
   it('cada estilo tiene su tempo y el compás dura lo que dicta', () => {

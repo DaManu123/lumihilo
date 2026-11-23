@@ -23,8 +23,8 @@ export function firstTierFor(mode: GameMode, currentTier: number): number {
 
 /** Nivel y peldaño de cada puzzle ahora mismo. */
 export function snapshotOf(progress: PlayerProgress, profiles: ModeProfiles): ModeSnapshot {
-  const levels = { circuits: 1, lights: 1, flow: 1 } as Record<PuzzleType, number>;
-  const tiers = { circuits: 1, lights: 1, flow: 1 } as Record<PuzzleType, number>;
+  const levels = { circuits: 1, lights: 1, flow: 1, code: 1 } as Record<PuzzleType, number>;
+  const tiers = { circuits: 1, lights: 1, flow: 1, code: 1 } as Record<PuzzleType, number>;
   for (const puzzle of PUZZLES) {
     levels[puzzle] = levelOf(progress, puzzle);
     tiers[puzzle] = profiles[puzzle].currentTier;

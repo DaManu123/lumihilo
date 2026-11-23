@@ -39,6 +39,8 @@ export const MASTERY_MIN_EFFICIENCY = 0.6;
  * - **Hilos:** el «toque» es un trazo y el mínimo es uno por pareja; lo que lleva tiempo es recorrer las casillas, así
  *   que el tiempo esperado crece con el tablero (≈ 0,8 s por casilla y 2 s por hilo). La maestría pide 0,6 (rehacer
  *   algún trazo está bien; rehacerlos todos, no).
+ * - **Claves:** el «toque» es un intento y el mínimo, los intentos de un buen jugador (`CodeParams.expected`); cada
+ *   intento lleva un rato de pensar (≈ 10 s). La maestría pide 0,8 (pocos intentos de más).
  * `struggleEfficiency`: por debajo de esta eficiencia y tardando mucho, la partida cuenta como atasco.
  */
 export interface PuzzleTuning {
@@ -51,6 +53,7 @@ export const PUZZLE_TUNING: Record<PuzzleType, PuzzleTuning> = {
   circuits: { expectedSeconds: (minTaps) => Math.max(12, minTaps * 2.5), masteryEfficiency: MASTERY_MIN_EFFICIENCY, struggleEfficiency: 0.32 },
   lights: { expectedSeconds: (minTaps) => Math.max(15, 10 + minTaps * 3.5), masteryEfficiency: 0.5, struggleEfficiency: 0.25 },
   flow: { expectedSeconds: (minTaps, cells) => Math.max(15, 6 + cells * 0.8 + minTaps * 2), masteryEfficiency: 0.6, struggleEfficiency: 0.3 },
+  code: { expectedSeconds: (minTaps) => Math.max(20, 12 + minTaps * 10), masteryEfficiency: 0.8, struggleEfficiency: 0.4 },
 };
 
 /** Tiempo que tarda un buen jugador en resolver un nivel (lo usan la dificultad y el bono de rapidez de Chispas). */

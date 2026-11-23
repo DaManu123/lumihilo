@@ -152,7 +152,8 @@ export interface PlayLayout {
   backBtn: Rect;
   sparksRight: Point;
   titleY: number;
-  cards: [Rect, Rect, Rect];
+  /** Una tarjeta por puzzle (Circuitos, Luces, Hilos y Claves). */
+  cards: Rect[];
   modeLabelY: number;
   /** Relajado, Normal y Reto. */
   modes: [Rect, Rect, Rect];
@@ -164,8 +165,14 @@ export function computePlayLayout(width: number = DESIGN_WIDTH, height: number =
   const gap = 12;
   const btnW = (barW - 2 * gap) / 3;
   const modesY = height - 190;
-  const center = (height - 70) / 2;
-  const cards = [-1, 0, 1].map((i) => ({ x: width / 2, y: center + i * 196, w: barW, h: 176 })) as [Rect, Rect, Rect];
+  // Las tarjetas se centran entre el título y el modo; con poco alto se acercan (nunca bajan de 150 de alto)
+  const count = 4;
+  const areaTop = 214;
+  const areaBottom = height - 290;
+  const step = Math.min(196, Math.floor((areaBottom - areaTop) / count));
+  const cardH = Math.min(176, step - 14);
+  const center = (areaTop + areaBottom) / 2;
+  const cards = Array.from({ length: count }, (_, i) => ({ x: width / 2, y: center + (i - (count - 1) / 2) * step, w: barW, h: cardH }));
   return {
     backBtn: { x: MARGIN + 100, y: 56, w: 200, h: ICON_BTN },
     sparksRight: { x: width - MARGIN, y: 56 },
@@ -215,5 +222,64 @@ export function computeBoardGeometry(
     startY: boardTop + (availH - boardHeight) * 0.35 + cellSize / 2,
     boardWidth,
     boardHeight,
+  };
+}
+
+/**
+ * Pantalla de Claves (bajo el panel del nivel): arriba la lista de intentos (el último, abajo del todo), en medio las
+ * casillas del número que se escribe y abajo el teclado: `1 2 3 4 5 Borrar` y `6 7 8 9 0 Probar`. El teclado se ancla
+ * al borde inferior (a mano del pulgar) y la lista se queda con lo que sobra.
+ */
+export interface CodeLayout {
+  /** Teclas de las cifras 0 a 9 (índice = cifra). */
+  digits: Rect[];
+  erase: Rect;
+  submit: Rect;
+  /** Casillas del número que se escribe. */
+  slots: Rect[];
+  /** Zona de la lista de intentos y alto de cada fila. */
+  history: Rect;
+  rowH: number;
+  /** Lado de cada cifra en la lista de intentos. */
+  tile: number;
+  /** Aviso corto («¡Casi!») sobre las casillas. */
+  messageY: number;
+}
+
+export const CODE_KEY_H = 96;
+export const CODE_ROW_H = 76;
+
+export function computeCodeLayout(width: number, height: number, boardTop: number, length: number): CodeLayout {
+  const left = MARGIN;
+  const barW = width - 2 * MARGIN;
+  const gap = 10;
+  const actionW = 150;
+  const keyW = (barW - actionW - 5 * gap) / 5;
+  const row2 = height - MARGIN - CODE_KEY_H / 2;
+  const row1 = row2 - CODE_KEY_H - gap;
+  const key = (col: number, y: number): Rect => ({ x: left + keyW / 2 + col * (keyW + gap), y, w: keyW, h: CODE_KEY_H });
+  const digits: Rect[] = new Array(10);
+  for (let d = 1; d <= 5; d++) digits[d] = key(d - 1, row1);
+  for (let d = 6; d <= 9; d++) digits[d] = key(d - 6, row2);
+  digits[0] = key(4, row2);
+  const actionX = left + barW - actionW / 2;
+
+  const slotGap = 14;
+  const slot = Math.min(100, Math.floor((barW - (length - 1) * slotGap) / length));
+  const slotsY = row1 - CODE_KEY_H / 2 - 28 - slot / 2;
+  const slotsW = length * slot + (length - 1) * slotGap;
+  const slots = Array.from({ length }, (_, i) => ({ x: width / 2 - slotsW / 2 + slot / 2 + i * (slot + slotGap), y: slotsY, w: slot, h: slot }));
+
+  const historyTop = boardTop;
+  const historyBottom = slotsY - slot / 2 - 20;
+  return {
+    digits,
+    erase: { x: actionX, y: row1, w: actionW, h: CODE_KEY_H },
+    submit: { x: actionX, y: row2, w: actionW, h: CODE_KEY_H },
+    slots,
+    history: { x: width / 2, y: (historyTop + historyBottom) / 2, w: barW, h: Math.max(CODE_ROW_H, historyBottom - historyTop) },
+    rowH: CODE_ROW_H,
+    tile: 60,
+    messageY: slotsY - slot / 2 - 44,
   };
 }

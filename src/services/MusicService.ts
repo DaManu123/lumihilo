@@ -1,7 +1,6 @@
 import {
   CHORDS,
   MusicEvent,
-  MusicStyle,
   MusicTrack,
   barEvents,
   barSeconds,
@@ -9,7 +8,7 @@ import {
   degreeFrequency,
   musicGainScale,
 } from '../core/music';
-import type { PuzzleType } from '../core/puzzles';
+import { Playlist } from '../core/playlist';
 import { AudioEngine, MUSIC_VOLUME } from './AudioService';
 
 /** Música de fondo del juego. */
@@ -22,13 +21,14 @@ export interface MusicPlayer {
   setIntensity(value: number): void;
   /** Victoria: la música se serena y resuelve en un acorde cálido. */
   resolve(): void;
-  /** Estilo de la música; si ya suena, cambia en el siguiente compás. */
-  setStyle(style: MusicStyle): void;
-  /**
-   * Puzzle que se juega: Luces (caja de música «cristal») e Hilos (cuerda pulsada «hilo») tienen su propia pista en vez del
-   * estilo elegido. `null` = en el menú, donde suena el estilo elegido (así se oye al cambiarlo en Ajustes).
-   */
-  setPuzzle(puzzle: PuzzleType | null): void;
+  /** Empieza un nivel: si el tema ya sonó un rato, cambia a otro al azar en el siguiente compás. */
+  levelStarted(): void;
+  /** Tema que suena ahora (para las pruebas). */
+  currentTrack(): MusicTrack | null;
+  /** Cambia a un tema concreto en el siguiente compás (solo para las pruebas). */
+  playTrack(track: MusicTrack): void;
+  /** Hace como si el tema llevara `seconds` segundos más sonando (solo para las pruebas). */
+  ageTrack(seconds: number): void;
   /** Volumen en porcentaje: 100 es el estándar del juego (0 = silencio, 200 = el doble). */
   setVolume(percent: number): void;
 }
@@ -38,8 +38,12 @@ export class NoopMusicPlayer implements MusicPlayer {
   stop(): void {}
   setIntensity(): void {}
   resolve(): void {}
-  setStyle(): void {}
-  setPuzzle(): void {}
+  levelStarted(): void {}
+  currentTrack(): MusicTrack | null {
+    return null;
+  }
+  playTrack(): void {}
+  ageTrack(): void {}
   setVolume(): void {}
 }
 
@@ -47,13 +51,15 @@ export class NoopMusicPlayer implements MusicPlayer {
 const LOOKAHEAD_SEC = 1.6;
 const FADE_IN_SEC = 2.5;
 const FADE_OUT_SEC = 0.9;
+/** Fundido cruzado al cambiar de tema: el anterior se apaga mientras entra el nuevo. */
+const CROSSFADE_SEC = 2.6;
 
 type Degree = 0 | 1 | 2 | 3 | 4;
 
 /**
- * Reproduce la música generativa de `core/music.ts` con Web Audio. Tiene dos estilos: el ambiental (colchón,
- * bajo y arpa de cristal) y el swing (teclado eléctrico, bajo, vibráfono y escobillas). Programa los compases
- * por adelantado con un temporizador de vigilancia.
+ * Reproduce la música generativa de `core/music.ts` con Web Audio. Los temas suenan al azar (`core/playlist.ts`): cada uno
+ * dura de 2 a 3 minutos (o cambia al empezar un nivel si ya sonó un rato), siempre al final de una frase y con un fundido
+ * cruzado. Programa los compases por adelantado con un temporizador de vigilancia.
  */
 export class WebMusicPlayer implements MusicPlayer {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -63,14 +69,19 @@ export class WebMusicPlayer implements MusicPlayer {
   private target = 0;
   private intensity = 0;
   private quietBars = 0;
-  private style: MusicStyle = 'swing';
-  private puzzle: PuzzleType | null = null;
   private volume = 1;
+  /** Salida del tema actual (va al bus de música): cada tema tiene la suya para poder fundirlos al cambiar. */
+  private out: GainNode | null = null;
+  /** Hay que cambiar de tema en el próximo compás (empezó un nivel o lo pidió una prueba). */
+  private pendingTrack: MusicTrack | 'next' | null = null;
   /** Vaivén suave de afinación, como el de una cinta antigua: da calidez al teclado y a la melodía. */
   private wobble: { lfo: OscillatorNode; depth: GainNode } | null = null;
   private noise: AudioBuffer | null = null;
   /** Semilla de la sesión: cada vez que se abre el juego el tema suena algo distinto. */
   private readonly seed = Math.floor(Math.random() * 0x7fffffff);
+  private readonly playlist = new Playlist(this.seed);
+  /** Tema que suena (lo elige la lista al azar). */
+  private track: MusicTrack = this.playlist.current;
 
   constructor(private readonly engine: AudioEngine) {}
 
@@ -124,23 +135,58 @@ export class WebMusicPlayer implements MusicPlayer {
     this.target = Math.min(1, Math.max(0, value));
   }
 
-  setStyle(style: MusicStyle): void {
-    if (style === this.style) return;
-    this.style = style;
-    // Si ya suena, el nuevo estilo empieza desde el principio de su frase en el siguiente compás
+  levelStarted(): void {
+    if (this.playlist.changeOnLevel() && this.pendingTrack === null) this.pendingTrack = 'next';
+  }
+
+  currentTrack(): MusicTrack | null {
+    return this.track;
+  }
+
+  playTrack(track: MusicTrack): void {
+    this.pendingTrack = track;
+  }
+
+  ageTrack(seconds: number): void {
+    this.playlist.age(seconds);
+  }
+
+  /** Salida del tema actual (se crea la primera vez). */
+  private output(): AudioNode | null {
+    const ctx = this.engine.context();
+    const bus = this.engine.musicBus;
+    if (!ctx || !bus) return null;
+    if (!this.out) {
+      this.out = ctx.createGain();
+      this.out.connect(bus);
+    }
+    return this.out;
+  }
+
+  /** Cambia de tema al empezar el compás `start`: el anterior se funde mientras entra el nuevo desde su primera frase. */
+  private switchTrack(start: number, track: MusicTrack | 'next'): void {
+    const ctx = this.engine.context();
+    const bus = this.engine.musicBus;
+    if (!ctx || !bus) return;
+    if (track === 'next') this.playlist.next();
+    else this.playlist.force(track);
+    this.track = this.playlist.current;
     this.bar = 0;
-  }
 
-  setPuzzle(puzzle: PuzzleType | null): void {
-    const before = this.track;
-    this.puzzle = puzzle;
-    // La caja de música de Luces y el estilo elegido son pistas distintas: si cambia la pista, la nueva empieza su frase
-    if (this.track !== before) this.bar = 0;
-  }
-
-  /** Pista que suena ahora: la caja de música en Luces, la cuerda en Hilos y el estilo elegido en Circuitos y en el menú. */
-  private get track(): MusicTrack {
-    return this.puzzle === 'lights' ? 'cristal' : this.puzzle === 'flow' ? 'hilo' : this.style;
+    const old = this.out;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, ctx.currentTime);
+    out.gain.setValueAtTime(0.0001, start);
+    out.gain.linearRampToValueAtTime(1, start + CROSSFADE_SEC);
+    out.connect(bus);
+    this.out = out;
+    if (old) {
+      old.gain.cancelScheduledValues(start);
+      old.gain.setValueAtTime(old.gain.value || 1, start);
+      old.gain.linearRampToValueAtTime(0, start + CROSSFADE_SEC);
+      // Cuando ya no se oye, se suelta (las colas que queden se cortan en silencio)
+      setTimeout(() => old.disconnect(), (start - ctx.currentTime + CROSSFADE_SEC + 0.5) * 1000);
+    }
   }
 
   setVolume(percent: number): void {
@@ -173,6 +219,19 @@ export class WebMusicPlayer implements MusicPlayer {
       this.swingBass(degreeFrequency(0, -1), t, 2.4, 0.7);
       this.kick(t, 0.5);
       this.ride(t, 0.5);
+    } else if (this.track === 'marimba') {
+      ([0, 2, 3, 4, 0] as Degree[]).forEach((degree, i) => this.mallet(degreeFrequency(degree, i > 3 ? 1 : 0), t + i * 0.11, 1.4, 0.5));
+      for (const degree of CHORDS.C.tones) this.pad(degree, -1, t, 5 * beatSeconds('marimba'), 0.3, 0.3);
+    } else if (this.track === 'synth') {
+      ([0, 2, 3, 4, 0] as Degree[]).forEach((degree, i) => this.synth(degreeFrequency(degree, i > 3 ? 1 : 0), t + i * 0.1, 1, 0.4));
+      for (const degree of CHORDS.C.tones) this.pad(degree, -1, t, 5 * beatSeconds('synth'), 0.45, 0.4);
+    } else if (this.track === 'chip') {
+      ([0, 2, 3, 4, 0] as Degree[]).forEach((degree, i) => this.chip(degreeFrequency(degree, i > 3 ? 2 : 1), t + i * 0.09, 0.6, 0.3));
+      this.chipBass(degreeFrequency(0, -2), t, 1.2, 0.5);
+    } else if (this.track === 'lofi' || this.track === 'nocturne') {
+      for (const degree of [0, 2, 3, 4] as Degree[]) this.keys(degreeFrequency(degree, 0), t + degree * 0.03, 3.2, 0.45);
+      this.swingBass(degreeFrequency(0, -1), t, 2.4, 0.6);
+      if (this.track === 'nocturne') this.bell(degreeFrequency(2, 1), t + 0.5, 2, 0.3, true);
     } else {
       for (const degree of CHORDS.C.tones) this.pad(degree, 0, t, 5 * beatSeconds('ambient'), 0.5, 0.35);
     }
@@ -184,8 +243,16 @@ export class WebMusicPlayer implements MusicPlayer {
     // Si el contexto estuvo pausado (app en segundo plano) no se acumulan compases atrasados
     if (this.nextBarTime < ctx.currentTime) this.nextBarTime = ctx.currentTime + 0.1;
     while (this.nextBarTime < ctx.currentTime + LOOKAHEAD_SEC) {
+      // Cambio de tema: al empezar un nivel (en el compás siguiente) o cuando el tema cumplió su duración (al acabar una frase)
+      if (this.pendingTrack !== null) {
+        this.switchTrack(this.nextBarTime, this.pendingTrack);
+        this.pendingTrack = null;
+      } else if (this.bar > 0 && this.bar % 4 === 0 && this.playlist.due()) {
+        this.switchTrack(this.nextBarTime, 'next');
+      }
       this.scheduleBar(this.bar, this.nextBarTime);
       this.nextBarTime += barSeconds(this.track);
+      this.playlist.advance(barSeconds(this.track));
       this.bar++;
     }
   }
@@ -210,8 +277,22 @@ export class WebMusicPlayer implements MusicPlayer {
         this.pad(event.degree, event.octave, when, length, event.velocity, 1);
         break;
       case 'bass':
-        if (this.track === 'swing') this.swingBass(freq, when, length, event.velocity);
+        if (this.track === 'swing' || this.track === 'lofi') this.swingBass(freq, when, length, event.velocity);
+        else if (this.track === 'chip') this.chipBass(freq, when, length, event.velocity);
+        else if (this.track === 'synth') this.synthBass(freq, when, length, event.velocity);
         else this.bass(freq, when, length, event.velocity);
+        break;
+      case 'mallet':
+        this.mallet(freq, when, length, event.velocity);
+        break;
+      case 'synth':
+        this.synth(freq, when, length, event.velocity);
+        break;
+      case 'chip':
+        this.chip(freq, when, length, event.velocity);
+        break;
+      case 'hat':
+        this.hat(when, event.velocity);
         break;
       case 'keys':
         this.keys(freq, when, length, event.velocity);
@@ -243,7 +324,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Colchón: dos osciladores ligeramente desafinados por un filtro suave, con entrada y salida lentas. */
   private pad(degree: number, octave: number, when: number, length: number, velocity: number, gain: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
     const freq = degreeFrequency(degree as Degree, octave);
 
@@ -274,7 +355,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Bajo ambiental: seno redondo con ataque suave que se apaga despacio. */
   private bass(freq: number, when: number, length: number, velocity: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
     const osc = ctx.createOscillator();
     osc.type = 'sine';
@@ -293,7 +374,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Arpa de cristal: el mismo timbre de los efectos (seno y triángulo una octava arriba), con cola larga. */
   private bell(freq: number, when: number, length: number, velocity: number, soft: boolean): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
     const body = ctx.createOscillator();
     body.type = 'sine';
@@ -328,7 +409,7 @@ export class WebMusicPlayer implements MusicPlayer {
    */
   private pluck(freq: number, when: number, length: number, velocity: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
     const body = ctx.createOscillator();
     body.type = 'triangle';
@@ -398,7 +479,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Teclado eléctrico: tono de seno con un armónico que ladra al pulsar y un filtro cálido; la cola se apaga sola. */
   private keys(freq: number, when: number, length: number, velocity: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
 
     const tail = Math.max(0.9, length * 1.5);
@@ -437,7 +518,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Bajo de jazz: seno redondo con un toque de triángulo para que se oiga en el altavoz del móvil. */
   private swingBass(freq: number, when: number, length: number, velocity: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
 
     const filter = ctx.createBiquadFilter();
@@ -468,7 +549,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Melodía: vibráfono (seno con un armónico agudo que se apaga rápido) y el vaivén de afinación. */
   private lead(freq: number, when: number, length: number, velocity: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
 
     const tail = Math.max(0.5, Math.min(2.2, length * 1.5));
@@ -494,6 +575,147 @@ export class WebMusicPlayer implements MusicPlayer {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Voces de los temas de `core/musicMore.ts`
+  // ---------------------------------------------------------------------------
+
+  /** Marimba: seno con dos armónicos de madera que se apagan enseguida; ataque seco y cola corta. */
+  private mallet(freq: number, when: number, length: number, velocity: number): void {
+    const ctx = this.engine.context();
+    const bus = this.output();
+    if (!ctx || !bus) return;
+    const tail = Math.min(1.1, 0.45 + length * 0.25);
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(0.42 * velocity, when + 0.003);
+    out.gain.exponentialRampToValueAtTime(0.0001, when + tail);
+    out.connect(bus);
+    for (const p of [{ mult: 1, gain: 1, decay: tail }, { mult: 4, gain: 0.22, decay: 0.07 }, { mult: 9.8, gain: 0.05, decay: 0.025 }]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq * p.mult;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(p.gain, when);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + p.decay);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(when);
+      osc.stop(when + p.decay + 0.05);
+      osc.onended = () => g.disconnect();
+    }
+  }
+
+  /** Sintetizador: diente de sierra desafinado por un filtro que se cierra rápido (suena a arpegiador). */
+  private synth(freq: number, when: number, length: number, velocity: number): void {
+    const ctx = this.engine.context();
+    const bus = this.output();
+    if (!ctx || !bus) return;
+    const dur = Math.max(0.18, Math.min(0.9, length * 0.7));
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 3;
+    filter.frequency.setValueAtTime(Math.min(5200, freq * 6), when);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(400, freq * 1.5), when + dur);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(0.085 * velocity, when + 0.006);
+    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    filter.connect(env);
+    env.connect(bus);
+    for (const detune of [-6, 6]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      osc.detune.value = detune;
+      osc.connect(filter);
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+      osc.onended = () => osc.disconnect();
+    }
+    setTimeout(() => {
+      try {
+        filter.disconnect();
+        env.disconnect();
+      } catch {
+        // ya desconectado
+      }
+    }, Math.max(0, (when - ctx.currentTime + dur + 0.2) * 1000));
+  }
+
+  /** Bajo sintético: triángulo con un filtro que se abre un instante al pulsar. */
+  private synthBass(freq: number, when: number, length: number, velocity: number): void {
+    const ctx = this.engine.context();
+    const bus = this.output();
+    if (!ctx || !bus) return;
+    const end = when + Math.max(0.25, length * 0.8);
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq * 2;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(0.28 * velocity, when + 0.01);
+    env.gain.exponentialRampToValueAtTime(0.0001, end);
+    osc.connect(env);
+    env.connect(bus);
+    osc.start(when);
+    osc.stop(end + 0.05);
+    osc.onended = () => env.disconnect();
+  }
+
+  /** Chip: onda cuadrada (de consola antigua) con un filtro que le quita lo áspero. */
+  private chip(freq: number, when: number, length: number, velocity: number): void {
+    const ctx = this.engine.context();
+    const bus = this.output();
+    if (!ctx || !bus) return;
+    const dur = Math.max(0.12, Math.min(0.8, length * 0.85));
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 3200;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(0.055 * velocity, when + 0.004);
+    env.gain.setValueAtTime(0.055 * velocity, when + dur * 0.6);
+    env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    osc.connect(filter);
+    filter.connect(env);
+    env.connect(bus);
+    osc.start(when);
+    osc.stop(when + dur + 0.05);
+    osc.onended = () => {
+      filter.disconnect();
+      env.disconnect();
+    };
+  }
+
+  /** Bajo de chip: triángulo a escalones, sin ataque suave (como en las consolas antiguas). */
+  private chipBass(freq: number, when: number, length: number, velocity: number): void {
+    const ctx = this.engine.context();
+    const bus = this.output();
+    if (!ctx || !bus) return;
+    const end = when + Math.max(0.15, length * 0.75);
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq * 2;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(0.22 * velocity, when + 0.004);
+    env.gain.setValueAtTime(0.22 * velocity, end - 0.04);
+    env.gain.linearRampToValueAtTime(0.0001, end);
+    osc.connect(env);
+    env.connect(bus);
+    osc.start(when);
+    osc.stop(end + 0.05);
+    osc.onended = () => env.disconnect();
+  }
+
+  /** Platillo cerrado: ruido muy agudo y cortísimo. */
+  private hat(when: number, velocity: number): void {
+    this.noiseHit(when, velocity, 'highpass', 8200, 0.6, 0.16, 0.05);
+  }
+
   /** Buffer de ruido blanco, compartido por toda la percusión. */
   private noiseBuffer(ctx: AudioContext): AudioBuffer {
     if (!this.noise) {
@@ -516,7 +738,7 @@ export class WebMusicPlayer implements MusicPlayer {
     decay: number
   ): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
 
     const src = ctx.createBufferSource();
@@ -550,7 +772,7 @@ export class WebMusicPlayer implements MusicPlayer {
   /** Bombo suave: un seno que cae de frecuencia. */
   private kick(when: number, velocity: number): void {
     const ctx = this.engine.context();
-    const bus = this.engine.musicBus;
+    const bus = this.output();
     if (!ctx || !bus) return;
     const osc = ctx.createOscillator();
     osc.type = 'sine';

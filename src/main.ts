@@ -5,7 +5,7 @@ import { GameScene } from './game/scenes/GameScene';
 import { HelloScene } from './game/scenes/HelloScene';
 import { THEME } from './game/theme';
 import { DESIGN_WIDTH, computeGameHeight } from './game/layout';
-import { createServices } from './services';
+import { createServices, music } from './services';
 
 // Inicializar servicios desacoplados (Storage, Ads, Haptics)
 const services = createServices();
@@ -43,7 +43,11 @@ function startGame(): void {
   };
   const game = new Phaser.Game(config);
   // Solo para las pruebas de rendimiento (`?debug` en la dirección)
-  if (location.search.includes('debug')) (window as unknown as { __game: Phaser.Game }).__game = game;
+  if (location.search.includes('debug')) {
+    (window as unknown as { __game: Phaser.Game }).__game = game;
+    // La música al azar, para que las pruebas sepan qué tema suena y puedan cambiarlo
+    (window as unknown as { __music: typeof music }).__music = music;
+  }
 }
 
 loadFonts().then(startGame);
