@@ -88,7 +88,8 @@ export function shouldAnnounceGraphics(settings: {
   hasSeenTutorial?: boolean;
   hasSeenLightsTip?: boolean;
   hasSeenFlowTip?: boolean;
+  hasSeenCodeTip?: boolean;
 }): boolean {
   if (settings.hasSeenGraphicsNotice === true) return false;
-  return settings.hasSeenTutorial === true || settings.hasSeenLightsTip === true || settings.hasSeenFlowTip === true;
+  return settings.hasSeenTutorial === true || settings.hasSeenLightsTip === true || settings.hasSeenFlowTip === true || settings.hasSeenCodeTip === true;
 }

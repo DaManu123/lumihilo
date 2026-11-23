@@ -274,31 +274,60 @@ export async function runGameScenarios(out) {
     await g.close();
   }]);
 
-  sections.push(['12. Estilo y volumen de la música', async () => {
-    const g = await openGame({ label: 'estilo', seed: SEEN_TUTORIAL, out });
-    await g.tap(...g.pos.hint, 450); // primer toque: arranca la música (por defecto, swing)
-    await g.page.waitForTimeout(3500);
-    let a = await g.audio();
-    check('el estilo por defecto es swing: usa percusión (escobillas)', a.src > 0, `fuentes de ruido ${a.src}`);
+  sections.push(['12. Música al azar y volumen', async () => {
+    const TRACKS = ['swing', 'ambient', 'cristal', 'hilo', 'lofi', 'marimba', 'synth', 'nocturne', 'chip'];
+    const g = await openGame({ label: 'musica-azar', seed: SEEN_TUTORIAL, out, query: '?debug' });
+    const track = () => g.page.evaluate(() => window.__music.currentTrack());
+    /** Espera (hasta `ms`) a que suene otro tema distinto de `from`. */
+    const waitChange = async (from, ms) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        const now = await track();
+        if (now !== from) return now;
+        await g.page.waitForTimeout(500);
+      }
+      return from;
+    };
+    await g.tap(...g.pos.hint, 450); // primer toque: arranca la música
+    await g.page.waitForTimeout(2500);
+    const first = await track();
+    check('suena uno de los nueve temas, elegido al azar', TRACKS.includes(first), `tema ${first}`);
+
+    // Los temas se distinguen: el nocturno no lleva percusión y el lo-fi sí
+    await g.page.evaluate(() => window.__music.playTrack('nocturne'));
+    check('se puede poner un tema concreto (pruebas): cambia en el siguiente compás', (await waitChange(first, 8000)) === 'nocturne');
+    await g.page.waitForTimeout(4500); // el fundido cruzado y la percusión del tema anterior terminan
+    const quiet = (await g.audio()).src;
+    await g.page.waitForTimeout(5000);
+    check('el nocturno no lleva percusión', (await g.audio()).src === quiet, `fuentes de ruido ${quiet} → ${(await g.audio()).src}`);
+    await g.page.evaluate(() => window.__music.playTrack('lofi'));
+    await waitChange('nocturne', 8000);
+    await g.page.waitForTimeout(4000);
+    check('el lo-fi sí (bombo, caja y platillo)', (await g.audio()).src > quiet + 4, `fuentes de ruido ${quiet} → ${(await g.audio()).src}`);
+
+    // Cambia solo cuando el tema cumplió sus 2-3 minutos, al acabar una frase (como mucho 4 compases)
+    await g.page.evaluate(() => window.__music.ageTrack(200));
+    const timed = await waitChange('lofi', 25000);
+    check('al cumplir su duración cambia solo a otro tema (y nunca al mismo)', timed !== 'lofi' && TRACKS.includes(timed), `lofi → ${timed}`);
+
+    // Un nivel nuevo con el tema recién empezado no lo corta…
+    await g.openMenu();
+    await g.playPuzzle('lights');
+    await g.tap(...g.pos.tutorialSkip, 500);
+    await g.page.waitForTimeout(5000);
+    check('al empezar un nivel con el tema recién puesto, sigue el mismo', (await track()) === timed, `${timed} → ${await track()}`);
+    // …pero si ya sonó un rato, el nivel nuevo empieza con otro tema
+    await g.page.evaluate(() => window.__music.ageTrack(80));
+    await g.openMenu();
+    await g.playPuzzle('circuits');
+    const onLevel = await waitChange(timed, 8000);
+    check('al empezar un nivel con el tema sonando hace rato, cambia a otro', onLevel !== timed && TRACKS.includes(onLevel), `${timed} → ${onLevel}`);
 
     await g.openSettings(500);
     await g.shot('e12-ajustes-completos');
     let s = await g.state();
     check('los ajustes de música aún no se han tocado (usan los valores por defecto)', s.settings?.musicVolume === undefined || s.settings?.musicVolume === 100);
-
-    // Estilo
-    await g.tap(...g.pos.styleAmbient, 400);
-    s = await g.state();
-    check('elegir "Ambiental" lo guarda', s.settings?.musicStyle === 'ambient');
-    await g.page.waitForTimeout(7000); // el cambio de estilo se aplica en el siguiente compás
-    const lateA = (await g.audio()).src;
-    await g.page.waitForTimeout(6000);
-    check('en estilo ambiental la percusión se detiene del todo', (await g.audio()).src === lateA);
-    await g.tap(...g.pos.styleSwing, 400);
-    s = await g.state();
-    check('volver a "Swing" lo guarda', s.settings?.musicStyle === 'swing');
-    await g.page.waitForTimeout(5000);
-    check('y vuelve la percusión', (await g.audio()).src > lateA);
+    check('Ajustes ya no tiene elección de estilo: no se guarda ninguno', s.settings?.musicStyle === undefined);
 
     // Volumen: se toca la barra en distintos puntos
     await g.tap(...g.pos.volume(50), 300);
@@ -319,41 +348,19 @@ export async function runGameScenarios(out) {
     await g.tap(...g.pos.volume(130), 300);
     await g.shot('e12-volumen-130');
 
-    // Con la música apagada, estilo y volumen se bloquean
+    // Con la música apagada, el volumen se bloquea
     await g.tap(...g.pos.setMusic, 400);
     await g.tap(...g.pos.volume(40), 300);
     s = await g.state();
     check('con la música apagada la barra de volumen no responde', s.settings?.musicVolume === 130, `guardado ${s.settings?.musicVolume}`);
-    await g.tap(...g.pos.styleAmbient, 300);
-    s = await g.state();
-    check('con la música apagada el estilo no cambia', s.settings?.musicStyle === 'swing');
+    check('y la música se apaga', s.settings?.musicEnabled === false);
     await g.shot('e12-musica-apagada');
     await g.tap(...g.pos.setMusic, 400); // se vuelve a encender
     await g.tap(...g.pos.settingsDone, 400);
 
     await g.reload();
     s = await g.state();
-    check('estilo y volumen persisten al recargar', s.settings?.musicStyle === 'swing' && s.settings?.musicVolume === 130);
-
-    // Lo que vio un probador: tras jugar Luces, cambiar el estilo en Ajustes (desde el menú) no se oía. En el menú suena
-    // el estilo elegido, así que el cambio se oye al momento; Luces conserva su caja de música
-    await g.tap(...g.pos.hint, 450);
-    await g.playPuzzle('lights');
-    await g.tap(...g.pos.tutorialSkip, 500);
-    await g.openSettings(500);
-    await g.tap(...g.pos.styleAmbient, 400);
-    await g.page.waitForTimeout(7000);
-    const quiet = (await g.audio()).src;
-    await g.page.waitForTimeout(4000);
-    check('en el menú, elegir Ambiental se oye (sin percusión) aunque se viniera de Luces', (await g.audio()).src === quiet);
-    await g.tap(...g.pos.styleSwing, 400);
-    await g.page.waitForTimeout(5000);
-    check('en el menú, volver a Swing se oye al momento (vuelve la percusión)', (await g.audio()).src > quiet);
-    await g.tap(...g.pos.settingsDone, 400); // vuelve a entrar a Luces
-    await g.page.waitForTimeout(6000);
-    const inLights = (await g.audio()).src;
-    await g.page.waitForTimeout(4000);
-    check('al volver a Luces suena su caja de música (sin percusión)', (await g.audio()).src === inLights);
+    check('el volumen persiste al recargar', s.settings?.musicVolume === 130 && s.settings?.musicEnabled === true);
     await g.close();
   }]);
 
@@ -1184,7 +1191,7 @@ export async function runGameScenarios(out) {
 
   sections.push(['22. Diseño: ningún texto se sale de su marco ni se pisa (ES y EN, dos pantallas)', async () => {
     const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
-    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true };
+    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true, hasSeenCodeTip: true, hasSeenCodeCountsTip: true };
     for (const [lang, vp] of [['es', { width: 393, height: 808 }], ['en', { width: 360, height: 640 }], ['en', { width: 393, height: 808 }], ['es', { width: 360, height: 640 }]]) {
       const name = `${lang} ${vp.width}×${vp.height}`;
       // Una de las pasadas con gráficos altos y un aspecto de la tienda (brillos en títulos y tarjetas)
@@ -1233,14 +1240,16 @@ export async function runGameScenarios(out) {
       g.menuScreen = 'play';
       await look('puzzles');
       if (lang === 'en' && vp.width === 360) await g.shot('e22-puzzles-en-pequena');
-      for (const puzzle of ['circuits', 'lights', 'flow']) {
+      for (const puzzle of ['circuits', 'lights', 'flow', 'code']) {
         await g.enter(puzzle);
         await look(`juego ${puzzle}`);
         await g.tap(...g.pos.help, 700);
-        const pages = puzzle === 'flow' ? 2 : 3;
+        // Hilos y Claves tienen dos pantallas, con un solo botón centrado
+        const twoPages = puzzle === 'flow' || puzzle === 'code';
+        const pages = twoPages ? 2 : 3;
         for (let page = 1; page <= pages; page++) {
           await look(`tutorial ${puzzle} ${page}`);
-          if (page < pages) await g.tap(...(puzzle === 'flow' ? g.pos.flowTutorialOk : g.pos.tutorialNext), 700);
+          if (page < pages) await g.tap(...(twoPages ? g.pos.flowTutorialOk : g.pos.tutorialNext), 700);
         }
         if (puzzle === 'flow') await g.shot(`e22-hilos-llenar-${lang}-${vp.width}`);
         await g.tap(...g.pos.tutorialDone, 500);
@@ -1437,6 +1446,143 @@ export async function runGameScenarios(out) {
     await g.page.waitForTimeout(500);
     st = await sc(g, game);
     check('«atrás» cierra Ajustes y se queda en el inicio', !(await texts(g)).includes('Volumen de la música') && st.inMenu && st.screen === 'home', JSON.stringify(st));
+    await g.close();
+  }]);
+
+  sections.push(['25. Cuarto puzzle: Claves (adivinar el número)', async () => {
+    const scene = '(window.__game.scene.scenes.find((sc) => sc.handleCellTap))';
+    const texts = (g) => g.page.evaluate(`(function walk(list) { return list.flatMap((o) => o.visible === false ? [] : [o.type === 'Text' ? o.text : '', ...(o.list ? walk(o.list) : [])]); })(${scene}.children.getAll()).join(' | ')`);
+    const sc = (g, expr) => g.page.evaluate(`(() => { const sc = ${scene}; return ${expr}; })()`);
+    const code = '({ puzzle: sc.puzzle, level: sc.currentLevelIndex, secret: sc.codeLevelData.secret, params: sc.codeLevelData.params, input: sc.codeInput, rows: sc.codeRows.length, revealed: sc.codeRevealed, notes: sc.codeNotes, notesMode: sc.codeNotesMode, taps: sc.tapCount, hints: sc.hintsUsed, won: sc.isWon, busy: sc.codeBusy, sparks: sc.progress.sparks, codeLevel: sc.progress.codeLevel, stars: sc.progress.stats.stars })';
+    // El reloj del juego va lento sin pantalla: se espera a que termine de revelarse el intento (o a que gane)
+    const settle = async (g, until = '!sc.codeBusy') => {
+      for (let i = 0; i < 80; i++) {
+        if (await sc(g, until)) return true;
+        await g.page.waitForTimeout(250);
+      }
+      return false;
+    };
+    const type = async (g, digits) => { for (const d of digits) await g.tap(...g.pos.codeKey(d), 120); };
+    const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true, hasSeenStonesTip: true };
+
+    let g = await openGame({ label: 'claves', out, query: '?debug', menu: true, seed: { user_settings: { ...SEEN } } });
+    await g.toPlayScreen();
+    let tx = await texts(g);
+    check('la pantalla de puzzles tiene la tarjeta de Claves', tx.includes('Claves') && tx.includes('Adivina el número secreto'), tx.slice(0, 300));
+    await g.enter('code', 1200);
+    tx = await texts(g);
+    check('la primera vez sale el tutorial de Claves', tx.includes('Cómo se juega Claves'), tx.slice(0, 200));
+    await g.tap(...g.pos.flowTutorialOk, 700);
+    check('su segunda pantalla explica los dos números', (await texts(g)).includes('Los dos números'));
+    await g.tap(...g.pos.tutorialDone, 600);
+    check('el tutorial queda visto', (await g.state()).settings?.hasSeenCodeTip === true);
+    let st = await sc(g, code);
+    tx = await texts(g);
+    check('el primer nivel: 2 cifras del 1 al 4, sin repetir y con colores', st.params.length === 2 && st.params.low === 1 && st.params.high === 4 && !st.params.repeats && st.params.colors, JSON.stringify(st.params));
+    check('el panel dice el intento y las reglas', tx.includes('Intento 1') && tx.includes('2 cifras del 1 al 4, sin repetir'), tx.slice(0, 400));
+    check('el primer botón de la barra son las «Notas»', tx.includes('Notas'));
+
+    // Cifras no permitidas, repetidas, borrar e intento incompleto
+    await g.tap(...g.pos.codeKey(7), 300);
+    st = await sc(g, code);
+    check('una cifra fuera del rango no se escribe', st.input.every((d) => d === null), JSON.stringify(st.input));
+    await type(g, [1, 1]);
+    st = await sc(g, code);
+    check('sin repetidas: la segunda cifra igual no se escribe', st.input[0] === 1 && st.input[1] === null, JSON.stringify(st.input));
+    await g.tap(...g.pos.codeKey('submit'), 300);
+    check('un intento incompleto no se prueba', (await sc(g, code)).rows === 0);
+    await g.tap(...g.pos.codeKey('erase'), 200);
+    check('«Borrar» quita la última cifra', (await sc(g, code)).input.every((d) => d === null));
+
+    // Un intento que falla: se revela y cuenta
+    const secret = st.secret;
+    const wrong = [1, 2, 3, 4].filter((d) => !secret.includes(d)).slice(0, 1).concat(secret[0]);
+    await type(g, wrong);
+    await g.tap(...g.pos.codeKey('submit'), 300);
+    check('mientras se revela no se puede escribir', (await sc(g, 'sc.codeBusy')) === true);
+    await settle(g);
+    st = await sc(g, code);
+    tx = await texts(g);
+    check('el intento queda en la lista y cuenta', st.rows === 1 && st.taps === 1 && tx.includes('1 intento'), JSON.stringify({ rows: st.rows, taps: st.taps }));
+    const keyNotes = await sc(g, 'sc.codeDisplayNotes()');
+    check('la tecla de la cifra que no está queda tachada sola', keyNotes[wrong[0]] === 'out', JSON.stringify(keyNotes));
+
+    // Notas y deshacer
+    const free = [1, 2, 3, 4].find((d) => !wrong.includes(d));
+    await g.tap(...g.pos.reset, 400);
+    await g.tap(...g.pos.codeKey(free), 300);
+    st = await sc(g, code);
+    check('con «Notas» la cifra se anota (tachada) y no se escribe', st.notesMode && st.notes[free] === 2 && st.input.every((d) => d === null), JSON.stringify(st));
+    await g.tap(...g.pos.undo, 300);
+    check('«Deshacer» quita la nota', (await sc(g, code)).notes[free] === 0);
+    await g.tap(...g.pos.reset, 300);
+
+    // Se guarda a medias
+    await sc(g, 'sc.persistGame()');
+    await g.reload();
+    await g.enter('code', 1000);
+    st = await sc(g, code);
+    check('al volver a abrir, la partida sigue con sus intentos', st.puzzle === 'code' && st.rows === 1 && st.taps === 1, JSON.stringify({ rows: st.rows, taps: st.taps }));
+
+    // Pista: la primera es gratis y revela una cifra
+    const before = st.sparks;
+    await g.tap(...g.pos.hint, 700);
+    st = await sc(g, code);
+    const pos = st.revealed.indexOf(true);
+    check('la pista revela una cifra en su lugar, gratis', pos >= 0 && st.hints === 1 && st.sparks === before, JSON.stringify(st));
+    check('la pista no da la clave entera', st.revealed.filter(Boolean).length === 1);
+
+    // Abrir la clave
+    await type(g, secret.filter((_, i) => i !== pos));
+    await g.tap(...g.pos.codeKey('submit'), 300);
+    await settle(g, 'sc.isWon');
+    await g.page.waitForTimeout(2500);
+    st = await sc(g, code);
+    tx = await texts(g);
+    check('al acertar se abre la clave y sale el resultado', st.won && tx.includes('Clave descubierta'), tx.slice(0, 200));
+    check('paga Chispas, da estrellas y pasa al nivel 2', st.sparks > before && st.stars > 0 && st.codeLevel === 2, JSON.stringify({ sparks: st.sparks, stars: st.stars, level: st.codeLevel }));
+    check('el resultado cuenta intentos, no toques', tx.includes('Intentos') && !tx.includes('Toques'));
+    await g.shot('e25-victoria');
+
+    // Repetir el nivel trae otra clave (la de antes ya se conoce)
+    const replayed = await sc(g, `(() => { const level = sc.currentLevelIndex; const old = sc.codeLevelData.secret.join(''); sc.children.getAll().filter((o) => (o.depth ?? 0) >= 100).forEach((o) => o.destroy()); sc.codeReplay = { level, n: 1 }; sc.startLevel(level); return { old, now: sc.codeLevelData.secret.join('') }; })()`);
+    check('repetir un nivel de Claves trae otra clave', replayed.old !== replayed.now || replayed.old.length <= 2, JSON.stringify(replayed));
+    await sc(g, 'sc.startLevel(2)');
+    await g.page.waitForTimeout(500);
+
+    // Teclado de computadora
+    st = await sc(g, code);
+    const guess = Array.from({ length: st.params.length }, (_, i) => st.params.low + i);
+    await g.page.keyboard.type(guess.join(''));
+    await g.page.keyboard.press('Enter');
+    await settle(g);
+    check('con el teclado de la computadora se escribe y se prueba (Enter)', (await sc(g, code)).rows === 1);
+    await g.close();
+
+    // Modo Reto: intentos limitados; al acabarse se enseña la clave y se pasa a otra
+    const challenge = { mode: 'challenge', currentTier: 5, rating: 1000, gamesPlayed: 9, gamesWon: 9, consecutiveWinsWithoutStruggle: 0, consecutiveStruggles: 0, totalTimeSeconds: 0, totalTaps: 0 };
+    g = await openGame({
+      label: 'claves-reto', out, query: '?debug', menu: true,
+      seed: { profile_adaptive: challenge, profile_adaptive_code: challenge, profile_adaptive_lights: challenge, profile_adaptive_flow: challenge, user_settings: { ...SEEN, hasSeenCodeTip: true, hasSeenCodeCountsTip: true, puzzle: 'code' } },
+    });
+    await g.enter('code', 1000);
+    st = await sc(g, code);
+    const max = await sc(g, 'sc.codeMaxGuesses()');
+    tx = await texts(g);
+    check('en Reto hay un límite de intentos a la vista', max >= 6 && tx.includes(`Intento 1 de ${max}`) && !st.params.colors, tx.slice(0, 300));
+    await sc(g, `(() => { const bad = sc.codeLevelData.secret.map((d) => (d + 1) % 10); for (let i = 0; i < ${max} - 1; i++) sc.codeRows = [...sc.codeRows, { guess: bad, score: { exact: 0, misplaced: 0 } }]; sc.tapCount = ${max} - 1; sc.updateFlowVisuals(); return true; })()`);
+    const last = st.secret.map((d) => (d + 2) % 10);
+    if (new Set(last).size === last.length) await type(g, last);
+    else await sc(g, `(() => { sc.codeInput = ${JSON.stringify(st.secret.map((d) => (d + 5) % 10))}; return true; })()`);
+    await g.tap(...g.pos.codeKey('submit'), 300);
+    await settle(g, `sc.children.getAll().some((o) => (o.depth ?? 0) >= 100)`);
+    await g.page.waitForTimeout(600);
+    tx = await texts(g);
+    check('al acabarse los intentos se enseña la clave', tx.includes('Se acabaron los intentos') && tx.includes('La clave era'), tx.slice(0, 300));
+    await g.tap(360, g.dims.h / 2 + 640 / 2 - 84, 800);
+    st = await sc(g, code);
+    const profile = JSON.parse(await g.page.evaluate(() => localStorage.getItem('profile_adaptive_code')));
+    check('«Otra clave» pasa al siguiente nivel, con otra clave, y cuenta como atasco', st.level === 2 && !st.won && st.rows === 0 && profile.consecutiveStruggles >= 1, JSON.stringify({ level: st.level, rows: st.rows, profile }));
     await g.close();
   }]);
 

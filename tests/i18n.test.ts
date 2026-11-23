@@ -12,7 +12,6 @@ import {
   t,
 } from '../src/core/i18n';
 import { HAPTIC_LABELS, HAPTIC_MODE_LABELS, describeDiagnostics, vibrationBlockers } from '../src/core/haptics';
-import { MUSIC_STYLE_LABELS } from '../src/core/music';
 import { ANIMATION_LABELS } from '../src/core/accessibility';
 import { SKINS } from '../src/core/skins';
 
@@ -95,7 +94,6 @@ describe('Idiomas (src/core/i18n.ts)', () => {
     const labels = [
       ...Object.values(HAPTIC_LABELS),
       ...Object.values(HAPTIC_MODE_LABELS),
-      ...Object.values(MUSIC_STYLE_LABELS),
       ...Object.values(ANIMATION_LABELS),
       ...SKINS.map((s) => s.name),
     ];

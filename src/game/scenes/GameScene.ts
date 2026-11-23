@@ -27,6 +27,7 @@ import {
   dailySeed,
   dailyLightsSeed,
   dailyFlowSeed,
+  dailyCodeSeed,
   lastDailyOf,
   levelOf,
   withLevel,
@@ -51,13 +52,9 @@ import {
   vibrationBlockers,
 } from '../../core/haptics';
 import {
-  MUSIC_STYLES,
-  MUSIC_STYLE_LABELS,
   MUSIC_VOLUME_DEFAULT,
   MUSIC_VOLUME_MAX,
   MUSIC_VOLUME_MIN,
-  MusicStyle,
-  isMusicStyle,
   normalizeMusicVolume,
 } from '../../core/music';
 import {
@@ -122,6 +119,7 @@ import {
   computeBoardGeometry,
   computeHomeLayout,
   computePlayLayout,
+  computeCodeLayout,
 } from '../layout';
 import { storage, feedback, listenBack, UserSettings, RotationDirection, createUpdateService, UpdateService } from '../../services';
 import { APP_VERSION } from '../../config';
@@ -129,13 +127,27 @@ import { UpdateInfo, isUpdateAvailable } from '../../core/updates';
 import { parseLastCheck, retryDelay, serializeLastCheck, shouldRecheck } from '../../core/updateRetry';
 import { APP_NAME } from '../../config';
 import { pickGreeting } from '../../core/greeting';
-import { introCircuitsParams, introFlowParams, introLightsParams, introRecordKey, isIntroLevel } from '../../core/intro';
+import { introCircuitsParams, introCodeParams, introFlowParams, introLightsParams, introRecordKey, isIntroLevel } from '../../core/intro';
 import { HintOffer, hintOffer, shouldNudgeHint } from '../../core/hintOffer';
 import { MAX_STARS, Stars, starsAdvice, starsFor } from '../../core/stars';
 import { switchGameMode } from '../../core/modes';
 import { SavedGame, SavedGames, MAX_SAVED_FLOW_UNDO, hasProgress, matchesLevel } from '../../core/savedGames';
 import { GRAPHICS_LABELS, GRAPHICS_QUALITIES, GraphicsQuality, SkinFx, activeSkinFx, fxLevel, isGraphicsQuality, shouldAnnounceGraphics } from '../../core/graphics';
 import { SkinFxRuntime, addBackLight, buildSkinFx } from '../skinFx';
+import {
+  CodeLevel,
+  codeHint,
+  codeParamsForTier,
+  deduceNotes,
+  digitAllowed,
+  generateCode,
+  guessProblem,
+  markGuess,
+  maxGuessesFor,
+  scoreGuess,
+  type DigitNote,
+} from '../../core/code';
+import { CodeBoard, CodeBoardState, CodeRow, buildCodeRow, drawCountIcon } from '../codeBoard';
 
 interface CellView {
   container: Phaser.GameObjects.Container;
@@ -301,6 +313,21 @@ export class GameScene extends Phaser.Scene {
   private flowMissingShown = false;
   private flowMissingPulse?: Phaser.Tweens.Tween;
   private lastLightsTap: { row: number; col: number } | null = null;
+  /** Claves: el nivel, los intentos hechos, el número que se escribe, las notas, las posiciones reveladas y la pantalla. */
+  private codeLevelData!: CodeLevel;
+  private codeRows: CodeRow[] = [];
+  private codeInput: Array<number | null> = [];
+  /** Notas del jugador por cifra: 0 nada, 1 está, 2 no está. */
+  private codeNotes: number[] = new Array(10).fill(0);
+  private codeRevealed: boolean[] = [];
+  private codeNotesMode = false;
+  /** Lo que se puede deshacer en Claves (lo escrito y las notas; un intento ya probado no se deshace). */
+  private codeUndo: Array<{ input: Array<number | null>; notes: number[] }> = [];
+  private codeBoard?: CodeBoard;
+  /** Claves: se está revelando un intento (no se puede escribir ni pedir pista). */
+  private codeBusy = false;
+  /** Claves: veces que se ha repetido un nivel (cada repetición trae otra clave). */
+  private codeReplay = { level: -1, n: 0 };
   private dailyKey = '';
   /** Partidas a medias de cada puzzle (ver `core/savedGames.ts`). */
   private savedGames: SavedGames = {};
@@ -322,6 +349,8 @@ export class GameScene extends Phaser.Scene {
   private dailySeg!: Segment;
   private themeSeg!: Segment;
   private undoSeg!: Segment;
+  /** Primer segmento de la barra de herramientas: «Reiniciar» (o «Notas» en Claves). */
+  private resetSeg?: Segment;
   private hintSeg!: Segment;
   private dirBtn!: Phaser.GameObjects.Container;
   private dirPanel!: Phaser.GameObjects.Graphics;
@@ -340,7 +369,12 @@ export class GameScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
 
     // Cargar perfil, progreso y configuraciones persistentes
-    this.profiles = { circuits: storage.loadProfile('circuits'), lights: storage.loadProfile('lights'), flow: storage.loadProfile('flow') };
+    this.profiles = {
+      circuits: storage.loadProfile('circuits'),
+      lights: storage.loadProfile('lights'),
+      flow: storage.loadProfile('flow'),
+      code: storage.loadProfile('code'),
+    };
     this.progress = storage.loadProgress();
     this.settings = storage.loadSettings();
     if (!isLanguageSetting(this.settings.language)) this.settings.language = 'auto';
@@ -353,7 +387,6 @@ export class GameScene extends Phaser.Scene {
     // Los ajustes guardados pueden venir de una versión antigua o corruptos: se validan al cargarlos
     if (!isHapticLevel(this.settings.hapticsLevel)) this.settings.hapticsLevel = 'normal';
     if (!isHapticMode(this.settings.hapticsMode)) this.settings.hapticsMode = 'all';
-    if (!isMusicStyle(this.settings.musicStyle)) this.settings.musicStyle = 'swing';
     if (!isAnimationSpeed(this.settings.animationSpeed)) this.settings.animationSpeed = 'normal';
     this.settings.highContrast = this.settings.highContrast === true;
     this.settings.litMarks = this.settings.litMarks === true;
@@ -362,13 +395,11 @@ export class GameScene extends Phaser.Scene {
     feedback.configure({
       sound: this.settings.soundEnabled,
       music: this.settings.musicEnabled,
-      musicStyle: this.settings.musicStyle,
       musicVolume: this.settings.musicVolume,
       haptics: this.settings.hapticsEnabled,
       hapticsLevel: this.settings.hapticsLevel,
       hapticsMode: this.settings.hapticsMode,
     });
-    feedback.setPuzzle(isPuzzleType(this.settings.puzzle) ? this.settings.puzzle : 'circuits');
     // Los navegadores solo permiten audio tras un gesto: se habilita con el primer toque
     this.input.once('pointerdown', () => feedback.unlock());
 
@@ -393,7 +424,6 @@ export class GameScene extends Phaser.Scene {
     this.inMenu = true;
     this.menuScreen = 'home';
     this.menuGreeting = pickGreeting(new Date().getHours(), Math.random, this.menuGreeting);
-    feedback.setPuzzle(null);
     this.setGameVisible(false);
     this.applyGraphicsFx();
     this.buildMenu();
@@ -416,6 +446,8 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.flowPointerMove(pointer));
     this.input.on('pointerup', () => this.flowPointerUp());
     this.input.on('pointerupoutside', () => this.flowPointerUp());
+    // Claves con teclado de computadora: cifras, borrar y Enter para probar
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.codeKeyDown(event));
 
     // Cronómetro interno (actualiza cada segundo)
     this.timerEvent = this.time.addEvent({
@@ -517,6 +549,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Rectángulo del tablero en pantalla. */
   private boardRect(): Rect {
+    if (this.puzzle === 'code' && this.codeBoard) return this.codeBoard.slotsRect();
     const { cellSize, startX, startY } = this.geometry;
     const { rows, cols } = this.board;
     return { x: startX - cellSize / 2, y: startY - cellSize / 2, w: cols * cellSize, h: rows * cellSize };
@@ -791,10 +824,14 @@ export class GameScene extends Phaser.Scene {
 
     this.levelText.setText(this.isDaily ? t('Reto diario') : t('Nivel {0}', this.currentLevelIndex));
     this.timerText.setText(this.formatTime(this.elapsedTime));
-    this.tapsText.setText(t(this.tapCount === 1 ? '{0} toque' : '{0} toques', this.tapCount));
+    this.tapsText.setText(
+      this.puzzle === 'code'
+        ? t(this.tapCount === 1 ? '{0} intento' : '{0} intentos', this.tapCount)
+        : t(this.tapCount === 1 ? '{0} toque' : '{0} toques', this.tapCount)
+    );
 
     // Etiqueta con el tamaño del tablero, junto al nombre del nivel
-    this.levelChipText.setText(`${width}×${height}`);
+    this.levelChipText.setText(this.puzzle === 'code' ? t('{0} cifras', width) : `${width}×${height}`);
     const chipW = this.levelChipText.width + 32;
     const chipH = 46;
     const chipX = this.hud.levelPos.x + this.levelText.width + 18;
@@ -859,7 +896,9 @@ export class GameScene extends Phaser.Scene {
     // Barra de reiniciar / deshacer / pista
     const [reset, undo, hint] = this.createSegmentedBar(c, this.hud.toolbar, this.hud.toolSegments, [
       () => {
-        if (!this.isWon) this.startLevel(this.currentLevelIndex);
+        // En Claves el primer botón son las notas (reiniciar con la misma clave no tendría sentido)
+        if (this.puzzle === 'code') this.toggleCodeNotes();
+        else if (!this.isWon) this.startLevel(this.currentLevelIndex);
       },
       () => this.handleUndo(),
       () => this.useHint(),
@@ -867,7 +906,9 @@ export class GameScene extends Phaser.Scene {
     this.undoSeg = undo;
     this.hintSeg = hint;
     this.hintSegState = '';
-    this.setSegment(reset, { label: t('Reiniciar'), kind: 'reset' });
+    this.resetSeg = reset;
+    if (this.puzzle === 'code') this.renderCodeNotesSegment();
+    else this.setSegment(reset, { label: t('Reiniciar'), kind: 'reset' });
 
     this.createDirectionButton(this.hud.dirBtn);
     c.add(this.dirBtn);
@@ -900,6 +941,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderDirectionButton(): void {
+    if (this.puzzle === 'code') {
+      this.renderCodePanel();
+      return;
+    }
     if (this.puzzle === 'flow') {
       // En Hilos no se gira nada: el panel cuenta los hilos unidos (y, si hay que llenar, las casillas) y al tocarlo explica cómo se juega
       const { w, h } = this.dirRect;
@@ -987,6 +1032,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private toggleRotationDirection(): void {
+    if (this.puzzle === 'code') {
+      this.showCodeTutorial();
+      return;
+    }
     if (this.puzzle === 'lights') {
       this.showLightsTutorial();
       return;
@@ -1009,7 +1058,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateUndoButtonState(): void {
     if (!this.undoSeg) return;
-    const canUndo = this.moveHistory.length > 0 && !this.isWon;
+    const canUndo = (this.puzzle === 'code' ? this.codeUndo.length > 0 && !this.codeBusy : this.moveHistory.length > 0) && !this.isWon;
     this.setSegment(this.undoSeg, {
       label: t('Deshacer'),
       kind: 'undo',
@@ -1993,6 +2042,7 @@ export class GameScene extends Phaser.Scene {
     this.flowDrag = null;
     if (this.puzzle === 'lights') this.showLightsTutorial();
     else if (this.puzzle === 'flow') this.showFlowTutorial();
+    else if (this.puzzle === 'code') this.showCodeTutorial();
     else this.showCircuitsTutorial();
   }
 
@@ -2439,7 +2489,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Ajustes: efectos, música (estilo y volumen), vibración (intensidad y prueba). Se guardan al instante. */
   private showSettingsModal(): void {
-    const cardH = 1160 + (this.updates.supported ? 104 : 0);
+    const cardH = 998 + (this.updates.supported ? 104 : 0);
     const { overlay, w } = this.createCard(cardH, 200);
     this.addCardTitle(overlay, w, cardH, t('Ajustes'));
 
@@ -2470,8 +2520,8 @@ export class GameScene extends Phaser.Scene {
     );
     y += 104;
 
-    // Efectos y música en la misma fila. Estilo y volumen de la música solo tienen sentido con la música encendida
-    let setStyleEnabled: (enabled: boolean) => void = () => undefined;
+    // Efectos y música en la misma fila. El volumen de la música solo tiene sentido con la música encendida (los temas no
+    // se eligen: suenan al azar, ver `core/playlist.ts`)
     let setVolumeEnabled: (enabled: boolean) => void = () => undefined;
     const mid = 9;
     this.addToggleRow(
@@ -2498,27 +2548,11 @@ export class GameScene extends Phaser.Scene {
         this.settings.musicEnabled = value;
         storage.saveSettings(this.settings);
         feedback.configure({ music: value });
-        setStyleEnabled(value);
         setVolumeEnabled(value);
       },
       { left: mid + 18, right: w / 2 - 44 }
     );
     y += 84;
-
-    setStyleEnabled = this.addChoiceRow(
-      overlay,
-      w,
-      y,
-      t('Música del menú y de Circuitos'),
-      MUSIC_STYLES.map((style) => ({ value: style, label: t(MUSIC_STYLE_LABELS[style]) })),
-      this.settings.musicStyle,
-      (value) => {
-        this.settings.musicStyle = value as MusicStyle;
-        storage.saveSettings(this.settings);
-        feedback.configure({ musicStyle: this.settings.musicStyle });
-      }
-    );
-    y += 162;
 
     setVolumeEnabled = this.addSliderRow(overlay, w, y, t('Volumen de la música'), {
       min: MUSIC_VOLUME_MIN,
@@ -2535,7 +2569,6 @@ export class GameScene extends Phaser.Scene {
       },
     });
     y += 162;
-    setStyleEnabled(this.settings.musicEnabled);
     setVolumeEnabled(this.settings.musicEnabled);
 
     let setIntensityEnabled: (enabled: boolean) => void = () => undefined;
@@ -2767,6 +2800,8 @@ export class GameScene extends Phaser.Scene {
   /** Genera el nivel y reinicia el estado de la partida (sin tocar la interfaz). */
   private loadLevel(levelIndex: number): void {
     this.dismissToast();
+    // Nivel nuevo: si el tema ya sonó un rato, la música cambia a otro al azar
+    feedback.levelStarted();
     this.currentLevelIndex = levelIndex;
     this.isWon = false;
     this.tapCount = 0;
@@ -2786,6 +2821,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.puzzle === 'flow') {
       this.loadFlowLevel(levelIndex);
+      return;
+    }
+    if (this.puzzle === 'code') {
+      this.loadCodeLevel(levelIndex);
       return;
     }
 
@@ -2879,6 +2918,38 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /** Carga un nivel de Claves: la clave secreta y un tablero «vacío» de una fila (una casilla por cifra). */
+  private loadCodeLevel(levelIndex: number): void {
+    // El reto diario no depende del jugador: misma clave para todos ese día
+    const params = this.isIntro() ? introCodeParams(levelIndex) : codeParamsForTier(this.isDaily ? dailyTier(this.dailyKey) : effectiveTier(this.profile));
+    if (this.codeReplay.level !== levelIndex) this.codeReplay = { level: -1, n: 0 };
+    const replaySalt = Math.imul(this.codeReplay.n, 0x9e3779b1) >>> 0;
+    const seed = this.isDaily ? dailyCodeSeed(this.dailyKey) : (levelSeed((this.progress.seedBase ^ 0x2c1b3c6d) >>> 0, levelIndex) ^ replaySalt) >>> 0;
+    const level = generateCode(params, seed);
+    this.codeLevelData = level;
+    this.codeRows = [];
+    this.codeInput = new Array(params.length).fill(null);
+    this.codeNotes = new Array(10).fill(0);
+    this.codeRevealed = new Array(params.length).fill(false);
+    this.codeNotesMode = false;
+    this.codeUndo = [];
+    this.codeBusy = false;
+    this.currentParams = { width: params.length, height: 1, extraLoops: 0, branchBias: 0 };
+    const grid = [Array.from({ length: params.length }, (_, col) => ({ row: 0, col, baseMask: 0, rotation: 0, isSource: false }))];
+    this.board = { rows: 1, cols: params.length, grid, source: { row: 0, col: 0 } };
+    this.currentLevelData = {
+      seed: level.seed,
+      params: this.currentParams,
+      board: this.board,
+      solutionRotations: [],
+      initialRotations: [],
+      minTaps: level.expectedGuesses,
+      difficulty: 0,
+      branches: 0,
+      cycles: 0,
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Partidas a medias
   // ---------------------------------------------------------------------------
@@ -2907,6 +2978,11 @@ export class GameScene extends Phaser.Scene {
     } else if (this.puzzle === 'lights') {
       game.lights = this.lightGrid.flat();
       game.lastLightsTap = this.lastLightsTap ? [this.lastLightsTap.row, this.lastLightsTap.col] : null;
+    } else if (this.puzzle === 'code') {
+      game.guesses = this.codeRows.map((row) => [...row.guess]);
+      game.notes = [...this.codeNotes];
+      game.revealed = [...this.codeRevealed];
+      game.moves = [];
     } else {
       const keep = Math.min(MAX_SAVED_FLOW_UNDO, this.flowUndo.length);
       game.paths = this.flowState.paths.map((path) => path.map((c) => ({ row: c.row, col: c.col })));
@@ -2951,6 +3027,19 @@ export class GameScene extends Phaser.Scene {
       const lights = saved.lights;
       this.lightGrid = Array.from({ length: height }, (_, r) => lights.slice(r * width, (r + 1) * width));
       this.lastLightsTap = saved.lastLightsTap ? { row: saved.lastLightsTap[0], col: saved.lastLightsTap[1] } : null;
+    } else if (this.puzzle === 'code') {
+      const params = this.codeLevelData.params;
+      let guesses = saved.guesses ?? [];
+      if (!guesses.every((g) => guessProblem(params, g) === null)) return false;
+      const secret = this.codeLevelData.secret;
+      // Si la app se cerró mientras se revelaba el intento ganador, se retoma sin él (se vuelve a escribir y gana)
+      const solvedAt = guesses.findIndex((g) => g.every((d, i) => d === secret[i]));
+      if (solvedAt >= 0) guesses = guesses.slice(0, solvedAt);
+      this.codeRows = guesses.map((guess) => ({ guess: [...guess], score: scoreGuess(secret, guess), marks: params.colors ? markGuess(secret, guess) : undefined }));
+      this.codeNotes = saved.notes ? [...saved.notes] : new Array(10).fill(0);
+      this.codeRevealed = saved.revealed && saved.revealed.length === params.length ? [...saved.revealed] : new Array(params.length).fill(false);
+      moves = [];
+      saved = { ...saved, taps: this.codeRows.length };
     } else {
       const size = this.flowLevelData.params.size;
       const pairs = this.flowLevelData.pairs.length;
@@ -3024,13 +3113,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Sale de la partida a la pantalla de puzzles (la partida a medias se guarda). */
   private goToMenu(): void {
-    if (this.inMenu || this.isWon) return;
+    if (this.inMenu || this.isWon || this.codeBusy) return;
     this.flowDrag = null;
     this.dismissToast();
     this.persistGame();
     this.inMenu = true;
     this.menuScreen = 'play';
-    feedback.setPuzzle(null);
     this.setGameVisible(false);
     this.buildMenu();
   }
@@ -3059,11 +3147,11 @@ export class GameScene extends Phaser.Scene {
       this.buildBoard();
       this.updateFlowVisuals();
     }
-    // Cada puzzle con su música (en el menú suena el estilo elegido)
-    feedback.setPuzzle(puzzle);
     this.checkAndShowTutorial();
     this.maybeShowLightsTutorial();
     this.maybeShowFlowTutorial();
+    this.maybeShowCodeTutorial();
+    this.maybeShowCodeCountsTip();
   }
 
   /** Botón del menú: con contorno, o relleno si es la opción elegida o la principal. */
@@ -3127,6 +3215,7 @@ export class GameScene extends Phaser.Scene {
       circuits: t('Gira y conecta todo'),
       lights: t('Enciende todas las luces'),
       flow: t('Une parejas y llena todo'),
+      code: t('Adivina el número secreto'),
     };
     const dailyDone = lastDailyOf(this.progress, puzzle) === dateKey(new Date());
     const textLeft = left + 150;
@@ -3286,7 +3375,6 @@ export class GameScene extends Phaser.Scene {
     this.savedGames = storage.loadSavedGames(nextMode);
     this.lastSavedJson = JSON.stringify(this.savedGames);
     this.loadPuzzleState(this.puzzle);
-    if (this.inMenu) feedback.setPuzzle(null);
     this.buildUi();
     this.buildBoard();
     this.updateFlowVisuals();
@@ -3315,7 +3403,6 @@ export class GameScene extends Phaser.Scene {
       this.settings.puzzle = puzzle;
       storage.saveSettings(this.settings);
     }
-    feedback.setPuzzle(puzzle);
     this.flowDrag = null;
     const saved = this.savedGames[puzzle];
     // Una partida del reto diario solo se retoma el mismo día
@@ -3415,6 +3502,12 @@ export class GameScene extends Phaser.Scene {
     this.backLightTween?.stop();
     this.backLightTween = null;
     const fx = this.activeFx();
+    this.codeBoard = undefined;
+    if (this.puzzle === 'code') {
+      // Claves no tiene casillas: lista de intentos, el número que se escribe y el teclado
+      this.buildCodeBoard();
+      return;
+    }
     if (fx) {
       const rect = { x: startX - cellSize / 2, y: startY - cellSize / 2, w: cols * cellSize, h: rows * cellSize };
       this.backLightTween = addBackLight(this, this.boardContainer, THEME, rect, fx.backLight, !this.reducedMotion());
@@ -3759,6 +3852,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateFlowVisuals(): void {
+    if (this.puzzle === 'code') {
+      this.codeBoard?.setState(this.codeBoardState());
+      // La música gana capas con las cifras que ya están en su lugar en el mejor intento
+      const best = this.codeRows.reduce((m, row) => Math.max(m, row.score.exact), 0);
+      feedback.setIntensity(best / Math.max(1, this.codeLevelData.params.length));
+      if (this.dirRect) this.renderDirectionButton();
+      return;
+    }
     if (this.puzzle === 'flow') {
       // Con todas las parejas unidas pero casillas vacías (y hay que llenar), esas casillas se señalan
       const missing = isFlowJoinedButNotFull(this.flowState, this.flowLevelData);
@@ -4281,7 +4382,480 @@ export class GameScene extends Phaser.Scene {
     this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Entendido'), finish, true);
   }
 
+  // ---------------------------------------------------------------------------
+  // Claves
+  // ---------------------------------------------------------------------------
+
+  /** Lo que se ve en cada tecla: la nota del jugador manda; si no tiene, lo que se deduce de los intentos. */
+  private codeDisplayNotes(): DigitNote[] {
+    const deduced = deduceNotes(this.codeLevelData.params, this.codeRows);
+    return this.codeNotes.map((n, d) => (n === 1 ? 'in' : n === 2 ? 'out' : deduced[d]));
+  }
+
+  private codeBoardState(): CodeBoardState {
+    const { params, secret } = this.codeLevelData;
+    return {
+      params,
+      rows: this.codeRows,
+      input: this.codeInput,
+      revealed: this.codeRevealed,
+      revealedDigits: secret.map((d, i) => (this.codeRevealed[i] ? d : null)),
+      notes: this.codeDisplayNotes(),
+      notesMode: this.codeNotesMode,
+      maxGuesses: this.codeMaxGuesses(),
+    };
+  }
+
+  /** Límite de intentos: solo en el modo Reto (fuera del reto diario, que es igual para todos). */
+  private codeMaxGuesses(): number | null {
+    return this.profile.mode === 'challenge' && !this.isDaily ? maxGuessesFor(this.codeLevelData.params) : null;
+  }
+
+  /** Dibuja la pantalla de Claves en el tablero. */
+  private buildCodeBoard(): void {
+    const { width, height } = this.cameras.main;
+    const layout = computeCodeLayout(width, height, this.hud.boardTop, this.codeLevelData.params.length);
+    this.codeBoard = new CodeBoard(
+      {
+        scene: this,
+        text: (x, y, text, opts) => this.uiText(x, y, text, opts),
+        reducedMotion: () => this.reducedMotion(),
+        dur: (ms) => this.dur(ms),
+      },
+      this.boardContainer,
+      layout,
+      this.codeBoardState(),
+      { digit: (d) => this.codeDigit(d), erase: () => this.codeErase(), submit: () => this.codeSubmit() },
+      {
+        key: (d) => feedback.codeKey(d),
+        flip: (i) => feedback.codeFlip(i),
+        count: (kind, i) => feedback.codeCount(kind, i),
+        suspense: (step) => feedback.codeSuspense(step),
+      }
+    );
+    this.codeBoard.busy = this.codeBusy;
+  }
+
+  /** ¿Se puede escribir ahora? (no durante una animación, con una tarjeta abierta o en el menú). */
+  private codeCanType(): boolean {
+    return this.puzzle === 'code' && !this.isWon && !this.codeBusy && !this.inMenu && !this.overlayOpen();
+  }
+
+  private codeRefresh(): void {
+    this.codeBoard?.setState(this.codeBoardState());
+    this.updateUndoButtonState();
+  }
+
+  private codePushUndo(): void {
+    this.codeUndo.push({ input: [...this.codeInput], notes: [...this.codeNotes] });
+    if (this.codeUndo.length > 60) this.codeUndo.shift();
+  }
+
+  private codeDigit(digit: number): void {
+    if (!this.codeCanType()) return;
+    const { params, secret } = this.codeLevelData;
+    this.idleSince = this.elapsedTime;
+    if (!digitAllowed(params, digit)) {
+      feedback.denied();
+      this.showToast(t('En este nivel las cifras van del {0} al {1}.', params.low, params.high));
+      return;
+    }
+    if (this.codeNotesMode) {
+      // Anotar: nada → no está (tachada) → está → nada
+      this.codePushUndo();
+      this.codeNotes[digit] = this.codeNotes[digit] === 0 ? 2 : this.codeNotes[digit] === 2 ? 1 : 0;
+      feedback.toggle();
+      this.codeRefresh();
+      return;
+    }
+    const slot = this.codeInput.findIndex((d, i) => d === null && !this.codeRevealed[i]);
+    if (slot < 0) {
+      feedback.denied();
+      this.codeBoard?.say(t('Ya está completo: toca «Probar».'));
+      return;
+    }
+    const used = this.codeInput.some((d) => d === digit) || secret.some((d, i) => this.codeRevealed[i] && d === digit);
+    if (!params.repeats && used) {
+      feedback.denied();
+      this.codeBoard?.say(t('En este nivel no se repiten cifras.'));
+      return;
+    }
+    this.codePushUndo();
+    this.codeInput[slot] = digit;
+    feedback.codeKey(digit);
+    this.codeRefresh();
+  }
+
+  private codeErase(): void {
+    if (!this.codeCanType()) return;
+    let last = -1;
+    this.codeInput.forEach((d, i) => {
+      if (d !== null && !this.codeRevealed[i]) last = i;
+    });
+    if (last < 0) return;
+    this.codePushUndo();
+    this.codeInput[last] = null;
+    feedback.toggle();
+    this.codeRefresh();
+  }
+
+  private codeSubmit(): void {
+    if (!this.codeCanType()) return;
+    const { params, secret } = this.codeLevelData;
+    const guess = this.codeInput.map((d, i) => (this.codeRevealed[i] ? secret[i] : d));
+    const problem = guessProblem(params, guess);
+    if (problem) {
+      feedback.denied();
+      this.codeBoard?.shake();
+      this.codeBoard?.say(problem === 'repeated' ? t('En este nivel no se repiten cifras.') : t('Faltan cifras.'));
+      return;
+    }
+    const digits = guess as number[];
+    const row: CodeRow = { guess: digits, score: scoreGuess(secret, digits), marks: params.colors ? markGuess(secret, digits) : undefined };
+    this.codeRows = [...this.codeRows, row];
+    this.tapCount++;
+    this.idleSince = this.elapsedTime;
+    this.codeInput = new Array(params.length).fill(null);
+    this.codeUndo = [];
+    this.codeBusy = true;
+    this.updateHud();
+    this.updateUndoButtonState();
+    this.updateHintButtonState();
+    this.renderDirectionButton();
+    this.persistGame();
+    const level = this.codeLevelData;
+    const board = this.codeBoard;
+    if (!board) {
+      this.codeAfterReveal(level, row);
+      return;
+    }
+    board.reveal(this.codeBoardState(), () => this.codeAfterReveal(level, row));
+  }
+
+  /** Tras revelar un intento: gana, avisa si va cerca, o (en Reto) se acaban los intentos. */
+  private codeAfterReveal(level: CodeLevel, row: CodeRow): void {
+    if (this.puzzle !== 'code' || this.codeLevelData !== level) return;
+    this.codeBusy = false;
+    if (this.codeBoard) this.codeBoard.busy = false;
+    const length = level.params.length;
+    if (row.score.exact === length) {
+      this.evaluateVictory();
+      return;
+    }
+    this.codeRefresh();
+    this.updateHintButtonState();
+    this.updateFlowVisuals();
+    const max = this.codeMaxGuesses();
+    const left = max === null ? null : max - this.codeRows.length;
+    if (left !== null && left <= 0) {
+      this.showCodeLoss();
+      return;
+    }
+    const found = row.score.exact + row.score.misplaced;
+    if (row.score.exact === length - 1) this.codeBoard?.say(t('¡Casi! Solo falta una.'), 'good');
+    else if (found === 0) this.codeBoard?.say(t('Ninguna está: ya quedaron tachadas.'));
+    else if (left !== null && left <= 2) this.codeBoard?.say(t(left === 1 ? 'Te queda {0} intento.' : 'Te quedan {0} intentos.', left));
+    else if (found >= Math.ceil(length / 2)) this.codeBoard?.say(t('¡Vas bien!'), 'good');
+  }
+
+  /** Modo Reto: se acabaron los intentos. Se enseña la clave y se pasa a otra (cuenta como atasco). */
+  private showCodeLoss(): void {
+    if (this.isWon) return;
+    this.isWon = true; // bloquea el tablero mientras está la tarjeta
+    if (this.timerEvent) this.timerEvent.paused = true;
+    const { updatedProfile } = evaluateAndAdapt(this.profile, {
+      puzzle: 'code',
+      minTaps: this.currentLevelData.minTaps,
+      actualTaps: this.tapCount,
+      elapsedSeconds: this.elapsedTime,
+      hintsUsed: this.hintsUsed,
+      abandoned: true,
+    });
+    if (!this.isIntro()) {
+      this.profile = updatedProfile;
+      storage.saveProfile(this.profile, this.puzzle);
+    }
+    // El siguiente nivel tiene otra clave (repetir esta ya no tendría gracia: se ha visto)
+    this.progress = withLevel(this.progress, this.puzzle, this.currentLevelIndex + 1);
+    storage.saveProgress(this.progress);
+    delete this.savedGames.code;
+    storage.saveSavedGames(this.savedGames, this.profile.mode);
+    this.lastSavedJson = JSON.stringify(this.savedGames);
+    feedback.denied();
+
+    const cardH = 640;
+    const { overlay, w } = this.createCard(cardH, 200);
+    this.addCardTitle(overlay, w, cardH, t('Se acabaron los intentos'));
+    overlay.add(
+      this.uiText(0, -cardH / 2 + 150, t('La clave era'), { size: 28, weight: '500', color: THEME.mutedText, originX: 0.5 })
+    );
+    const secret = this.codeLevelData.secret;
+    const tile = 84;
+    const gap = 12;
+    const startX = -((secret.length - 1) * (tile + gap)) / 2;
+    secret.forEach((digit, i) => {
+      const g = this.add.graphics({ x: startX + i * (tile + gap), y: -cardH / 2 + 250 });
+      g.fillStyle(THEME.primary, 1);
+      g.fillRoundedRect(-tile / 2, -tile / 2, tile, tile, 18);
+      overlay.add([g, this.uiText(startX + i * (tile + gap), -cardH / 2 + 253, String(digit), { size: 46, display: true, color: THEME.onPrimary, originX: 0.5 })]);
+    });
+    const note = this.uiText(0, -cardH / 2 + 350, t('En el modo Reto hay intentos limitados. Prueba con otra clave.'), {
+      size: 26,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+      align: 'center',
+      originX: 0.5,
+    });
+    note.setOrigin(0.5, 0);
+    overlay.add(note);
+    const next = () => {
+      if (!overlay.active) return;
+      overlay.destroy();
+      this.startLevel(this.currentLevelIndex + 1);
+    };
+    overlay.setData('dismiss', next);
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Otra clave'), next, true);
+  }
+
+  /** Panel de Claves: qué intento va (y cuántos hay en Reto), las reglas del nivel y lo cerca que está. */
+  private renderCodePanel(): void {
+    const { w, h } = this.dirRect;
+    const params = this.codeLevelData.params;
+    const best = this.codeRows.reduce((m, row) => Math.max(m, row.score.exact), 0);
+    const fraction = best / Math.max(1, params.length);
+    const next = this.codeRows.length + (this.isWon ? 0 : 1);
+    const max = this.codeMaxGuesses();
+    this.dirPanel.clear();
+    this.dirPanel.fillStyle(mixColors(THEME.surface, THEME.primary, 0.06 + 0.1 * fraction), 1);
+    this.dirPanel.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
+    this.dirPanel.lineStyle(4, THEME.primary, 1);
+    this.dirPanel.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
+    const title = max === null ? t('Intento {0}', next) : t('Intento {0} de {1}', Math.min(next, max), max);
+    this.dirTitle.setText(title).setColor(THEME.primaryCss).setPosition(40, -30);
+    const rules = params.repeats
+      ? t('{0} cifras del {1} al {2}, pueden repetirse', params.length, params.low, params.high)
+      : t('{0} cifras del {1} al {2}, sin repetir', params.length, params.low, params.high);
+    this.dirSub.setText(rules).setPosition(40, 4);
+    this.fitText(this.dirSub, w - 200, 18);
+    this.dirIcon.clear();
+    drawIcon(this.dirIcon, 'code', -w / 2 + 84, 0, 56, fraction > 0 ? THEME.primary : THEME.wireOff, THEME.surface);
+    const barW = 400;
+    const barX = 40 - barW / 2;
+    this.dirIcon.fillStyle(THEME.divider, 1);
+    this.dirIcon.fillRoundedRect(barX, 34, barW, 12, 6);
+    if (fraction > 0) {
+      this.dirIcon.fillStyle(THEME.primary, 1);
+      this.dirIcon.fillRoundedRect(barX, 34, Math.max(12, barW * fraction), 12, 6);
+    }
+  }
+
+  private maybeShowCodeTutorial(): void {
+    if (this.puzzle !== 'code' || this.isDaily) return;
+    if (this.settings.hasSeenCodeTip) return;
+    if (this.overlayOpen()) return;
+    this.showCodeTutorial();
+  }
+
+  /** Tutorial de Claves: cómo se juega (con colores) y qué dicen los dos números. */
+  private showCodeTutorial(page: 1 | 2 = 1): void {
+    const cardH = 1090;
+    const { overlay, w } = this.createCard(cardH, 250);
+    const finish = () => {
+      this.settings.hasSeenCodeTip = true;
+      storage.saveSettings(this.settings);
+      overlay.destroy();
+      this.maybeShowCodeCountsTip();
+    };
+    overlay.setData('dismiss', finish);
+    const host = {
+      scene: this as Phaser.Scene,
+      text: (x: number, y: number, text: string, opts?: TextOptions) => this.uiText(x, y, text, opts),
+      reducedMotion: () => this.reducedMotion(),
+      dur: (ms: number) => this.dur(ms),
+    };
+    // Clave de ejemplo: 3 5 1
+    const secret = [3, 5, 1];
+    const demo = (guess: number[], colors: boolean): CodeRow => ({
+      guess,
+      score: scoreGuess(secret, guess),
+      marks: colors ? markGuess(secret, guess) : undefined,
+    });
+    const rowW = w - 120;
+    const rowX = -rowW / 2;
+    const tile = 72;
+
+    if (page === 1) {
+      this.addCardTitle(overlay, w, cardH, t('Cómo se juega Claves'));
+      const intro = this.uiText(0, -cardH / 2 + 124, t('Hay un número secreto. Tu misión: adivinarlo.'), {
+        size: 28,
+        weight: '500',
+        color: THEME.mutedText,
+        wrap: w - 88,
+        align: 'center',
+        originX: 0.5,
+      });
+      intro.setOrigin(0.5, 0);
+      overlay.add(intro);
+      // Tres intentos que aparecen uno a uno, hasta abrir la clave
+      const guesses = [[1, 2, 3], [3, 1, 4], [3, 5, 1]];
+      const rowsTop = -cardH / 2 + 250;
+      const holder = this.add.container(0, 0);
+      overlay.add(holder);
+      const alive = () => overlay.active;
+      const cycle = () => {
+        if (!alive()) return;
+        holder.removeAll(true);
+        guesses.forEach((guess, i) => {
+          this.time.delayedCall(400 + i * 1000, () => {
+            if (!alive()) return;
+            const view = buildCodeRow(host, holder, rowX, rowsTop + i * 96, rowW, tile, demo(guess, true), i + 1, true);
+            if (!this.reducedMotion()) {
+              view.container.setAlpha(0);
+              this.tweens.add({ targets: view.container, alpha: 1, duration: 220 });
+            }
+            const score = scoreGuess(secret, guess);
+            if (score.exact === secret.length) feedback.winStep(4);
+            else feedback.codeFlip(i);
+          });
+        });
+      };
+      cycle();
+      const timer = this.time.addEvent({ delay: 400 + guesses.length * 1000 + 1800, loop: true, callback: cycle });
+      overlay.once('destroy', () => timer.remove(false));
+
+      const lines = [
+        t('Escribe un número con el teclado y toca «Probar».'),
+        t('Cada cifra se pinta: llena si está en su lugar, con borde si está pero en otro lugar, y gris si no está.'),
+        t('Sigue probando hasta abrir la clave. ¡Con menos intentos ganas más estrellas!'),
+      ];
+      this.addTutorialLines(overlay, w, rowsTop + 3 * 96 + 10, lines, 28, 22);
+      this.addCardButton(
+        overlay,
+        { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 },
+        t('Siguiente'),
+        () => {
+          overlay.destroy();
+          this.showCodeTutorial(2);
+        },
+        true
+      );
+      return;
+    }
+
+    this.addCardTitle(overlay, w, cardH, t('Los dos números'));
+    const intro = this.uiText(0, -cardH / 2 + 124, t('Más adelante las cifras ya no se pintan: solo verás dos números.'), {
+      size: 28,
+      weight: '500',
+      color: THEME.mutedText,
+      wrap: w - 88,
+      align: 'center',
+      originX: 0.5,
+    });
+    intro.setOrigin(0.5, 0);
+    overlay.add(intro);
+    // Leyenda de los dos símbolos
+    let y = -cardH / 2 + 260;
+    const legend = (kind: 'exact' | 'misplaced', label: string) => {
+      const icon = this.add.graphics();
+      drawCountIcon(icon, kind, -w / 2 + 76, y + 18, 20);
+      const text = this.uiText(-w / 2 + 116, y, label, { size: 28, weight: '600', wrap: w - 170 });
+      text.setOrigin(0, 0);
+      overlay.add([icon, text]);
+      y += Math.max(56, text.height + 24);
+    };
+    legend('exact', t('En su lugar: cifras correctas en la posición correcta.'));
+    legend('misplaced', t('En otro lugar: cifras que están, pero en otra posición.'));
+    y += 20;
+    const example = this.uiText(0, y, t('Si la clave es 3 5 1 y pruebas 3 1 4:'), { size: 28, weight: '500', color: THEME.mutedText, originX: 0.5 });
+    example.setOrigin(0.5, 0);
+    overlay.add(example);
+    y += 90;
+    buildCodeRow(host, overlay, rowX, y, rowW, tile, demo([3, 1, 4], false), null, false);
+    y += 70;
+    const caption = this.uiText(0, y, t('El 3 está en su lugar; el 1 está, pero en otro lugar; el 4 no está.'), {
+      size: 26,
+      weight: '600',
+      wrap: w - 100,
+      align: 'center',
+      originX: 0.5,
+    });
+    caption.setOrigin(0.5, 0);
+    overlay.add(caption);
+    this.addTutorialTip(overlay, w, y + caption.height + 50, t('Con «Notas» tachas las cifras que no están. ¿Atascado? La pista te dice una cifra.'));
+    this.addCardButton(overlay, { x: 0, y: cardH / 2 - 84, w: w - 88, h: 100 }, t('Entendido'), finish, true);
+  }
+
+  /** Activa o desactiva las notas (tocar una cifra la anota en vez de escribirla). */
+  private toggleCodeNotes(): void {
+    if (this.isWon) return;
+    this.codeNotesMode = !this.codeNotesMode;
+    feedback.toggle();
+    this.renderCodeNotesSegment();
+    this.codeRefresh();
+    if (this.codeNotesMode) this.codeBoard?.say(t('Toca una cifra para anotarla.'));
+  }
+
+  private renderCodeNotesSegment(): void {
+    if (!this.resetSeg) return;
+    this.setSegment(this.resetSeg, {
+      label: t('Notas'),
+      kind: 'pencil',
+      sub: this.codeNotesMode ? t('activadas') : t('apagadas'),
+      iconColor: this.codeNotesMode ? THEME.accent : THEME.primary,
+      labelColor: THEME.text,
+    });
+  }
+
+  /** Pista de Claves: revela una cifra de la clave en su lugar (queda fija). */
+  private useCodeHint(): void {
+    if (this.codeBusy) return;
+    const level = this.codeLevelData;
+    const position = codeHint(level, this.codeRevealed, this.codeRows);
+    if (position === null) {
+      this.showToast(t('Solo te falta una cifra: ¡tú puedes!'));
+      return;
+    }
+    if (!this.payForHint()) return;
+    const digit = level.secret[position];
+    this.codeRevealed = this.codeRevealed.map((v, i) => v || i === position);
+    // Lo escrito en esa casilla se quita; sin repetidas, esa cifra tampoco puede ir en otra
+    this.codeInput = this.codeInput.map((d, i) => (i === position || (!level.params.repeats && d === digit) ? null : d));
+    this.codeUndo = [];
+    this.updateHud();
+    this.updateHintButtonState();
+    this.codeRefresh();
+    this.codeBoard?.say(t('La cifra {0} es {1}.', position + 1, digit), 'good');
+    this.persistGame();
+  }
+
+  /** Teclado de computadora en Claves: cifras, Retroceso para borrar y Enter para probar. */
+  private codeKeyDown(event: KeyboardEvent): void {
+    if (!this.codeCanType()) return;
+    if (/^[0-9]$/.test(event.key)) this.codeDigit(Number(event.key));
+    else if (event.key === 'Backspace' || event.key === 'Delete') this.codeErase();
+    else if (event.key === 'Enter') this.codeSubmit();
+  }
+
+  /** Desde el peldaño 4 Claves ya no pinta cada cifra: se avisa la primera vez. */
+  private maybeShowCodeCountsTip(): void {
+    if (this.puzzle !== 'code' || this.settings.hasSeenCodeCountsTip || this.codeLevelData.params.colors) return;
+    if (this.overlayOpen()) return;
+    this.settings.hasSeenCodeCountsTip = true;
+    storage.saveSettings(this.settings);
+    this.showToast(t('Desde aquí ya no se pinta cada cifra: solo los dos números. ¡A deducir!'));
+  }
+
   private handleUndo(): void {
+    if (this.puzzle === 'code') {
+      const previous = this.isWon || this.codeBusy ? undefined : this.codeUndo.pop();
+      if (!previous) return;
+      this.codeInput = previous.input;
+      this.codeNotes = previous.notes;
+      feedback.undo(0, 0);
+      this.codeRefresh();
+      return;
+    }
     if (this.isWon || this.moveHistory.length === 0) return;
 
     if (this.puzzle === 'flow') {
@@ -4343,6 +4917,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.puzzle === 'flow') {
       this.useFlowHint();
+      return;
+    }
+    if (this.puzzle === 'code') {
+      this.useCodeHint();
       return;
     }
 
@@ -4418,6 +4996,15 @@ export class GameScene extends Phaser.Scene {
 
   /** Pulso de luz que recorre el tablero desde la fuente. Devuelve su duración total en ms. */
   private playWinPulse(): number {
+    if (this.puzzle === 'code') {
+      // La clave se abre: las cifras se encienden una a una, cada una con su nota y su destello
+      return (
+        this.codeBoard?.celebrate((i, x, y) => {
+          feedback.winStep(i * 2);
+          this.skinFx?.burst(x, y, 1);
+        }) ?? 0
+      );
+    }
     if (this.reducedMotion()) return 0;
 
     const lightsMode = this.puzzle === 'lights' || this.puzzle === 'flow';
@@ -4465,8 +5052,15 @@ export class GameScene extends Phaser.Scene {
 
   private evaluateVictory(): void {
     if (this.isWon) return;
+    const lastCode = this.codeRows[this.codeRows.length - 1];
     const solved =
-      this.puzzle === 'lights' ? isAllLit(this.lightGrid) : this.puzzle === 'flow' ? isFlowComplete(this.flowState, this.flowLevelData) : checkVictory(this.board);
+      this.puzzle === 'lights'
+        ? isAllLit(this.lightGrid)
+        : this.puzzle === 'flow'
+          ? isFlowComplete(this.flowState, this.flowLevelData)
+          : this.puzzle === 'code'
+            ? !!lastCode && lastCode.score.exact === this.codeLevelData.params.length
+            : checkVictory(this.board);
     if (!solved) return;
 
     this.isWon = true;
@@ -4567,7 +5161,11 @@ export class GameScene extends Phaser.Scene {
       { label: t('Tiempo'), value: this.formatTime(this.elapsedTime), color: info.isNewRecord ? THEME.primaryCss : undefined },
     ];
     if (info.isNewRecord) rows.push({ label: t('Récord personal'), value: t('Nuevo'), color: THEME.primaryCss });
-    rows.push({ label: t('Toques'), value: t('{0}  (mínimo {1})', this.tapCount, minTaps) });
+    rows.push(
+      this.puzzle === 'code'
+        ? { label: t('Intentos'), value: t('{0}  (buena marca: {1})', this.tapCount, minTaps) }
+        : { label: t('Toques'), value: t('{0}  (mínimo {1})', this.tapCount, minTaps) }
+    );
     if (this.hintsUsed > 0) rows.push({ label: t('Pistas usadas'), value: String(this.hintsUsed) });
     if (info.difficultyChange) {
       rows.push({
@@ -4618,7 +5216,13 @@ export class GameScene extends Phaser.Scene {
       goNext();
     });
 
-    this.addCardTitle(overlay, w, cardH, this.puzzle === 'lights' ? t('Todo encendido') : this.puzzle === 'flow' ? t('Todo unido') : t('Circuito completo'));
+    const titles: Record<PuzzleType, string> = {
+      circuits: t('Circuito completo'),
+      lights: t('Todo encendido'),
+      flow: t('Todo unido'),
+      code: t('Clave descubierta'),
+    };
+    this.addCardTitle(overlay, w, cardH, titles[this.puzzle]);
     overlay.add(
       this.uiText(0, top + 124, info.isDaily ? t('Reto diario superado') : t('Nivel {0} superado', this.currentLevelIndex), {
         size: 28,
@@ -4657,8 +5261,9 @@ export class GameScene extends Phaser.Scene {
         },
       });
     }
-    const advice = starsAdvice({ stars: info.stars, hintsUsed: this.hintsUsed });
-    const adviceText = this.uiText(0, top + 318, advice ? t(advice) : t('Sin pistas y con pocos toques: perfecto.'), {
+    const advice = starsAdvice({ stars: info.stars, hintsUsed: this.hintsUsed, puzzle: this.puzzle });
+    const perfect = this.puzzle === 'code' ? t('Sin pistas y con pocos intentos: perfecto.') : t('Sin pistas y con pocos toques: perfecto.');
+    const adviceText = this.uiText(0, top + 318, advice ? t(advice) : perfect, {
       size: FONT.small,
       weight: '500',
       color: THEME.mutedText,
@@ -4738,6 +5343,8 @@ export class GameScene extends Phaser.Scene {
       info.isDaily ? t('Repetir el reto') : t('Repetir este nivel'),
       () => {
         overlay.destroy();
+        // En Claves la clave ya se conoce: repetir el nivel trae otra clave de la misma dificultad (salvo el diario)
+        if (this.puzzle === 'code' && !info.isDaily) this.codeReplay = { level: this.currentLevelIndex, n: this.codeReplay.level === this.currentLevelIndex ? this.codeReplay.n + 1 : 1 };
         this.startLevel(this.currentLevelIndex);
       },
       false

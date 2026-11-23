@@ -10,6 +10,8 @@ import {
   computeHudLayout,
   computeBoardGeometry,
   computeHomeLayout,
+  computeCodeLayout,
+  MARGIN as CODE_MARGIN,
   computePlayLayout,
 } from '../src/game/layout';
 
@@ -188,8 +190,10 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
         expect(m.titleY).toBeGreaterThan(bottom(m.backBtn) + 10);
         expect(top(m.cards[0])).toBeGreaterThan(m.titleY + 30);
         expect(top(m.cards[1])).toBeGreaterThanOrEqual(bottom(m.cards[0]));
-        expect(top(m.cards[2])).toBeGreaterThanOrEqual(bottom(m.cards[1]));
-        expect(m.modeLabelY).toBeGreaterThan(bottom(m.cards[2]) + 20);
+        expect(m.cards).toHaveLength(4);
+        for (let i = 1; i < m.cards.length; i++) expect(top(m.cards[i])).toBeGreaterThanOrEqual(bottom(m.cards[i - 1]));
+        for (const card of m.cards) expect(card.h).toBeGreaterThanOrEqual(150);
+        expect(m.modeLabelY).toBeGreaterThan(bottom(m.cards[3]) + 20);
         expect(top(m.modes[0])).toBeGreaterThan(m.modeLabelY + 14);
         expect(m.modeInfoY).toBeGreaterThan(bottom(m.modes[0]) + 20);
         expect(m.modeInfoY + 30).toBeLessThanOrEqual(h);
@@ -197,5 +201,35 @@ describe('Diseño adaptable (src/game/layout.ts)', () => {
         expect(m.modes[1].x).toBe(DESIGN_WIDTH / 2);
       }
     });
+  });
+});
+
+describe('Pantalla de Claves', () => {
+  const overlap = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
+    Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
+  it('teclas grandes, sin encimarse, dentro de la pantalla y con al menos tres filas de intentos', () => {
+    for (const height of [MIN_GAME_HEIGHT, 1440, MAX_GAME_HEIGHT]) {
+      const hud = computeHudLayout(DESIGN_WIDTH);
+      for (const length of [2, 3, 4, 5, 6]) {
+        const l = computeCodeLayout(DESIGN_WIDTH, height, hud.boardTop, length);
+        const keys = [...l.digits, l.erase, l.submit];
+        expect(keys).toHaveLength(12);
+        for (const k of keys) {
+          expect(k.w).toBeGreaterThanOrEqual(88);
+          expect(k.h).toBeGreaterThanOrEqual(88);
+          expect(k.x - k.w / 2).toBeGreaterThanOrEqual(CODE_MARGIN - 0.01);
+          expect(k.x + k.w / 2).toBeLessThanOrEqual(DESIGN_WIDTH - CODE_MARGIN + 0.01);
+          expect(k.y + k.h / 2).toBeLessThanOrEqual(height);
+        }
+        for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) expect(overlap(keys[i], keys[j])).toBe(false);
+        for (const s of l.slots) {
+          expect(s.w).toBeGreaterThanOrEqual(88);
+          for (const k of keys) expect(overlap(s, k)).toBe(false);
+        }
+        expect(l.history.y - l.history.h / 2).toBeGreaterThanOrEqual(hud.boardTop);
+        expect(Math.floor(l.history.h / l.rowH)).toBeGreaterThanOrEqual(3);
+        for (const s of l.slots) expect(s.y - s.h / 2).toBeGreaterThan(l.history.y + l.history.h / 2);
+      }
+    }
   });
 });

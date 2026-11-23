@@ -7,6 +7,7 @@ const profiles = (tier: number): ModeProfiles => ({
   circuits: { ...createDefaultProfile('normal'), currentTier: tier },
   lights: { ...createDefaultProfile('normal'), currentTier: tier + 1 },
   flow: { ...createDefaultProfile('normal'), currentTier: tier + 2 },
+  code: { ...createDefaultProfile('normal'), currentTier: tier },
 });
 
 describe('Cambio de modo', () => {

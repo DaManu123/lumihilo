@@ -1,6 +1,7 @@
 import {
   FLOW_CONNECT_NOTES,
   HINT_NOTES,
+  NOTE_COUNT,
   WIN_CHORD,
   connectNote,
   flowStepNote,
@@ -8,8 +9,7 @@ import {
   winStepNote,
 } from '../core/sound';
 import type { HapticDiagnostics, HapticLevel, HapticMode } from '../core/haptics';
-import { MUSIC_VOLUME_DEFAULT, MusicStyle } from '../core/music';
-import type { PuzzleType } from '../core/puzzles';
+import { MUSIC_VOLUME_DEFAULT } from '../core/music';
 import type { AudioService } from './AudioService';
 import type { HapticService } from './HapticService';
 import { MusicPlayer, NoopMusicPlayer } from './MusicService';
@@ -19,7 +19,6 @@ export interface FeedbackSettings {
   sound: boolean;
   /** Música de fondo. */
   music: boolean;
-  musicStyle: MusicStyle;
   /** Volumen de la música en porcentaje: 100 es el estándar. */
   musicVolume: number;
   haptics: boolean;
@@ -35,7 +34,6 @@ export class FeedbackService {
   private settings: FeedbackSettings = {
     sound: true,
     music: true,
-    musicStyle: 'swing',
     musicVolume: MUSIC_VOLUME_DEFAULT,
     haptics: true,
     hapticsLevel: 'normal',
@@ -54,8 +52,7 @@ export class FeedbackService {
     this.settings = { ...this.settings, ...settings };
     this.haptics.setLevel(this.settings.hapticsLevel);
     this.haptics.setMode(this.settings.hapticsMode);
-    // Estilo y volumen se pasan siempre: la música los aplica al empezar o al instante si ya suena
-    this.music.setStyle(this.settings.musicStyle);
+    // El volumen se pasa siempre: la música lo aplica al empezar o al instante si ya suena
     this.music.setVolume(this.settings.musicVolume);
     // La música se enciende o se apaga al instante, pero solo si ya hubo un gesto del usuario
     if (this.unlocked) {
@@ -114,9 +111,9 @@ export class FeedbackService {
     this.vibrate(() => this.haptics.mediumTap());
   }
 
-  /** Puzzle que se juega (null = menú): Luces e Hilos tienen su propia música; Circuitos y el menú, el estilo elegido. */
-  setPuzzle(puzzle: PuzzleType | null): void {
-    this.music.setPuzzle(puzzle);
+  /** Empieza un nivel: si el tema ya sonó un rato, la música cambia a otro al azar (no se elige: suena al azar). */
+  levelStarted(): void {
+    this.music.levelStarted();
   }
 
   /**
@@ -208,6 +205,34 @@ export class FeedbackService {
   /** Estrella ganada en la tarjeta de resultado: una nota más aguda por cada una. */
   star(index: number): void {
     this.sound(() => this.audio.note(winStepNote(5 + index * 2), { volume: 0.4 }));
+    this.vibrate(() => this.haptics.lightTap());
+  }
+
+  /** Claves: tecla de una cifra (clic suave con la nota de esa cifra). */
+  codeKey(digit: number): void {
+    this.sound(() => this.audio.note(Math.max(0, Math.floor(digit)) % NOTE_COUNT, { volume: 0.32, kind: 'tick' }));
+    this.vibrate(() => this.haptics.lightTap());
+  }
+
+  /** Claves: una cifra del intento se da vuelta; la nota sube con cada una. */
+  codeFlip(index: number): void {
+    this.sound(() => this.audio.note(Math.min(NOTE_COUNT - 1, 1 + index), { volume: 0.3 }));
+  }
+
+  /** Claves: un punto más en un contador. «En su lugar» suena a campanita y vibra más; «en otro lugar», más suave. */
+  codeCount(kind: 'exact' | 'misplaced', index: number): void {
+    if (kind === 'exact') {
+      this.sound(() => this.audio.note(connectNote(2 + index), { volume: 0.5, bright: true }));
+      this.vibrate(() => this.haptics.mediumTap());
+    } else {
+      this.sound(() => this.audio.note(Math.min(NOTE_COUNT - 1, 2 + index), { volume: 0.38 }));
+      this.vibrate(() => this.haptics.lightTap());
+    }
+  }
+
+  /** Claves: redoble antes del último punto cuando va cerca (golpecitos que crecen). */
+  codeSuspense(step: number): void {
+    this.sound(() => this.audio.note(1, { volume: 0.3 + 0.1 * step, kind: 'tick' }));
     this.vibrate(() => this.haptics.lightTap());
   }
 

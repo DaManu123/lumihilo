@@ -34,6 +34,10 @@ export interface SavedGame {
   /** Hilos: el hilo de cada pareja y los estados para deshacer. */
   paths?: FlowCell[][];
   flowUndo?: FlowCell[][][];
+  /** Claves: los intentos hechos, las notas de cada cifra (0 nada, 1 está, 2 no está) y las posiciones reveladas. */
+  guesses?: number[][];
+  notes?: number[];
+  revealed?: boolean[];
 }
 
 export type SavedGames = Partial<Record<PuzzleType, SavedGame>>;
@@ -116,6 +120,16 @@ export function sanitizeSavedGame(puzzle: PuzzleType, raw: unknown): SavedGame |
     const tap = r.lastLightsTap;
     game.lastLightsTap =
       Array.isArray(tap) && tap.length === 2 && int(tap[0]) !== null && int(tap[1]) !== null ? [tap[0] as number, tap[1] as number] : null;
+  } else if (puzzle === 'code') {
+    const digit = (v: unknown) => v === 0 || (int(v, 0) !== null && (v as number) <= 9 && Number.isInteger(v));
+    if (!Array.isArray(r.guesses) || r.guesses.length > 60) return null;
+    if (!r.guesses.every((g) => Array.isArray(g) && g.length === width && g.every(digit))) return null;
+    game.guesses = (r.guesses as number[][]).map((g) => [...g]);
+    game.notes =
+      Array.isArray(r.notes) && r.notes.length === 10 && r.notes.every((n) => n === 0 || n === 1 || n === 2) ? [...(r.notes as number[])] : new Array(10).fill(0);
+    game.revealed =
+      Array.isArray(r.revealed) && r.revealed.length === width && r.revealed.every((v) => typeof v === 'boolean') ? [...(r.revealed as boolean[])] : new Array(width).fill(false);
+    game.moves = [];
   } else {
     const paths = pathsOf(r.paths);
     if (!paths) return null;

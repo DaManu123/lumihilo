@@ -2,6 +2,21 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
+## [Sin publicar]
+
+### Añadido
+- **Cuarto puzzle: Claves.** Hay un número secreto y hay que adivinarlo. Se escribe un número con un teclado grande y, en cada intento, el juego dice cuántas cifras están **en su lugar** (círculo lleno) y cuántas están **en otro lugar** (anillo). Cada intento se revela con emoción: las cifras se dan vuelta una a una con una nota que sube, los contadores se llenan punto a punto y, si falta una sola cifra, el último punto se hace esperar con un redoble. Al acertar, la clave se enciende y se abre.
+- **Más cifras, más difícil** (mínimo 2): los primeros niveles son de 2 cifras del 1 al 4; luego 3 y 4 cifras, y desde el peldaño 6 las cifras pueden repetirse, hasta 6 cifras. En los niveles fáciles (y en todo el modo Relajado) además **se pinta cada cifra**: llena si está en su lugar, con borde si está en otro lugar y gris si no está; más adelante solo quedan los dos números (un aviso lo dice la primera vez).
+- **Teclas que ayudan:** las cifras que seguro no están se tachan solas y las que seguro están llevan un punto. Con **«Notas»** (primer botón de la barra) se tacha o marca cualquier cifra a mano; «Deshacer» deshace lo escrito y las notas.
+- **Pista de Claves:** revela una cifra de la clave en su lugar (queda fija con un candado). Nunca revela la última.
+- **Sin derrota en Relajado y Normal:** solo cambian las estrellas (tres con pocos intentos de más y sin pistas). En **Reto** hay un límite de intentos (el doble de lo que tarda un buen jugador); si se acaban, se enseña la clave y se pasa a otra.
+- Reto diario, récords, partida guardada, tutorial de dos pantallas y teclado de computadora (cifras, Retroceso y Enter) también en Claves. Repetir un nivel de Claves trae otra clave (la anterior ya se conoce).
+- **Cinco temas de música nuevos:** Lo-fi, Marimba, Sintetizador, Nocturno y Chip. Con los cuatro de antes (Swing, Ambiental, la caja de música y la cuerda pulsada) son nueve, todos en la misma escala del juego para que los efectos siempre combinen.
+
+### Cambiado
+- La pantalla de puzzles tiene ahora cuatro tarjetas.
+- **La música suena al azar** en todo el juego: ya no se elige un estilo ni cada puzzle tiene la suya. Cada tema dura de 2 a 3 minutos y luego pasa a otro (sin repetir hasta que suenen todos), siempre al final de una frase y con un fundido suave. Si al empezar un nivel el tema ya sonó un rato, el nivel empieza con música nueva. En Ajustes quedan encender o apagar la música y su volumen.
+
 ## [0.2.0-beta.16] - 2026-11-17
 
 Revisión del juego pensando en quien lo abre por primera vez (un niño, alguien con dos minutos libres, una persona mayor): que se entienda sin leer, que nadie se quede atorado y que ganar se sienta bien.

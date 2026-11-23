@@ -1,4 +1,5 @@
 import type { GameMode } from './adaptive';
+import type { CodeParams } from './code';
 import type { FlowParams } from './flow';
 import type { LightsParams } from './lights';
 import type { PuzzleType } from './puzzles';
@@ -12,6 +13,7 @@ import type { LevelParams } from './types';
  * - **Circuitos:** 3×3 sin bucles, 3×3 con un bucle y 4×4 sin bucles.
  * - **Luces:** 3×3 que se resuelve con 1, 2, 3 y 4 toques, y luego 4×4 con 3 y 5.
  * - **Hilos:** 3×3 con 2 y 3 hilos y 4×4 con 4 (hilos cortos: llenar el tablero sale casi solo).
+ * - **Claves:** dos cifras del 1 al 4, dos del 1 al 6 y tres del 1 al 6, todas con cada cifra marcada.
  *
  * No aplican en el modo Reto (quien lo elige quiere tableros grandes) ni en el reto diario (igual para todos).
  * Estos niveles no mueven la dificultad adaptativa ni los récords de tiempo: son de práctica.
@@ -38,11 +40,18 @@ const FLOW_INTRO: ReadonlyArray<FlowParams> = [
   { size: 4, pairs: 4 },
 ];
 
+const CODE_INTRO: ReadonlyArray<CodeParams> = [
+  { length: 2, low: 1, high: 4, repeats: false, colors: true, expected: 3 },
+  { length: 2, low: 1, high: 6, repeats: false, colors: true, expected: 5 },
+  { length: 3, low: 1, high: 6, repeats: false, colors: true, expected: 4 },
+];
+
 /** Cuántos niveles de entrada tiene cada puzzle. */
 export const INTRO_LEVELS: Record<PuzzleType, number> = {
   circuits: CIRCUITS_INTRO.length,
   lights: LIGHTS_INTRO.length,
   flow: FLOW_INTRO.length,
+  code: CODE_INTRO.length,
 };
 
 export interface IntroContext {
@@ -69,6 +78,10 @@ export function introLightsParams(level: number): LightsParams {
 
 export function introFlowParams(level: number): FlowParams {
   return { ...FLOW_INTRO[Math.max(1, Math.min(FLOW_INTRO.length, level)) - 1] };
+}
+
+export function introCodeParams(level: number): CodeParams {
+  return { ...CODE_INTRO[Math.max(1, Math.min(CODE_INTRO.length, level)) - 1] };
 }
 
 /** Clave del récord de tiempo de los niveles de entrada (aparte de los de cada nivel de habilidad). */

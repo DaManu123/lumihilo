@@ -1,6 +1,7 @@
 import { mulberry32 } from './rng';
 import { noteFrequency } from './sound';
 import { swingBarEvents } from './musicSwing';
+import { chipBarEvents, lofiBarEvents, marimbaBarEvents, nocturneBarEvents, synthBarEvents } from './musicMore';
 
 /**
  * Música generativa del juego (lógica pura, sin Web Audio).
@@ -19,30 +20,34 @@ export const BEATS_PER_BAR = 4;
 export const BEAT_SECONDS = 60 / TEMPO_BPM;
 export const BAR_SECONDS = BEAT_SECONDS * BEATS_PER_BAR;
 
-/** Estilos de música: el ambiental (colchón y arpa de cristal) y el swing (jazz de sala con groove). */
-export type MusicStyle = 'ambient' | 'swing';
+/**
+ * Temas que pueden sonar. Ya no se eligen: suenan al azar en todo el juego (`core/playlist.ts`).
+ * - swing: jazz de sala con groove; ambient: colchón y arpa de cristal; cristal: caja de música; hilo: cuerda pulsada.
+ * - lofi, marimba, synth (sintetizador), nocturne (nocturno) y chip: los de `core/musicMore.ts`.
+ */
+export const MUSIC_TRACKS = ['swing', 'ambient', 'cristal', 'hilo', 'lofi', 'marimba', 'synth', 'nocturne', 'chip'] as const;
 
-export const MUSIC_STYLES: readonly MusicStyle[] = ['swing', 'ambient'];
+export type MusicTrack = (typeof MUSIC_TRACKS)[number];
 
-export const MUSIC_STYLE_LABELS: Record<MusicStyle, string> = {
-  swing: 'Swing',
-  ambient: 'Ambiental',
-};
-
-export function isMusicStyle(value: unknown): value is MusicStyle {
-  return typeof value === 'string' && (MUSIC_STYLES as readonly string[]).includes(value);
+export function isMusicTrack(value: unknown): value is MusicTrack {
+  return typeof value === 'string' && (MUSIC_TRACKS as readonly string[]).includes(value);
 }
 
-/**
- * Pistas que puede sonar: las dos que elige el jugador, la «cristal» (la caja de música propia del puzzle Luces) y la
- * «hilo» (cuerda pulsada, propia del puzzle Hilos). Las dos propias suenan solas en su puzzle, sea cual sea el estilo elegido.
- */
-export type MusicTrack = MusicStyle | 'cristal' | 'hilo';
-
-export const STYLE_TEMPO: Record<MusicTrack, number> = { ambient: TEMPO_BPM, swing: 90, cristal: 66, hilo: 100 };
+/** Tempo de cada tema (pulsos por minuto). */
+export const TRACK_TEMPO: Record<MusicTrack, number> = {
+  ambient: TEMPO_BPM,
+  swing: 90,
+  cristal: 66,
+  hilo: 100,
+  lofi: 72,
+  marimba: 96,
+  synth: 104,
+  nocturne: 60,
+  chip: 112,
+};
 
 export function beatSeconds(style: MusicTrack): number {
-  return 60 / STYLE_TEMPO[style];
+  return 60 / TRACK_TEMPO[style];
 }
 
 export function barSeconds(style: MusicTrack): number {
@@ -68,7 +73,25 @@ export function musicGainScale(percent: number): number {
 /** Grados de la escala: 0 = do, 1 = re, 2 = mi, 3 = sol, 4 = la. */
 export type Degree = 0 | 1 | 2 | 3 | 4;
 
-export type MusicVoice = 'pad' | 'bass' | 'arp' | 'bell' | 'keys' | 'lead' | 'ride' | 'snare' | 'kick' | 'pluck';
+export type MusicVoice =
+  | 'pad'
+  | 'bass'
+  | 'arp'
+  | 'bell'
+  | 'keys'
+  | 'lead'
+  | 'ride'
+  | 'snare'
+  | 'kick'
+  | 'pluck'
+  /** Marimba: madera golpeada, ataque seco y cola corta. */
+  | 'mallet'
+  /** Sintetizador: diente de sierra con un filtro que se cierra. */
+  | 'synth'
+  /** Chip: onda cuadrada suave, como una consola antigua. */
+  | 'chip'
+  /** Platillo cerrado: ruido agudo y cortísimo. */
+  | 'hat';
 
 export interface MusicEvent {
   voice: MusicVoice;
@@ -134,6 +157,11 @@ export function barEvents(bar: number, intensity: number, seed: number, style: M
   if (style === 'swing') return swingBarEvents(bar, intensity, seed);
   if (style === 'cristal') return crystalBarEvents(bar, intensity, seed);
   if (style === 'hilo') return threadBarEvents(bar, intensity, seed);
+  if (style === 'lofi') return lofiBarEvents(bar, intensity, seed, chordAt(bar, seed));
+  if (style === 'marimba') return marimbaBarEvents(bar, intensity, seed, chordAt(bar, seed));
+  if (style === 'synth') return synthBarEvents(bar, intensity, seed, chordAt(bar, seed));
+  if (style === 'nocturne') return nocturneBarEvents(bar, intensity, seed, chordAt(bar, seed));
+  if (style === 'chip') return chipBarEvents(bar, intensity, seed, chordAt(bar, seed));
   return ambientBarEvents(bar, intensity, seed);
 }
 

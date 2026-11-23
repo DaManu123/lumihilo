@@ -3,8 +3,7 @@ import { FeedbackService } from '../src/services/FeedbackService';
 import type { AudioService, NoteOptions } from '../src/services/AudioService';
 import type { HapticService } from '../src/services/HapticService';
 import type { MusicPlayer } from '../src/services/MusicService';
-import type { MusicStyle } from '../src/core/music';
-import type { PuzzleType } from '../src/core/puzzles';
+import type { MusicTrack } from '../src/core/music';
 import type { HapticDiagnostics, HapticLevel, HapticMode } from '../src/core/haptics';
 import { NOTE_COUNT, noteForCell, WIN_CHORD, HINT_NOTES, FLOW_CONNECT_NOTES } from '../src/core/sound';
 
@@ -24,11 +23,12 @@ class FakeMusic implements MusicPlayer {
   stop() { this.log.push('stop'); }
   setIntensity(v: number) { this.intensities.push(v); }
   resolve() { this.log.push('resolve'); }
-  style: MusicStyle | null = null;
   volume: number | null = null;
-  setStyle(style: MusicStyle) { this.style = style; }
-  puzzle: PuzzleType | null = null;
-  setPuzzle(puzzle: PuzzleType) { this.puzzle = puzzle; }
+  levels = 0;
+  levelStarted() { this.levels++; }
+  currentTrack(): MusicTrack | null { return null; }
+  playTrack() {}
+  ageTrack() {}
   setVolume(percent: number) { this.volume = percent; }
 }
 
@@ -114,11 +114,10 @@ describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () =
     expect(haptics.calls).toEqual(['light', 'medium', 'light']);
   });
 
-  it('el puzzle activo se pasa a la música', () => {
-    feedback.setPuzzle('lights');
-    expect(music.puzzle).toBe('lights');
-    feedback.setPuzzle('circuits');
-    expect(music.puzzle).toBe('circuits');
+  it('cada nivel nuevo se avisa a la música (puede cambiar de tema al azar)', () => {
+    feedback.levelStarted();
+    feedback.levelStarted();
+    expect(music.levels).toBe(2);
   });
 
   it('con el sonido apagado, Luces no suena pero sí vibra', () => {
@@ -244,18 +243,15 @@ describe('Sonido y vibración del juego (src/services/FeedbackService.ts)', () =
       expect(music.intensities).toEqual([0.4]);
     });
 
-    it('pasa el estilo y el volumen elegidos a la música', () => {
-      feedback.configure({ musicStyle: 'ambient', musicVolume: 140 });
-      expect(music.style).toBe('ambient');
+    it('pasa el volumen elegido a la música', () => {
+      feedback.configure({ musicVolume: 140 });
       expect(music.volume).toBe(140);
       feedback.configure({ musicVolume: 35 });
       expect(music.volume).toBe(35);
-      expect(music.style).toBe('ambient'); // cambiar el volumen no toca el estilo
     });
 
-    it('el estilo y el volumen llegan a la música aunque todavía no haya habido un gesto del usuario', () => {
-      feedback.configure({ musicStyle: 'swing', musicVolume: 80 });
-      expect(music.style).toBe('swing');
+    it('el volumen llega a la música aunque todavía no haya habido un gesto del usuario', () => {
+      feedback.configure({ musicVolume: 80 });
       expect(music.volume).toBe(80);
       expect(music.log).toEqual([]); // sin gesto no arranca
     });

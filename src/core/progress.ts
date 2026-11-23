@@ -1,5 +1,5 @@
 import { LevelParams } from './types';
-import { DIFFICULTY_TIERS, GameMode, MAX_TIER, MIN_TIER } from './adaptive';
+import { DIFFICULTY_TIERS, GameMode, MAX_TIER, MIN_TIER, createDefaultProfile } from './adaptive';
 import { SkinId, sanitizeUnlockedSkins } from './skins';
 import type { PuzzleType } from './puzzles';
 
@@ -36,6 +36,8 @@ export interface PlayerProgress {
   lightsLevel: number;
   /** Nivel en el que va el jugador en el puzzle Hilos. */
   flowLevel: number;
+  /** Nivel en el que va el jugador en el puzzle Claves. */
+  codeLevel: number;
   sparks: number;
   stats: PlayerStats;
   streak: StreakState;
@@ -45,6 +47,8 @@ export interface PlayerProgress {
   lastLightsDailyCompleted: string | null;
   /** Último día en que se completó el reto diario de Hilos. */
   lastFlowDailyCompleted: string | null;
+  /** Último día en que se completó el reto diario de Claves. */
+  lastCodeDailyCompleted: string | null;
   /** Aspectos comprados (el inicial siempre está disponible y no se guarda). */
   unlockedSkins: SkinId[];
   /**
@@ -63,7 +67,7 @@ export interface ModeSnapshot {
 
 export type ModeProgress = Partial<Record<GameMode, ModeSnapshot>>;
 
-const SNAPSHOT_PUZZLES: readonly PuzzleType[] = ['circuits', 'lights', 'flow'];
+const SNAPSHOT_PUZZLES: readonly PuzzleType[] = ['circuits', 'lights', 'flow', 'code'];
 const SNAPSHOT_MODES: readonly GameMode[] = ['relaxed', 'normal', 'challenge'];
 
 /** Valida lo guardado de cada modo; descarta lo que no tenga forma de modo, nivel y peldaño válidos. */
@@ -76,10 +80,12 @@ export function sanitizeModeProgress(raw: unknown): ModeProgress {
     const levels = (snap as Record<string, unknown>).levels as Record<string, unknown> | undefined;
     const tiers = (snap as Record<string, unknown>).tiers as Record<string, unknown> | undefined;
     if (typeof levels !== 'object' || levels === null || typeof tiers !== 'object' || tiers === null) continue;
-    const clean: ModeSnapshot = { levels: { circuits: 1, lights: 1, flow: 1 }, tiers: { circuits: 1, lights: 1, flow: 1 } };
+    const clean: ModeSnapshot = { levels: { circuits: 1, lights: 1, flow: 1, code: 1 }, tiers: { circuits: 1, lights: 1, flow: 1, code: 1 } };
     for (const puzzle of SNAPSHOT_PUZZLES) {
+      // Un puzzle que no existía cuando se guardó el modo (Claves) empieza en su nivel 1 con el peldaño inicial del modo
+      const fallbackTier = puzzle === 'code' ? createDefaultProfile(mode).currentTier : MIN_TIER;
       clean.levels[puzzle] = toInt(levels[puzzle], 1, 1);
-      clean.tiers[puzzle] = Math.min(MAX_TIER, toInt(tiers[puzzle], MIN_TIER, MIN_TIER));
+      clean.tiers[puzzle] = Math.min(MAX_TIER, toInt(tiers[puzzle], fallbackTier, MIN_TIER));
     }
     out[mode] = clean;
   }
@@ -92,12 +98,14 @@ export function createDefaultProgress(seedBase: number): PlayerProgress {
     currentLevel: 1,
     lightsLevel: 1,
     flowLevel: 1,
+    codeLevel: 1,
     sparks: STARTING_SPARKS,
     stats: { levelsSolved: 0, perfectSolves: 0, dailyCompleted: 0, stars: 0, bestTimeByTier: {} },
     streak: { current: 0, best: 0, lastActiveDate: null },
     lastDailyCompleted: null,
     lastLightsDailyCompleted: null,
     lastFlowDailyCompleted: null,
+    lastCodeDailyCompleted: null,
     unlockedSkins: [],
     modeProgress: {},
   };
@@ -139,6 +147,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
     currentLevel: toInt(r.currentLevel, 1, 1),
     lightsLevel: toInt(r.lightsLevel, 1, 1),
     flowLevel: toInt(r.flowLevel, 1, 1),
+    codeLevel: toInt(r.codeLevel, 1, 1),
     sparks: toInt(r.sparks, STARTING_SPARKS),
     stats: {
       levelsSolved: toInt(stats.levelsSolved, 0),
@@ -155,6 +164,7 @@ export function sanitizeProgress(raw: unknown, fallbackSeedBase: number): Player
     lastDailyCompleted: toDateKey(r.lastDailyCompleted),
     lastLightsDailyCompleted: toDateKey(r.lastLightsDailyCompleted),
     lastFlowDailyCompleted: toDateKey(r.lastFlowDailyCompleted),
+    lastCodeDailyCompleted: toDateKey(r.lastCodeDailyCompleted),
     unlockedSkins: sanitizeUnlockedSkins(r.unlockedSkins),
     modeProgress: sanitizeModeProgress(r.modeProgress),
   };
@@ -324,22 +334,36 @@ export interface LevelOutcome {
 
 /** Último día en que se completó el reto diario de un puzzle. */
 export function lastDailyOf(progress: PlayerProgress, puzzle: PuzzleType): string | null {
-  return puzzle === 'lights' ? progress.lastLightsDailyCompleted : puzzle === 'flow' ? progress.lastFlowDailyCompleted : progress.lastDailyCompleted;
+  if (puzzle === 'lights') return progress.lastLightsDailyCompleted;
+  if (puzzle === 'flow') return progress.lastFlowDailyCompleted;
+  if (puzzle === 'code') return progress.lastCodeDailyCompleted;
+  return progress.lastDailyCompleted;
 }
 
 /** Nivel en el que va el jugador en un puzzle. */
 export function levelOf(progress: PlayerProgress, puzzle: PuzzleType): number {
-  return puzzle === 'lights' ? progress.lightsLevel : puzzle === 'flow' ? progress.flowLevel : progress.currentLevel;
+  if (puzzle === 'lights') return progress.lightsLevel;
+  if (puzzle === 'flow') return progress.flowLevel;
+  if (puzzle === 'code') return progress.codeLevel;
+  return progress.currentLevel;
 }
 
 /** Copia del progreso con el nivel de un puzzle cambiado. */
 export function withLevel(progress: PlayerProgress, puzzle: PuzzleType, level: number): PlayerProgress {
-  return puzzle === 'lights' ? { ...progress, lightsLevel: level } : puzzle === 'flow' ? { ...progress, flowLevel: level } : { ...progress, currentLevel: level };
+  if (puzzle === 'lights') return { ...progress, lightsLevel: level };
+  if (puzzle === 'flow') return { ...progress, flowLevel: level };
+  if (puzzle === 'code') return { ...progress, codeLevel: level };
+  return { ...progress, currentLevel: level };
 }
 
 /** Semilla del reto diario de Hilos (distinta de las de Circuitos y Luces). */
 export function dailyFlowSeed(key: string): number {
   return fnv1a(`puzzle-adaptativo:daily-flow:${key}`);
+}
+
+/** Semilla del reto diario de Claves. */
+export function dailyCodeSeed(key: string): number {
+  return fnv1a(`puzzle-adaptativo:daily-code:${key}`);
 }
 
 /** Aplica el resultado de un nivel resuelto al progreso (estadísticas, Chispas, racha y reto diario). */
@@ -371,6 +395,7 @@ export function applyLevelOutcome(progress: PlayerProgress, outcome: LevelOutcom
     lastDailyCompleted: firstDailyToday && dailyPuzzle === 'circuits' ? outcome.today : progress.lastDailyCompleted,
     lastLightsDailyCompleted: firstDailyToday && dailyPuzzle === 'lights' ? outcome.today : progress.lastLightsDailyCompleted,
     lastFlowDailyCompleted: firstDailyToday && dailyPuzzle === 'flow' ? outcome.today : progress.lastFlowDailyCompleted,
+    lastCodeDailyCompleted: firstDailyToday && dailyPuzzle === 'code' ? outcome.today : progress.lastCodeDailyCompleted,
   };
 }
 

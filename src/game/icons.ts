@@ -22,7 +22,11 @@ export type IconKind =
   | 'help'
   | 'circuits'
   | 'lights'
-  | 'flow';
+  | 'flow'
+  | 'code'
+  | 'pencil'
+  | 'erase'
+  | 'check';
 
 type G = Phaser.GameObjects.Graphics;
 
@@ -277,6 +281,56 @@ export function drawIcon(
       g.strokePath();
       g.fillCircle(cx - s * 0.42, cy, s * 0.11);
       g.fillCircle(cx + s * 0.42, cy, s * 0.11);
+      break;
+    }
+
+    case 'code': {
+      // Candado: arco arriba, cuerpo y ojo de la cerradura
+      g.beginPath();
+      g.arc(cx, cy - s * 0.1, s * 0.22, Math.PI, 0, false);
+      g.strokePath();
+      g.lineBetween(cx - s * 0.22, cy - s * 0.1, cx - s * 0.22, cy);
+      g.lineBetween(cx + s * 0.22, cy - s * 0.1, cx + s * 0.22, cy);
+      g.fillRoundedRect(cx - s * 0.36, cy - s * 0.02, s * 0.72, s * 0.5, s * 0.08);
+      g.fillStyle(cut, 1);
+      g.fillCircle(cx, cy + s * 0.18, s * 0.07);
+      g.fillRect(cx - s * 0.03, cy + s * 0.2, s * 0.06, s * 0.14);
+      break;
+    }
+
+    case 'pencil': {
+      // Lápiz en diagonal: cuerpo, punta y una raya debajo
+      const ax = cx - s * 0.3;
+      const ay = cy + s * 0.3;
+      g.lineStyle(Math.max(4, s * 0.16), color, 1);
+      g.lineBetween(ax + s * 0.14, ay - s * 0.14, cx + s * 0.34, cy - s * 0.34);
+      g.fillTriangle(ax, ay, ax + s * 0.2, ay - s * 0.06, ax + s * 0.06, ay - s * 0.2);
+      break;
+    }
+
+    case 'erase': {
+      // Tecla de borrar: flecha hacia la izquierda con una equis
+      g.lineStyle(lw, color, 1);
+      g.beginPath();
+      g.moveTo(cx - s * 0.48, cy);
+      g.lineTo(cx - s * 0.22, cy - s * 0.28);
+      g.lineTo(cx + s * 0.46, cy - s * 0.28);
+      g.lineTo(cx + s * 0.46, cy + s * 0.28);
+      g.lineTo(cx - s * 0.22, cy + s * 0.28);
+      g.closePath();
+      g.strokePath();
+      g.lineBetween(cx - s * 0.02, cy - s * 0.12, cx + s * 0.22, cy + s * 0.12);
+      g.lineBetween(cx + s * 0.22, cy - s * 0.12, cx - s * 0.02, cy + s * 0.12);
+      break;
+    }
+
+    case 'check': {
+      g.lineStyle(Math.max(4, s * 0.16), color, 1);
+      g.beginPath();
+      g.moveTo(cx - s * 0.38, cy + s * 0.02);
+      g.lineTo(cx - s * 0.1, cy + s * 0.3);
+      g.lineTo(cx + s * 0.4, cy - s * 0.3);
+      g.strokePath();
       break;
     }
 
