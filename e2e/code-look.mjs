@@ -15,7 +15,7 @@ const secretOf = (g) => g.page.evaluate(() => window.__game.scene.getScene('Game
 
 try {
   await launch();
-  // Primera vez: tutorial y primer nivel (2 cifras del 1 al 4)
+  // Primera vez: tutorial y primer nivel (2 cifras del 0 al 9)
   let g = await openGame({ label: 'claves', out, menu: true, query: '?debug', seed: { user_settings: { ...seen } } });
   await g.toPlayScreen();
   await g.shot('c01-puzzles');
@@ -28,7 +28,7 @@ try {
   await g.tap(360, g.dims.h / 2 + 1090 / 2 - 84, 900);
   await g.shot('c04-nivel-1');
   const secret = await secretOf(g);
-  const wrong = secret.map((d) => (d % 4) + 1).reverse();
+  const wrong = [...secret].reverse(); // las dos cifras cambiadas de lugar: 2 aciertos, 0 posiciones
   await typeGuess(g, wrong);
   await g.shot('c05-escrito');
   await g.tap(...await g.codeKey('submit'), 350);

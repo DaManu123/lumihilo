@@ -13,7 +13,7 @@ import type { LevelParams } from './types';
  * - **Circuitos:** 3×3 sin bucles, 3×3 con un bucle y 4×4 sin bucles.
  * - **Luces:** 3×3 que se resuelve con 1, 2, 3 y 4 toques, y luego 4×4 con 3 y 5.
  * - **Hilos:** 3×3 con 2 y 3 hilos y 4×4 con 4 (hilos cortos: llenar el tablero sale casi solo).
- * - **Claves:** dos cifras del 1 al 4, dos del 1 al 6 y tres del 1 al 6, todas con cada cifra marcada.
+ * - **Claves:** dos niveles de dos cifras y uno de tres (siempre del 0 al 9), todos con cada cifra marcada.
  *
  * No aplican en el modo Reto (quien lo elige quiere tableros grandes) ni en el reto diario (igual para todos).
  * Estos niveles no mueven la dificultad adaptativa ni los récords de tiempo: son de práctica.
@@ -41,9 +41,9 @@ const FLOW_INTRO: ReadonlyArray<FlowParams> = [
 ];
 
 const CODE_INTRO: ReadonlyArray<CodeParams> = [
-  { length: 2, low: 1, high: 4, repeats: false, colors: true, expected: 3 },
-  { length: 2, low: 1, high: 6, repeats: false, colors: true, expected: 5 },
-  { length: 3, low: 1, high: 6, repeats: false, colors: true, expected: 4 },
+  { length: 2, low: 0, high: 9, repeats: false, colors: true, expected: 6 },
+  { length: 2, low: 0, high: 9, repeats: false, colors: true, expected: 6 },
+  { length: 3, low: 0, high: 9, repeats: false, colors: true, expected: 6 },
 ];
 
 /** Cuántos niveles de entrada tiene cada puzzle. */

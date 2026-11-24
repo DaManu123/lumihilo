@@ -12,6 +12,7 @@ import {
   computeHomeLayout,
   computeCodeLayout,
   codeKeypadDigits,
+  CODE_HEADER_H,
   MARGIN as CODE_MARGIN,
   computePlayLayout,
 } from '../src/game/layout';
@@ -240,11 +241,12 @@ describe('Pantalla de Claves', () => {
             expect(s.w).toBeGreaterThanOrEqual(88);
             for (const k of keys) expect(overlap(s, k)).toBe(false);
           }
-          expect(l.history.y - l.history.h / 2).toBeGreaterThanOrEqual(hud.boardTop);
+          expect(l.headerY - CODE_HEADER_H / 2).toBeGreaterThanOrEqual(hud.boardTop);
           expect(Math.floor(l.history.h / l.rowH)).toBeGreaterThanOrEqual(3);
           for (const s of l.slots) expect(s.y - s.h / 2).toBeGreaterThan(l.history.y + l.history.h / 2);
           // El bloque (lista, casillas y teclado) queda centrado en el espacio libre, no pegado abajo
-          const blockTop = l.history.y - l.history.h / 2;
+          const blockTop = l.headerY - CODE_HEADER_H / 2;
+          expect(l.headerY + CODE_HEADER_H / 2).toBeLessThanOrEqual(l.history.y - l.history.h / 2 + 0.01);
           const blockBottom = Math.max(...keys.map((k) => k.y + k.h / 2));
           expect(Math.abs(blockTop - hud.boardTop - (height - 24 - blockBottom))).toBeLessThan(1);
         }

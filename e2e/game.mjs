@@ -1473,21 +1473,18 @@ export async function runGameScenarios(out) {
     tx = await texts(g);
     check('la primera vez sale el tutorial de Claves', tx.includes('Cómo se juega Claves'), tx.slice(0, 200));
     await g.tap(...g.pos.flowTutorialOk, 700);
-    check('su segunda pantalla explica los dos números', (await texts(g)).includes('Los dos números'));
+    check('su segunda pantalla explica aciertos y posiciones', (await texts(g)).includes('Aciertos y posiciones'));
     await g.tap(...g.pos.tutorialDone, 600);
     check('el tutorial queda visto', (await g.state()).settings?.hasSeenCodeTip === true);
     let st = await sc(g, code);
     tx = await texts(g);
-    check('el primer nivel: 2 cifras del 1 al 4, sin repetir y con colores', st.params.length === 2 && st.params.low === 1 && st.params.high === 4 && !st.params.repeats && st.params.colors, JSON.stringify(st.params));
-    check('el panel dice el intento y las reglas', tx.includes('Intento 1') && tx.includes('2 cifras del 1 al 4, sin repetir'), tx.slice(0, 400));
+    check('el primer nivel: 2 cifras del 0 al 9, sin repetir y con colores', st.params.length === 2 && st.params.low === 0 && st.params.high === 9 && !st.params.repeats && st.params.colors, JSON.stringify(st.params));
+    check('el panel dice el intento y las reglas', tx.includes('Intento 1') && tx.includes('2 cifras del 0 al 9, sin repetir'), tx.slice(0, 400));
     check('el primer botón de la barra son las «Notas»', tx.includes('Notas'));
 
     // Cifras no permitidas, repetidas, borrar e intento incompleto
-    check('el teclado solo tiene las cifras del nivel (1 a 4: cuatro teclas, ninguna bloqueada)', JSON.stringify(await sc(g, 'sc.codeBoard.layout.digits.map((r, d) => r ? d : null).filter((d) => d !== null)')) === '[1,2,3,4]');
-    await g.page.keyboard.press('7');
-    await g.page.waitForTimeout(300);
-    st = await sc(g, code);
-    check('una cifra fuera del rango (teclado de la computadora) no se escribe', st.input.every((d) => d === null), JSON.stringify(st.input));
+    check('el teclado tiene las diez cifras, del 1 al 0', JSON.stringify(await sc(g, 'sc.codeBoard.layout.digits.map((r, d) => r ? d : null).filter((d) => d !== null)')) === '[0,1,2,3,4,5,6,7,8,9]');
+    check('la tabla tiene sus columnas: Número, Aciertos y Posiciones', tx.includes('Número') && tx.includes('Aciertos') && tx.includes('Posiciones'));
     await type(g, [1, 1]);
     st = await sc(g, code);
     check('sin repetidas: la segunda cifra igual no se escribe', st.input[0] === 1 && st.input[1] === null, JSON.stringify(st.input));

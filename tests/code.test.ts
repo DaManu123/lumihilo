@@ -96,6 +96,10 @@ describe('Claves: niveles', () => {
     expect(tiers[9].length).toBe(6);
   });
 
+  it('todos los niveles usan las diez cifras (el teclado siempre tiene del 1 al 0)', () => {
+    for (const params of [...intro, ...tiers]) expect([params.low, params.high]).toEqual([0, 9]);
+  });
+
   it('los tres primeros peldaños (los de Relajado) y los niveles de entrada marcan cada cifra; los demás no', () => {
     expect(tiers.slice(0, 3).every((p) => p.colors)).toBe(true);
     expect(tiers.slice(3).every((p) => !p.colors)).toBe(true);
