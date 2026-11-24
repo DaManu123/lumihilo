@@ -2,7 +2,7 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
-## [Sin publicar]
+## [0.2.0-beta.19] - 2026-11-23
 
 ### Cambiado
 - **Claves, intentos en una tabla:** debajo del panel hay una tabla con encabezado «#», «Número», «Aciertos» y «Posiciones», y cada intento queda como una fila más hacia abajo. **Aciertos** = cuántas cifras de tu número están en la clave; **posiciones** = cuántas de esas están además en su lugar. Al probar, primero cuentan los aciertos y luego las posiciones (la última se hace esperar si vas cerca). El tutorial lo explica con la misma tabla.
