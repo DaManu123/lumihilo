@@ -11,6 +11,7 @@ import {
   computeBoardGeometry,
   computeHomeLayout,
   computeCodeLayout,
+  codeKeypadDigits,
   MARGIN as CODE_MARGIN,
   computePlayLayout,
 } from '../src/game/layout';
@@ -211,24 +212,42 @@ describe('Pantalla de Claves', () => {
     for (const height of [MIN_GAME_HEIGHT, 1440, MAX_GAME_HEIGHT]) {
       const hud = computeHudLayout(DESIGN_WIDTH);
       for (const length of [2, 3, 4, 5, 6]) {
-        const l = computeCodeLayout(DESIGN_WIDTH, height, hud.boardTop, length);
-        const keys = [...l.digits, l.erase, l.submit];
-        expect(keys).toHaveLength(12);
-        for (const k of keys) {
-          expect(k.w).toBeGreaterThanOrEqual(88);
-          expect(k.h).toBeGreaterThanOrEqual(88);
-          expect(k.x - k.w / 2).toBeGreaterThanOrEqual(CODE_MARGIN - 0.01);
-          expect(k.x + k.w / 2).toBeLessThanOrEqual(DESIGN_WIDTH - CODE_MARGIN + 0.01);
-          expect(k.y + k.h / 2).toBeLessThanOrEqual(height);
+        for (const [low, high] of [[1, 4], [1, 6], [1, 7], [1, 8], [0, 9]]) {
+          const l = computeCodeLayout(DESIGN_WIDTH, height, hud.boardTop, length, low, high);
+          // Solo hay tecla para las cifras del nivel
+          const digitKeys = l.digits.filter((k): k is NonNullable<typeof k> => k !== null);
+          expect(digitKeys).toHaveLength(high - low + 1);
+          for (let d = 0; d <= 9; d++) expect(l.digits[d] !== null).toBe(d >= low && d <= high);
+          expect(codeKeypadDigits(low, high)).toHaveLength(high - low + 1);
+          const keys = [...digitKeys, l.erase, l.submit];
+          for (const k of keys) {
+            expect(k.w).toBeGreaterThanOrEqual(88);
+            expect(k.h).toBeGreaterThanOrEqual(88);
+            expect(k.x - k.w / 2).toBeGreaterThanOrEqual(CODE_MARGIN - 0.01);
+            expect(k.x + k.w / 2).toBeLessThanOrEqual(DESIGN_WIDTH - CODE_MARGIN + 0.01);
+            expect(k.y + k.h / 2).toBeLessThanOrEqual(height);
+          }
+          for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) expect(overlap(keys[i], keys[j])).toBe(false);
+          // Cada fila de teclas está centrada en la pantalla
+          const rows = new Map<number, typeof digitKeys>();
+          for (const k of digitKeys) rows.set(k.y, [...(rows.get(k.y) ?? []), k]);
+          for (const row of rows.values()) {
+            const left = Math.min(...row.map((k) => k.x - k.w / 2));
+            const right = Math.max(...row.map((k) => k.x + k.w / 2));
+            expect((left + right) / 2).toBeCloseTo(DESIGN_WIDTH / 2, 3);
+          }
+          for (const s of l.slots) {
+            expect(s.w).toBeGreaterThanOrEqual(88);
+            for (const k of keys) expect(overlap(s, k)).toBe(false);
+          }
+          expect(l.history.y - l.history.h / 2).toBeGreaterThanOrEqual(hud.boardTop);
+          expect(Math.floor(l.history.h / l.rowH)).toBeGreaterThanOrEqual(3);
+          for (const s of l.slots) expect(s.y - s.h / 2).toBeGreaterThan(l.history.y + l.history.h / 2);
+          // El bloque (lista, casillas y teclado) queda centrado en el espacio libre, no pegado abajo
+          const blockTop = l.history.y - l.history.h / 2;
+          const blockBottom = Math.max(...keys.map((k) => k.y + k.h / 2));
+          expect(Math.abs(blockTop - hud.boardTop - (height - 24 - blockBottom))).toBeLessThan(1);
         }
-        for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) expect(overlap(keys[i], keys[j])).toBe(false);
-        for (const s of l.slots) {
-          expect(s.w).toBeGreaterThanOrEqual(88);
-          for (const k of keys) expect(overlap(s, k)).toBe(false);
-        }
-        expect(l.history.y - l.history.h / 2).toBeGreaterThanOrEqual(hud.boardTop);
-        expect(Math.floor(l.history.h / l.rowH)).toBeGreaterThanOrEqual(3);
-        for (const s of l.slots) expect(s.y - s.h / 2).toBeGreaterThan(l.history.y + l.history.h / 2);
       }
     }
   });

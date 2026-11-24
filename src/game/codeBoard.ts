@@ -137,7 +137,7 @@ export function paintTile(g: Phaser.GameObjects.Graphics, size: number, mark: Di
   }
 }
 
-type KeyLook = 'normal' | 'out' | 'in' | 'disabled' | 'primary' | 'notes';
+type KeyLook = 'normal' | 'in' | 'primary' | 'notes';
 
 /** Fondo de una tecla, centrado en (0, 0). */
 function paintKey(g: Phaser.GameObjects.Graphics, w: number, h: number, look: KeyLook): void {
@@ -148,20 +148,27 @@ function paintKey(g: Phaser.GameObjects.Graphics, w: number, h: number, look: Ke
     g.fillRoundedRect(left, top, w, h, 22);
     return;
   }
-  const fill = look === 'disabled' ? mixColors(THEME.surface, THEME.background, 0.7) : look === 'out' ? mixColors(THEME.surface, THEME.background, 0.55) : THEME.surface;
-  g.fillStyle(fill, 1);
+  // Todas las teclas se ven igual de vivas: anotar una cifra no la bloquea (se puede seguir escribiendo)
+  g.fillStyle(THEME.surface, 1);
   g.fillRoundedRect(left, top, w, h, 22);
-  if (look === 'disabled') return;
   const border = look === 'in' ? THEME.primary : look === 'notes' ? THEME.accent : THEME.cardBorder;
   g.lineStyle(look === 'in' || look === 'notes' ? 4 : 2, border, 1);
   g.strokeRoundedRect(left + 1, top + 1, w - 2, h - 2, 22);
 }
 
-/** Lo que va encima de una tecla: tachada, punto de «está» y el lápiz del modo notas. Centrado en (0, 0). */
+/**
+ * Lo que va encima de una tecla, en la esquina y sin tapar la cifra: una equis pequeña si ya se sabe que no está, un punto
+ * si se sabe que está, y el lápiz del modo notas. Centrado en (0, 0).
+ */
 function paintKeyMark(g: Phaser.GameObjects.Graphics, w: number, h: number, note: DigitNote, notes: boolean): void {
   if (note === 'out') {
-    g.lineStyle(5, THEME.wireOff, 1);
-    g.lineBetween(-w * 0.26, h * 0.26, w * 0.26, -h * 0.26);
+    const cx = w / 2 - 18;
+    const cy = -h / 2 + 18;
+    g.fillStyle(THEME.background, 1);
+    g.fillCircle(cx, cy, 12);
+    g.lineStyle(3, THEME.wireOff, 1);
+    g.lineBetween(cx - 5, cy - 5, cx + 5, cy + 5);
+    g.lineBetween(cx - 5, cy + 5, cx + 5, cy - 5);
   } else if (note === 'in') {
     g.fillStyle(THEME.primary, 1);
     g.fillCircle(w / 2 - 16, -h / 2 + 16, 8);
@@ -198,6 +205,8 @@ const digitColor = (mark: DigitMark | 'plain' | 'win'): string =>
 /** Lo que se dibuja de una fila de la lista, para poder animarla. */
 interface RowView {
   container: Phaser.GameObjects.Container;
+  /** Franja de fondo de la fila. */
+  bg: Phaser.GameObjects.Image;
   tiles: Array<{ box: Phaser.GameObjects.Container; img: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text }>;
   exact: { icon: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text };
   misplaced: { icon: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text };
@@ -216,17 +225,35 @@ export function buildCodeRow(
   tile: number,
   row: CodeRow,
   index: number | null,
-  colors: boolean
+  colors: boolean,
+  /**
+   * Dónde poner la franja de fondo (por defecto, en la fila). La lista del juego las junta todas en una capa aparte: así se
+   * dibujan seguidas con la misma textura, en un solo lote, en vez de cambiar de textura en cada fila (~2 ms por fotograma).
+   */
+  bgParent?: Phaser.GameObjects.Container
 ): RowView {
   const scene = host.scene;
   const container = scene.add.container(0, y);
   parent.add(container);
-  let left = x;
-  if (index !== null) {
-    container.add(host.text(x + 4, 0, String(index), { size: FONT.small, display: true, weight: '500', color: THEME.mutedText }));
-    left = x + 56;
-  }
+  // Fila centrada: número de intento, cifras y contadores juntos, sobre una franja suave
   const gap = Math.round(tile * 0.14);
+  const indexW = index !== null ? 52 : 0;
+  const tilesW = row.guess.length * tile + (row.guess.length - 1) * gap;
+  const countersW = 2 * 96 - 20;
+  const contentW = indexW + tilesW + 36 + countersW;
+  const start = x + Math.max(0, (w - contentW) / 2);
+  const bgW = Math.min(w, contentW + 36);
+  const bgH = tile + 12;
+  const bg = scene.add.image(x + w / 2, bgParent ? y : 0, bakeTexture(scene, `rowbg|${Math.round(bgW)}x${bgH}`, Math.round(bgW), bgH, (g) => {
+    g.fillStyle(THEME.surface, 0.55);
+    g.fillRoundedRect(-bgW / 2, -bgH / 2, bgW, bgH, 18);
+  }));
+  (bgParent ?? container).add(bg);
+  let left = start;
+  if (index !== null) {
+    container.add(host.text(start + indexW / 2 - 6, 2, String(index), { size: FONT.small, display: true, weight: '500', color: THEME.mutedText, originX: 0.5 }));
+    left = start + indexW;
+  }
   const tiles = row.guess.map((digit, i) => {
     const box = scene.add.container(left + tile / 2 + i * (tile + gap), 0);
     const mark = colors && row.marks ? row.marks[i] : 'plain';
@@ -237,7 +264,7 @@ export function buildCodeRow(
     return { box, img, text };
   });
   // Contadores a la derecha: «● 2   ○ 1»
-  const right = x + w;
+  const right = start + contentW + 10;
   const groupW = 96;
   const counter = (kind: 'exact' | 'misplaced', cx: number, value: number) => {
     const icon = scene.add.image(cx - 22, 0, countTexture(scene, kind, 16));
@@ -247,13 +274,15 @@ export function buildCodeRow(
   };
   const exact = counter('exact', right - groupW * 2 + 30, row.score.exact);
   const misplaced = counter('misplaced', right - groupW + 30, row.score.misplaced);
-  return { container, tiles, exact, misplaced };
+  return { container, bg, tiles, exact, misplaced };
 }
 
 export class CodeBoard {
   private readonly scene: Phaser.Scene;
   private readonly root: Phaser.GameObjects.Container;
   private readonly list: Phaser.GameObjects.Container;
+  /** Fondos de las filas (debajo de la lista, en un solo lote). */
+  private readonly bgList: Phaser.GameObjects.Container;
   private rowViews: RowView[] = [];
   private slotViews: Array<{ img: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text; lock: Phaser.GameObjects.Image }> = [];
   private keyViews: Array<{ rect: Rect; img: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text; mark: Phaser.GameObjects.Image }> = [];
@@ -282,6 +311,7 @@ export class CodeBoard {
     // zona se ocultan, que en WebGL sale mucho más barato que recortar con el búfer de plantilla
     const h = layout.history;
     this.list = this.scene.add.container(0, 0);
+    this.bgList = this.scene.add.container(0, 0);
     const zone = this.scene.add.zone(h.x, h.y, h.w, h.h).setInteractive();
     zone.on('pointerdown', (p: Phaser.Input.Pointer) => (this.dragFrom = { y: p.y, scroll: this.scroll }));
     zone.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -291,7 +321,7 @@ export class CodeBoard {
     zone.on('pointerup', () => (this.dragFrom = null));
     zone.on('pointerout', () => (this.dragFrom = null));
     zone.on('wheel', (_p: Phaser.Input.Pointer, _dx: number, dy: number) => this.setScroll(this.scroll - dy));
-    this.root.add([zone, this.list]);
+    this.root.add([zone, this.bgList, this.list]);
 
     this.buildSlots();
     this.buildKeys();
@@ -343,6 +373,7 @@ export class CodeBoard {
     };
     for (let d = 0; d <= 9; d++) {
       const rect = this.layout.digits[d];
+      if (!rect) continue; // la cifra no se usa en este nivel: no tiene tecla
       const img = this.scene.add.image(rect.x, rect.y, '__DEFAULT');
       const mark = this.scene.add.image(rect.x, rect.y, '__DEFAULT').setVisible(false);
       const text = this.host.text(rect.x, rect.y + 2, String(d), { size: 40, display: true, originX: 0.5 });
@@ -352,9 +383,11 @@ export class CodeBoard {
     const erase = this.layout.erase;
     const eraseKey = bakeTexture(this.scene, `erase|${erase.w}x${erase.h}`, erase.w, erase.h, (g) => {
       paintKey(g, erase.w, erase.h, 'normal');
-      drawIcon(g, 'erase', 0, 0, 46, cssToNumber(THEME.text), THEME.surface);
+      drawIcon(g, 'erase', -erase.w / 2 + 46, 0, 40, cssToNumber(THEME.text), THEME.surface);
     });
-    this.root.add([this.scene.add.image(erase.x, erase.y, eraseKey), add(erase, () => this.events.erase())]);
+    const et = this.host.text(erase.x + 22, erase.y, t('Borrar'), { size: FONT.button, weight: '700', originX: 0.5 });
+    if (et.width > erase.w - 90) et.setScale((erase.w - 90) / et.width);
+    this.root.add([this.scene.add.image(erase.x, erase.y, eraseKey), et, add(erase, () => this.events.erase())]);
 
     const submit = this.layout.submit;
     const sImg = this.scene.add.image(submit.x, submit.y, '__DEFAULT');
@@ -371,6 +404,7 @@ export class CodeBoard {
 
   private rebuildRows(): void {
     this.list.removeAll(true);
+    this.bgList.removeAll(true);
     this.rowViews = [];
     const h = this.layout.history;
     const { rows, params } = this.state;
@@ -378,7 +412,7 @@ export class CodeBoard {
     this.maxScroll = Math.max(0, contentH - h.h);
     rows.forEach((row, i) => {
       const y = this.rowY(i);
-      this.rowViews.push(buildCodeRow(this.host, this.list, h.x - h.w / 2, y, h.w, this.layout.tile, row, i + 1, params.colors));
+      this.rowViews.push(buildCodeRow(this.host, this.list, h.x - h.w / 2, y, h.w, this.layout.tile, row, i + 1, params.colors, this.bgList));
     });
     // Sin intentos: qué hacer y qué significa cada símbolo
     this.emptyHelp?.destroy();
@@ -387,12 +421,14 @@ export class CodeBoard {
     this.setScroll(-this.maxScroll);
   }
 
-  /** Y de la fila `i` sin desplazar: la última queda abajo del todo de la lista. */
+  /**
+   * Y de la fila `i` sin desplazar. Si caben todas, van centradas en la zona de la lista (con pocos intentos no quedan
+   * pegadas a las casillas con un hueco vacío encima); si no, la última queda abajo del todo.
+   */
   private rowY(i: number): number {
     const h = this.layout.history;
     const contentH = this.state.rows.length * this.layout.rowH;
-    const bottom = h.y + h.h / 2;
-    const top = contentH <= h.h ? bottom - contentH : h.y - h.h / 2;
+    const top = contentH <= h.h ? h.y - contentH / 2 : h.y - h.h / 2;
     return top + this.layout.rowH * i + this.layout.rowH / 2;
   }
 
@@ -400,6 +436,7 @@ export class CodeBoard {
     // El desplazamiento va de -maxScroll (lo más nuevo a la vista) a 0 (el primer intento)
     this.scroll = Math.max(-this.maxScroll, Math.min(0, value));
     this.list.y = this.scroll;
+    this.bgList.y = this.scroll;
     // Solo se ven las filas que caben enteras en la zona de la lista
     const h = this.layout.history;
     const top = h.y - h.h / 2 - 1;
@@ -407,7 +444,9 @@ export class CodeBoard {
     const half = this.layout.rowH / 2;
     for (const view of this.rowViews) {
       const y = view.container.y + this.scroll;
-      view.container.setVisible(y - half >= top - half * 0.2 && y + half <= bottom + half * 0.2);
+      const visible = y - half >= top - half * 0.2 && y + half <= bottom + half * 0.2;
+      view.container.setVisible(visible);
+      view.bg.setVisible(visible);
     }
   }
 
@@ -463,12 +502,13 @@ export class CodeBoard {
 
     for (let d = 0; d <= 9; d++) {
       const view = this.keyViews[d];
+      if (!view) continue;
       const { rect } = view;
       const allowed = digitAllowed(params, d);
       const note = allowed ? notes[d] : null;
-      view.img.setTexture(this.keyTexture(rect, !allowed ? 'disabled' : notesMode ? 'notes' : note === 'out' ? 'out' : note === 'in' ? 'in' : 'normal'));
-      view.text.setColor(note === 'out' || !allowed ? THEME.mutedText : THEME.text);
-      view.text.setAlpha(allowed ? 1 : 0.35);
+      view.img.setTexture(this.keyTexture(rect, notesMode ? 'notes' : note === 'in' ? 'in' : 'normal'));
+      // La cifra se ve siempre clara: que no esté en la clave no impide probarla
+      view.text.setColor(THEME.text);
       const pencil = notesMode && allowed;
       if (note || pencil) {
         view.mark.setTexture(bakeTexture(this.scene, `keymark|${rect.w}x${rect.h}|${note}|${pencil}`, rect.w, rect.h, (g) => paintKeyMark(g, rect.w, rect.h, note, pencil)));

@@ -226,13 +226,15 @@ export function computeBoardGeometry(
 }
 
 /**
- * Pantalla de Claves (bajo el panel del nivel): arriba la lista de intentos (el último, abajo del todo), en medio las
- * casillas del número que se escribe y abajo el teclado: `1 2 3 4 5 Borrar` y `6 7 8 9 0 Probar`. El teclado se ancla
- * al borde inferior (a mano del pulgar) y la lista se queda con lo que sobra.
+ * Pantalla de Claves (bajo el panel del nivel), como un solo bloque **centrado** en el espacio libre: arriba la lista de
+ * intentos (el último, abajo del todo, junto a las casillas), en medio las casillas del número que se escribe y abajo el
+ * teclado. El teclado solo tiene **las cifras que se usan en el nivel** (con 1 a 4 hay cuatro teclas, no diez con seis
+ * bloqueadas): hasta 6 en una fila y, si son más, en dos filas centradas (`1 2 3 4 5` / `6 7 8 9 0`). Debajo, «Borrar»
+ * y un «Probar» ancho.
  */
 export interface CodeLayout {
-  /** Teclas de las cifras 0 a 9 (índice = cifra). */
-  digits: Rect[];
+  /** Teclas de las cifras 0 a 9 (índice = cifra); null si la cifra no se usa en el nivel. */
+  digits: Array<Rect | null>;
   erase: Rect;
   submit: Rect;
   /** Casillas del número que se escribe. */
@@ -247,37 +249,73 @@ export interface CodeLayout {
 }
 
 export const CODE_KEY_H = 96;
-export const CODE_ROW_H = 76;
+export const CODE_ROW_H = 80;
+/** Filas de intentos que se ven como mucho (si hay más, la lista se desliza). */
+export const CODE_MAX_VISIBLE_ROWS = 6;
 
-export function computeCodeLayout(width: number, height: number, boardTop: number, length: number): CodeLayout {
-  const left = MARGIN;
+/** Cifras del teclado en el orden del teléfono: 1 a 9 y el 0 al final. */
+export function codeKeypadDigits(low: number, high: number): number[] {
+  const out: number[] = [];
+  for (let d = Math.max(1, low); d <= Math.min(9, high); d++) out.push(d);
+  if (low <= 0 && high >= 0) out.push(0);
+  return out;
+}
+
+export function computeCodeLayout(width: number, height: number, boardTop: number, length: number, low = 0, high = 9): CodeLayout {
   const barW = width - 2 * MARGIN;
   const gap = 10;
-  const actionW = 150;
-  const keyW = (barW - actionW - 5 * gap) / 5;
-  const row2 = height - MARGIN - CODE_KEY_H / 2;
-  const row1 = row2 - CODE_KEY_H - gap;
-  const key = (col: number, y: number): Rect => ({ x: left + keyW / 2 + col * (keyW + gap), y, w: keyW, h: CODE_KEY_H });
-  const digits: Rect[] = new Array(10);
-  for (let d = 1; d <= 5; d++) digits[d] = key(d - 1, row1);
-  for (let d = 6; d <= 9; d++) digits[d] = key(d - 6, row2);
-  digits[0] = key(4, row2);
-  const actionX = left + barW - actionW / 2;
-
+  const keys = codeKeypadDigits(low, high);
+  const n = keys.length;
+  // Hasta 6 cifras en una fila; si son más, dos filas (la de arriba con una más si son impares)
+  const perRow = n <= 6 ? n : Math.ceil(n / 2);
+  const digitRows = n <= 6 ? 1 : 2;
+  const keyW = Math.min((barW - 4 * gap) / 5, (barW - (perRow - 1) * gap) / perRow);
   const slotGap = 14;
-  const slot = Math.min(100, Math.floor((barW - (length - 1) * slotGap) / length));
-  const slotsY = row1 - CODE_KEY_H / 2 - 28 - slot / 2;
+  const avail = height - MARGIN - boardTop;
+  // En pantallas bajas se aprietan los espacios (y un poco las teclas, sin bajar de 88) para que quepan 3 intentos
+  const sizes = (compact: boolean) => {
+    const keyH = compact ? 90 : CODE_KEY_H;
+    const slot = Math.min(compact ? 92 : 100, Math.floor((barW - (length - 1) * slotGap) / length));
+    const gapHistory = compact ? 14 : 26;
+    const gapKeypad = compact ? 20 : 34;
+    const keypadH = (digitRows + 1) * keyH + digitRows * gap;
+    return { keyH, slot, gapHistory, gapKeypad, keypadH, fixed: gapHistory + slot + gapKeypad + keypadH };
+  };
+  const roomy = sizes(false);
+  const { keyH, slot, gapHistory, gapKeypad, fixed } = avail - roomy.fixed >= 3 * CODE_ROW_H ? roomy : sizes(true);
+  const historyH = Math.max(CODE_ROW_H, Math.min(CODE_MAX_VISIBLE_ROWS * CODE_ROW_H, avail - fixed));
+  const total = historyH + fixed;
+  const top = boardTop + Math.max(0, (avail - total) / 2);
+
+  const historyTop = top;
+  const slotsY = historyTop + historyH + gapHistory + slot / 2;
+  const keypadTop = slotsY + slot / 2 + gapKeypad;
+
+  const digits: Array<Rect | null> = new Array(10).fill(null);
+  keys.forEach((d, i) => {
+    const row = digitRows === 1 ? 0 : i < perRow ? 0 : 1;
+    const inRow = row === 0 ? Math.min(perRow, n) : n - perRow;
+    const col = row === 0 ? i : i - perRow;
+    const rowW = inRow * keyW + (inRow - 1) * gap;
+    digits[d] = {
+      x: width / 2 - rowW / 2 + keyW / 2 + col * (keyW + gap),
+      y: keypadTop + keyH / 2 + row * (keyH + gap),
+      w: keyW,
+      h: keyH,
+    };
+  });
+  const actionY = keypadTop + digitRows * (keyH + gap) + keyH / 2;
+  const eraseW = 190;
+  const submitW = barW - eraseW - gap;
+
   const slotsW = length * slot + (length - 1) * slotGap;
   const slots = Array.from({ length }, (_, i) => ({ x: width / 2 - slotsW / 2 + slot / 2 + i * (slot + slotGap), y: slotsY, w: slot, h: slot }));
-
-  const historyTop = boardTop;
-  const historyBottom = slotsY - slot / 2 - 20;
   return {
     digits,
-    erase: { x: actionX, y: row1, w: actionW, h: CODE_KEY_H },
-    submit: { x: actionX, y: row2, w: actionW, h: CODE_KEY_H },
+    erase: { x: MARGIN + eraseW / 2, y: actionY, w: eraseW, h: keyH },
+    submit: { x: width - MARGIN - submitW / 2, y: actionY, w: submitW, h: keyH },
     slots,
-    history: { x: width / 2, y: (historyTop + historyBottom) / 2, w: barW, h: Math.max(CODE_ROW_H, historyBottom - historyTop) },
+    history: { x: width / 2, y: historyTop + historyH / 2, w: barW, h: historyH },
     rowH: CODE_ROW_H,
     tile: 60,
     messageY: slotsY - slot / 2 - 44,
