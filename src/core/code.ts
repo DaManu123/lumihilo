@@ -47,13 +47,14 @@ export interface GuessScore {
 export type DigitMark = 'exact' | 'present' | 'absent';
 
 /**
- * Peldaños 1 a 10: más cifras, más difícil. Los tres primeros marcan cada cifra (el modo Relajado no pasa de ahí); desde
- * el 4 solo se dan los dos números, y desde el 6 las cifras pueden repetirse.
+ * Peldaños 1 a 10: más cifras, más difícil. **Todos usan las diez cifras (0 a 9)**, para que el teclado tenga siempre las
+ * diez (lo pidió el usuario). Los tres primeros marcan cada cifra (el modo Relajado no pasa de ahí; el 3 ya admite
+ * repetidas); desde el 4 solo se dan los dos números, y desde el 6 las cifras pueden repetirse.
  */
 const CODE_TIERS: ReadonlyArray<CodeParams> = [
-  { length: 3, low: 1, high: 7, repeats: false, colors: true, expected: 5 },
-  { length: 3, low: 1, high: 8, repeats: false, colors: true, expected: 5 },
-  { length: 4, low: 0, high: 9, repeats: false, colors: true, expected: 6 },
+  { length: 3, low: 0, high: 9, repeats: false, colors: true, expected: 6 },
+  { length: 4, low: 0, high: 9, repeats: false, colors: true, expected: 7 },
+  { length: 4, low: 0, high: 9, repeats: true, colors: true, expected: 8 },
   { length: 3, low: 0, high: 9, repeats: false, colors: false, expected: 8 },
   { length: 4, low: 0, high: 9, repeats: false, colors: false, expected: 9 },
   { length: 4, low: 0, high: 9, repeats: true, colors: false, expected: 10 },

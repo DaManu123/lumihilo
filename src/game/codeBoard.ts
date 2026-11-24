@@ -11,10 +11,10 @@ import { CodeLayout, FONT, Rect } from './layout';
  * Pantalla del puzzle Claves (solo dibujo y animación; el estado del juego vive en `GameScene` y la lógica en
  * `core/code.ts`): la lista de intentos, las casillas del número que se escribe y el teclado.
  *
- * Cada intento se revela con emoción: las cifras se dan vuelta una a una con una nota que sube, después los dos
- * contadores se llenan punto a punto y, si va cerca (le falta una sola cifra en su lugar), el último punto se hace
- * esperar. «En su lugar» es un círculo lleno del color principal; «en otro lugar», un anillo azul: la forma distingue
- * las dos cosas aunque no se vean los colores.
+ * Los intentos van en una **tabla** con encabezado: «#», «Número», «Aciertos» (cuántas cifras del número están en la
+ * clave, en cualquier lugar) y «Posiciones» (cuántas de esas están además en su lugar). Cada intento se revela con
+ * emoción: las cifras se dan vuelta una a una con una nota que sube, después cuentan los aciertos y luego las posiciones
+ * y, si va cerca (le falta una sola cifra en su lugar), la última posición se hace esperar.
  */
 
 export interface CodeTextOptions {
@@ -96,8 +96,6 @@ export function bakeTexture(scene: Phaser.Scene, name: string, w: number, h: num
 type TileLook = DigitMark | 'plain' | 'win';
 const tileTexture = (scene: Phaser.Scene, size: number, look: TileLook): string =>
   bakeTexture(scene, `tile|${size}|${look}`, size + 4, size + 4, (g) => paintTile(g, size, look));
-const countTexture = (scene: Phaser.Scene, kind: 'exact' | 'misplaced', r: number): string =>
-  bakeTexture(scene, `count|${kind}|${r}`, 2 * r + 8, 2 * r + 8, (g) => drawCountIcon(g, kind, 0, 0, r));
 
 /** Color de cada marca: «en su lugar» = principal; «en otro lugar» = azul (el del giro a la derecha). */
 const markColor = (mark: 'exact' | 'present'): number => (mark === 'exact' ? THEME.primary : THEME.clockwise);
@@ -202,19 +200,75 @@ function paintSlot(g: Phaser.GameObjects.Graphics, w: number, h: number, look: S
 const digitColor = (mark: DigitMark | 'plain' | 'win'): string =>
   mark === 'exact' || mark === 'win' ? THEME.onPrimary : mark === 'absent' ? THEME.mutedText : THEME.text;
 
-/** Lo que se dibuja de una fila de la lista, para poder animarla. */
+/** Lo que se dibuja de una fila de la tabla, para poder animarla. */
 interface RowView {
   container: Phaser.GameObjects.Container;
   /** Franja de fondo de la fila. */
   bg: Phaser.GameObjects.Image;
   tiles: Array<{ box: Phaser.GameObjects.Container; img: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text }>;
-  exact: { icon: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text };
-  misplaced: { icon: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text };
+  /** «Aciertos»: cifras del número que están en la clave (en su lugar o no). */
+  hits: Phaser.GameObjects.Text;
+  /** «Posiciones»: cifras en su lugar. */
+  exact: Phaser.GameObjects.Text;
+  /** Lado de cada cifra (se achica con muchas cifras para que quepan las columnas). */
+  size: number;
+}
+
+/** Ancho de las columnas de «Aciertos» y «Posiciones». */
+const VALUE_COL_W = 132;
+
+/** Columnas de la tabla de intentos dentro de `[x, x + w]`: número de intento, cifras, aciertos y posiciones. */
+export function codeTableColumns(x: number, w: number, length: number, tile: number) {
+  const exactX = x + w - VALUE_COL_W / 2;
+  const hitsX = exactX - VALUE_COL_W;
+  const indexX = x + 30;
+  const tilesLeft = x + 60;
+  const tilesRight = hitsX - VALUE_COL_W / 2 - 6;
+  const size = Math.min(tile, Math.floor((tilesRight - tilesLeft) / (length + (length - 1) * 0.14)));
+  const gap = Math.round(size * 0.14);
+  const tilesW = length * size + (length - 1) * gap;
+  const numberX = (tilesLeft + tilesRight) / 2;
+  return { indexX, numberX, hitsX, exactX, size, gap, first: numberX - tilesW / 2 + size / 2 };
+}
+
+/** Línea fina horizontal (debajo del encabezado), pintada una vez. */
+const lineTexture = (scene: Phaser.Scene, w: number): string =>
+  bakeTexture(scene, `hline|${Math.round(w)}`, Math.round(w), 4, (g) => {
+    g.fillStyle(THEME.cardBorder, 1);
+    g.fillRect(-w / 2, -1, w, 2);
+  });
+
+/** Encabezado de la tabla: «#  Número  Aciertos  Posiciones», con una línea debajo. `withIndex` = con la columna «#». */
+export function buildCodeHeader(
+  host: CodeBoardHost,
+  parent: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+  w: number,
+  length: number,
+  tile: number,
+  withIndex = true
+): Phaser.GameObjects.Container {
+  const scene = host.scene;
+  const c = scene.add.container(0, y);
+  parent.add(c);
+  const col = codeTableColumns(x, w, length, tile);
+  const label = (cx: number, text: string, maxW: number) => {
+    const l = host.text(cx, 0, text, { size: FONT.small, weight: '700', color: THEME.mutedText, originX: 0.5 });
+    if (l.width > maxW) l.setScale(maxW / l.width);
+    c.add(l);
+  };
+  if (withIndex) label(col.indexX, '#', 50);
+  label(col.numberX, t('Número'), col.hitsX - VALUE_COL_W / 2 - col.indexX - 30);
+  label(col.hitsX, t('Aciertos'), VALUE_COL_W - 8);
+  label(col.exactX, t('Posiciones'), VALUE_COL_W - 8);
+  c.add(scene.add.image(x + w / 2, 24, lineTexture(scene, w)));
+  return c;
 }
 
 /**
- * Fila de un intento: número de intento, las cifras y los dos contadores. Se usa en el juego y en el tutorial.
- * `x` es el borde izquierdo y `w` el ancho disponible.
+ * Fila de la tabla de un intento: número de intento, las cifras, los aciertos y las posiciones. Se usa en el juego y en el
+ * tutorial. `x` es el borde izquierdo y `w` el ancho de la tabla.
  */
 export function buildCodeRow(
   host: CodeBoardHost,
@@ -235,46 +289,33 @@ export function buildCodeRow(
   const scene = host.scene;
   const container = scene.add.container(0, y);
   parent.add(container);
-  // Fila centrada: número de intento, cifras y contadores juntos, sobre una franja suave
-  const gap = Math.round(tile * 0.14);
-  const indexW = index !== null ? 52 : 0;
-  const tilesW = row.guess.length * tile + (row.guess.length - 1) * gap;
-  const countersW = 2 * 96 - 20;
-  const contentW = indexW + tilesW + 36 + countersW;
-  const start = x + Math.max(0, (w - contentW) / 2);
-  const bgW = Math.min(w, contentW + 36);
-  const bgH = tile + 12;
-  const bg = scene.add.image(x + w / 2, bgParent ? y : 0, bakeTexture(scene, `rowbg|${Math.round(bgW)}x${bgH}`, Math.round(bgW), bgH, (g) => {
+  const col = codeTableColumns(x, w, row.guess.length, tile);
+  const bgW = Math.round(w);
+  const bgH = col.size + 12;
+  const bg = scene.add.image(x + w / 2, bgParent ? y : 0, bakeTexture(scene, `rowbg|${bgW}x${bgH}`, bgW, bgH, (g) => {
     g.fillStyle(THEME.surface, 0.55);
     g.fillRoundedRect(-bgW / 2, -bgH / 2, bgW, bgH, 18);
   }));
   (bgParent ?? container).add(bg);
-  let left = start;
   if (index !== null) {
-    container.add(host.text(start + indexW / 2 - 6, 2, String(index), { size: FONT.small, display: true, weight: '500', color: THEME.mutedText, originX: 0.5 }));
-    left = start + indexW;
+    container.add(host.text(col.indexX, 2, String(index), { size: FONT.small, display: true, weight: '500', color: THEME.mutedText, originX: 0.5 }));
   }
   const tiles = row.guess.map((digit, i) => {
-    const box = scene.add.container(left + tile / 2 + i * (tile + gap), 0);
+    const box = scene.add.container(col.first + i * (col.size + col.gap), 0);
     const mark = colors && row.marks ? row.marks[i] : 'plain';
-    const img = scene.add.image(0, 0, tileTexture(scene, tile, mark));
-    const text = host.text(0, 2, String(digit), { size: Math.round(tile * 0.55), display: true, color: digitColor(mark), originX: 0.5 });
+    const img = scene.add.image(0, 0, tileTexture(scene, col.size, mark));
+    const text = host.text(0, 2, String(digit), { size: Math.round(col.size * 0.55), display: true, color: digitColor(mark), originX: 0.5 });
     box.add([img, text]);
     container.add(box);
     return { box, img, text };
   });
-  // Contadores a la derecha: «● 2   ○ 1»
-  const right = start + contentW + 10;
-  const groupW = 96;
-  const counter = (kind: 'exact' | 'misplaced', cx: number, value: number) => {
-    const icon = scene.add.image(cx - 22, 0, countTexture(scene, kind, 16));
-    const text = host.text(cx + 2, 2, String(value), { size: 34, display: true, color: value > 0 ? THEME.text : THEME.mutedText });
-    container.add([icon, text]);
-    return { icon, text };
-  };
-  const exact = counter('exact', right - groupW * 2 + 30, row.score.exact);
-  const misplaced = counter('misplaced', right - groupW + 30, row.score.misplaced);
-  return { container, bg, tiles, exact, misplaced };
+  const hitsValue = row.score.exact + row.score.misplaced;
+  const value = (cx: number, n: number, strong: string) =>
+    host.text(cx, 2, String(n), { size: 38, display: true, color: n > 0 ? strong : THEME.mutedText, originX: 0.5 });
+  const hits = value(col.hitsX, hitsValue, THEME.text);
+  const exact = value(col.exactX, row.score.exact, THEME.primaryCss);
+  container.add([hits, exact]);
+  return { container, bg, tiles, hits, exact, size: col.size };
 }
 
 export class CodeBoard {
@@ -322,6 +363,8 @@ export class CodeBoard {
     zone.on('pointerout', () => (this.dragFrom = null));
     zone.on('wheel', (_p: Phaser.Input.Pointer, _dx: number, dy: number) => this.setScroll(this.scroll - dy));
     this.root.add([zone, this.bgList, this.list]);
+    // Encabezado fijo de la tabla (no se desliza con la lista)
+    buildCodeHeader(host, this.root, h.x - h.w / 2, layout.headerY, h.w, state.params.length, layout.tile);
 
     this.buildSlots();
     this.buildKeys();
@@ -421,14 +464,10 @@ export class CodeBoard {
     this.setScroll(-this.maxScroll);
   }
 
-  /**
-   * Y de la fila `i` sin desplazar. Si caben todas, van centradas en la zona de la lista (con pocos intentos no quedan
-   * pegadas a las casillas con un hueco vacío encima); si no, la última queda abajo del todo.
-   */
+  /** Y de la fila `i` sin desplazar: como en una tabla, de arriba abajo bajo el encabezado (si no caben, se desliza). */
   private rowY(i: number): number {
     const h = this.layout.history;
-    const contentH = this.state.rows.length * this.layout.rowH;
-    const top = contentH <= h.h ? h.y - contentH / 2 : h.y - h.h / 2;
+    const top = h.y - h.h / 2;
     return top + this.layout.rowH * i + this.layout.rowH / 2;
   }
 
@@ -454,30 +493,20 @@ export class CodeBoard {
     const h = this.layout.history;
     const c = this.scene.add.container(0, 0);
     const { params } = this.state;
-    const lines = [t('Escribe un número y toca «Probar».')];
-    const title = this.host.text(h.x, h.y - 56, lines[0], { size: 30, weight: '600', align: 'center', wrap: h.w - 40, originX: 0.5 });
-    c.add(title);
-    // Leyenda de los dos símbolos
-    const legend = (kind: 'exact' | 'misplaced', y: number, label: string) => {
-      const icon = this.scene.add.image(h.x - h.w / 2 + 70, y, countTexture(this.scene, kind, 16));
-      const text = this.host.text(h.x - h.w / 2 + 104, y, label, { size: FONT.small, weight: '500', color: THEME.mutedText, wrap: h.w - 130 });
-      c.add([icon, text]);
+    const left = h.x - h.w / 2 + 24;
+    let y = h.y - h.h / 2 + 24;
+    const line = (text: string, opts: CodeTextOptions) => {
+      const l = this.host.text(opts.originX === 0.5 ? h.x : left, y, text, { wrap: h.w - 48, ...opts });
+      l.setOrigin(opts.originX ?? 0, 0);
+      c.add(l);
+      y += l.height + 18;
     };
-    legend('exact', h.y + 4, t('cifras en su lugar'));
-    legend('misplaced', h.y + 52, t('cifras que están, pero en otro lugar'));
-    if (params.colors) {
-      const note = this.host.text(h.x, h.y + 104, t('Cada cifra se pinta: llena si está en su lugar, con borde si está en otro.'), {
-        size: FONT.small,
-        weight: '500',
-        color: THEME.mutedText,
-        align: 'center',
-        wrap: h.w - 40,
-        originX: 0.5,
-      });
-      c.add(note);
-    }
+    line(t('Escribe un número y toca «Probar».'), { size: 30, weight: '600', align: 'center', originX: 0.5 });
+    line(t('Aciertos: cuántas cifras de tu número están en la clave.'), { size: FONT.small, weight: '500', color: THEME.mutedText });
+    line(t('Posiciones: cuántas de esas están además en su lugar.'), { size: FONT.small, weight: '500', color: THEME.mutedText });
+    if (params.colors) line(t('Cada cifra se pinta: llena si está en su lugar, con borde si está en otro.'), { size: FONT.small, weight: '500', color: THEME.mutedText });
     // Que no se salga de la zona de la lista en pantallas bajas
-    if (c.getBounds().height > h.h) c.setVisible(false);
+    if (y - (h.y - h.h / 2) > h.h + 10) c.setVisible(false);
     this.root.add(c);
     this.emptyHelp = c;
   }
@@ -584,14 +613,12 @@ export class CodeBoard {
 
     // Las cifras empiezan «tapadas» y se dan vuelta
     view.tiles.forEach((tile) => {
-      tile.img.setTexture(tileTexture(this.scene, this.layout.tile, 'plain'));
+      tile.img.setTexture(tileTexture(this.scene, view.size, 'plain'));
       tile.text.setColor(THEME.text);
       if (!fast) tile.box.setScale(1, 0.05);
     });
-    view.exact.text.setText('0').setColor(THEME.mutedText);
-    view.misplaced.text.setText('0').setColor(THEME.mutedText);
-    view.exact.icon.setAlpha(0.35);
-    view.misplaced.icon.setAlpha(0.35);
+    view.hits.setText('0').setColor(THEME.mutedText);
+    view.exact.setText('0').setColor(THEME.mutedText);
 
     let t0 = 0;
     view.tiles.forEach((tile, i) => {
@@ -599,7 +626,7 @@ export class CodeBoard {
         if (!tile.box.active) return;
         this.sounds.flip(i);
         const mark = state.params.colors && row.marks ? row.marks[i] : 'plain';
-        tile.img.setTexture(tileTexture(this.scene, this.layout.tile, mark));
+        tile.img.setTexture(tileTexture(this.scene, view.size, mark));
         tile.text.setColor(digitColor(mark));
         if (!fast) this.scene.tweens.add({ targets: tile.box, scaleY: 1, duration: this.host.dur(140), ease: 'Back.easeOut' });
       });
@@ -611,46 +638,43 @@ export class CodeBoard {
       this.scene.tweens.add({ targets: target, scale: 1.45, duration: 90, yoyo: true, ease: 'Sine.easeOut' });
     };
 
-    // «En su lugar», punto a punto; el último se hace esperar si va cerca
+    // Primero los aciertos (cifras que están), uno a uno…
+    const hitsTotal = row.score.exact + row.score.misplaced;
+    for (let k = 1; k <= hitsTotal; k++) {
+      this.scene.time.delayedCall(t0, () => {
+        if (!view.hits.active) return;
+        view.hits.setText(String(k)).setColor(THEME.text);
+        this.sounds.count('misplaced', k);
+        pop(view.hits);
+      });
+      t0 += countStep;
+    }
+    if (hitsTotal > 0 && !fast) t0 += this.host.dur(140);
+    // …y después las posiciones; la última se hace esperar si va cerca
     const close = row.score.exact >= length - 1;
     for (let k = 1; k <= row.score.exact; k++) {
       const last = k === row.score.exact;
       if (last && close && !fast) {
-        // Redoble: tres golpecitos con el contador latiendo
+        // Redoble: tres golpecitos con el número latiendo
         for (let s = 0; s < 3; s++) {
           this.scene.time.delayedCall(t0 + s * this.host.dur(170), () => {
-            if (!view.exact.text.active) return;
+            if (!view.exact.active) return;
             this.sounds.suspense(s);
-            this.scene.tweens.add({ targets: view.exact.icon, alpha: 0.4, duration: 80, yoyo: true });
+            this.scene.tweens.add({ targets: view.exact, alpha: 0.4, duration: 80, yoyo: true });
           });
         }
         t0 += 3 * this.host.dur(170) + this.host.dur(120);
       }
       this.scene.time.delayedCall(t0, () => {
-        if (!view.exact.text.active) return;
-        view.exact.text.setText(String(k)).setColor(THEME.text);
-        view.exact.icon.setAlpha(1);
+        if (!view.exact.active) return;
+        view.exact.setText(String(k)).setColor(THEME.primaryCss).setAlpha(1);
         this.sounds.count('exact', k);
-        pop(view.exact.text);
-      });
-      t0 += countStep;
-    }
-    for (let k = 1; k <= row.score.misplaced; k++) {
-      this.scene.time.delayedCall(t0, () => {
-        if (!view.misplaced.text.active) return;
-        view.misplaced.text.setText(String(k)).setColor(THEME.text);
-        view.misplaced.icon.setAlpha(1);
-        this.sounds.count('misplaced', k);
-        pop(view.misplaced.text);
+        pop(view.exact);
       });
       t0 += countStep;
     }
     this.scene.time.delayedCall(t0 + (fast ? 0 : 120), () => {
       this.busy = false;
-      if (view.container.active) {
-        if (row.score.exact > 0) view.exact.icon.setAlpha(1);
-        if (row.score.misplaced > 0) view.misplaced.icon.setAlpha(1);
-      }
       if (this.root.active) this.refresh();
       done();
     });
@@ -665,7 +689,7 @@ export class CodeBoard {
     view.tiles.forEach((tile, i) => {
       this.scene.time.delayedCall(i * step, () => {
         if (!tile.box.active) return;
-        tile.img.setTexture(tileTexture(this.scene, this.layout.tile, 'win'));
+        tile.img.setTexture(tileTexture(this.scene, view.size, 'win'));
         tile.text.setColor(THEME.onPrimary);
         const m = tile.box.getWorldTransformMatrix();
         onStep(i, m.tx, m.ty);

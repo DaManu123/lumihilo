@@ -147,7 +147,7 @@ import {
   scoreGuess,
   type DigitNote,
 } from '../../core/code';
-import { CodeBoard, CodeBoardState, CodeRow, buildCodeRow, drawCountIcon } from '../codeBoard';
+import { CodeBoard, CodeBoardState, CodeRow, buildCodeHeader, buildCodeRow } from '../codeBoard';
 
 interface CellView {
   container: Phaser.GameObjects.Container;
@@ -4658,7 +4658,7 @@ export class GameScene extends Phaser.Scene {
     this.showCodeTutorial();
   }
 
-  /** Tutorial de Claves: cómo se juega (con colores) y qué dicen los dos números. */
+  /** Tutorial de Claves: cómo se juega (con colores) y qué dicen las columnas «Aciertos» y «Posiciones». */
   private showCodeTutorial(page: 1 | 2 = 1): void {
     const cardH = 1090;
     const { overlay, w } = this.createCard(cardH, 250);
@@ -4700,7 +4700,8 @@ export class GameScene extends Phaser.Scene {
       overlay.add(intro);
       // Tres intentos que aparecen uno a uno, hasta abrir la clave
       const guesses = [[1, 2, 3], [3, 1, 4], [3, 5, 1]];
-      const rowsTop = -cardH / 2 + 250;
+      buildCodeHeader(host, overlay, rowX, -cardH / 2 + 236, rowW, secret.length, tile);
+      const rowsTop = -cardH / 2 + 300;
       const holder = this.add.container(0, 0);
       overlay.add(holder);
       const alive = () => overlay.active;
@@ -4744,8 +4745,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.addCardTitle(overlay, w, cardH, t('Los dos números'));
-    const intro = this.uiText(0, -cardH / 2 + 124, t('Más adelante las cifras ya no se pintan: solo verás dos números.'), {
+    this.addCardTitle(overlay, w, cardH, t('Aciertos y posiciones'));
+    const intro = this.uiText(0, -cardH / 2 + 124, t('Más adelante las cifras ya no se pintan: solo verás los dos números.'), {
       size: 28,
       weight: '500',
       color: THEME.mutedText,
@@ -4755,26 +4756,29 @@ export class GameScene extends Phaser.Scene {
     });
     intro.setOrigin(0.5, 0);
     overlay.add(intro);
-    // Leyenda de los dos símbolos
-    let y = -cardH / 2 + 260;
-    const legend = (kind: 'exact' | 'misplaced', label: string) => {
-      const icon = this.add.graphics();
-      drawCountIcon(icon, kind, -w / 2 + 76, y + 18, 20);
-      const text = this.uiText(-w / 2 + 116, y, label, { size: 28, weight: '600', wrap: w - 170 });
+    // Qué dice cada columna
+    let y = -cardH / 2 + 250;
+    const legend = (label: string) => {
+      const dot = this.add.graphics();
+      dot.fillStyle(THEME.primary, 1);
+      dot.fillCircle(-w / 2 + 64, y + 18, 7);
+      const text = this.uiText(-w / 2 + 88, y, label, { size: 28, weight: '600', wrap: w - 150 });
       text.setOrigin(0, 0);
-      overlay.add([icon, text]);
+      overlay.add([dot, text]);
       y += Math.max(56, text.height + 24);
     };
-    legend('exact', t('En su lugar: cifras correctas en la posición correcta.'));
-    legend('misplaced', t('En otro lugar: cifras que están, pero en otra posición.'));
-    y += 20;
+    legend(t('Aciertos: cuántas cifras de tu número están en la clave.'));
+    legend(t('Posiciones: cuántas de esas están además en su lugar.'));
+    y += 12;
     const example = this.uiText(0, y, t('Si la clave es 3 5 1 y pruebas 3 1 4:'), { size: 28, weight: '500', color: THEME.mutedText, originX: 0.5 });
     example.setOrigin(0.5, 0);
     overlay.add(example);
-    y += 90;
+    y += 76;
+    buildCodeHeader(host, overlay, rowX, y, rowW, 3, tile, false);
+    y += 74;
     buildCodeRow(host, overlay, rowX, y, rowW, tile, demo([3, 1, 4], false), null, false);
-    y += 70;
-    const caption = this.uiText(0, y, t('El 3 está en su lugar; el 1 está, pero en otro lugar; el 4 no está.'), {
+    y += 64;
+    const caption = this.uiText(0, y, t('El 3 y el 1 están en la clave: 2 aciertos. Solo el 3 está en su lugar: 1 posición.'), {
       size: 26,
       weight: '600',
       wrap: w - 100,
@@ -4844,7 +4848,7 @@ export class GameScene extends Phaser.Scene {
     if (this.overlayOpen()) return;
     this.settings.hasSeenCodeCountsTip = true;
     storage.saveSettings(this.settings);
-    this.showToast(t('Desde aquí ya no se pinta cada cifra: solo los dos números. ¡A deducir!'));
+    this.showToast(t('Desde aquí ya no se pinta cada cifra: solo los aciertos y las posiciones. ¡A deducir!'));
   }
 
   private handleUndo(): void {

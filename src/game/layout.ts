@@ -226,8 +226,8 @@ export function computeBoardGeometry(
 }
 
 /**
- * Pantalla de Claves (bajo el panel del nivel), como un solo bloque **centrado** en el espacio libre: arriba la lista de
- * intentos (el último, abajo del todo, junto a las casillas), en medio las casillas del número que se escribe y abajo el
+ * Pantalla de Claves (bajo el panel del nivel), como un solo bloque **centrado** en el espacio libre: arriba la tabla de
+ * intentos (encabezado «#  Número  Aciertos  Posiciones» y una fila por intento, de arriba abajo), en medio las casillas del número que se escribe y abajo el
  * teclado. El teclado solo tiene **las cifras que se usan en el nivel** (con 1 a 4 hay cuatro teclas, no diez con seis
  * bloqueadas): hasta 6 en una fila y, si son más, en dos filas centradas (`1 2 3 4 5` / `6 7 8 9 0`). Debajo, «Borrar»
  * y un «Probar» ancho.
@@ -239,17 +239,21 @@ export interface CodeLayout {
   submit: Rect;
   /** Casillas del número que se escribe. */
   slots: Rect[];
-  /** Zona de la lista de intentos y alto de cada fila. */
+  /** Encabezado de la tabla de intentos («#  Número  Aciertos  Posiciones»): centro vertical. */
+  headerY: number;
+  /** Zona de la lista de intentos (debajo del encabezado) y alto de cada fila. */
   history: Rect;
   rowH: number;
   /** Lado de cada cifra en la lista de intentos. */
   tile: number;
-  /** Aviso corto («¡Casi!») sobre las casillas. */
+  /** Aviso corto («¡Casi!»), encima de las casillas. */
   messageY: number;
 }
 
 export const CODE_KEY_H = 96;
 export const CODE_ROW_H = 80;
+/** Alto del encabezado de la tabla de intentos. */
+export const CODE_HEADER_H = 44;
 /** Filas de intentos que se ven como mucho (si hay más, la lista se desliza). */
 export const CODE_MAX_VISIBLE_ROWS = 6;
 
@@ -279,15 +283,18 @@ export function computeCodeLayout(width: number, height: number, boardTop: numbe
     const gapHistory = compact ? 14 : 26;
     const gapKeypad = compact ? 20 : 34;
     const keypadH = (digitRows + 1) * keyH + digitRows * gap;
-    return { keyH, slot, gapHistory, gapKeypad, keypadH, fixed: gapHistory + slot + gapKeypad + keypadH };
+    const rowH = compact ? 70 : CODE_ROW_H;
+    return { keyH, slot, gapHistory, gapKeypad, keypadH, rowH, tile: compact ? 54 : 60, fixed: gapHistory + slot + gapKeypad + keypadH };
   };
   const roomy = sizes(false);
-  const { keyH, slot, gapHistory, gapKeypad, fixed } = avail - roomy.fixed >= 3 * CODE_ROW_H ? roomy : sizes(true);
-  const historyH = Math.max(CODE_ROW_H, Math.min(CODE_MAX_VISIBLE_ROWS * CODE_ROW_H, avail - fixed));
-  const total = historyH + fixed;
+  const headerH = CODE_HEADER_H;
+  const { keyH, slot, gapHistory, gapKeypad, fixed, rowH, tile } = avail - roomy.fixed - CODE_HEADER_H >= 3 * CODE_ROW_H ? roomy : sizes(true);
+  // Un número entero de filas: al deslizar no queda media fila oculta con un hueco encima
+  const historyH = rowH * Math.max(1, Math.min(CODE_MAX_VISIBLE_ROWS, Math.floor((avail - fixed - headerH) / rowH)));
+  const total = headerH + historyH + fixed;
   const top = boardTop + Math.max(0, (avail - total) / 2);
 
-  const historyTop = top;
+  const historyTop = top + headerH;
   const slotsY = historyTop + historyH + gapHistory + slot / 2;
   const keypadTop = slotsY + slot / 2 + gapKeypad;
 
@@ -315,9 +322,11 @@ export function computeCodeLayout(width: number, height: number, boardTop: numbe
     erase: { x: MARGIN + eraseW / 2, y: actionY, w: eraseW, h: keyH },
     submit: { x: width - MARGIN - submitW / 2, y: actionY, w: submitW, h: keyH },
     slots,
+    headerY: top + headerH / 2,
     history: { x: width / 2, y: historyTop + historyH / 2, w: barW, h: historyH },
-    rowH: CODE_ROW_H,
-    tile: 60,
-    messageY: slotsY - slot / 2 - 44,
+    rowH,
+    tile,
+    // El aviso va sobre las casillas (vacías tras probar), sin tapar el intento que se acaba de revelar
+    messageY: slotsY,
   };
 }
