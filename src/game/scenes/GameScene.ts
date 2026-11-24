@@ -4414,7 +4414,8 @@ export class GameScene extends Phaser.Scene {
   /** Dibuja la pantalla de Claves en el tablero. */
   private buildCodeBoard(): void {
     const { width, height } = this.cameras.main;
-    const layout = computeCodeLayout(width, height, this.hud.boardTop, this.codeLevelData.params.length);
+    const { params } = this.codeLevelData;
+    const layout = computeCodeLayout(width, height, this.hud.boardTop, params.length, params.low, params.high);
     this.codeBoard = new CodeBoard(
       {
         scene: this,

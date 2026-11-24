@@ -9,7 +9,7 @@ const server = await preview({ root, logLevel: 'error', preview: { port: 4173, s
 const seen = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true, hasSeenStonesTip: true, hasSeenGraphicsNotice: true };
 
 const typeGuess = async (g, digits) => {
-  for (const d of digits) await g.tap(...g.pos.codeKey(d), 120);
+  for (const d of digits) await g.tap(...await g.codeKey(d), 120);
 };
 const secretOf = (g) => g.page.evaluate(() => window.__game.scene.getScene('GameScene').codeLevelData.secret);
 
@@ -31,12 +31,12 @@ try {
   const wrong = secret.map((d) => (d % 4) + 1).reverse();
   await typeGuess(g, wrong);
   await g.shot('c05-escrito');
-  await g.tap(...g.pos.codeKey('submit'), 350);
+  await g.tap(...await g.codeKey('submit'), 350);
   await g.shot('c06-revelando');
   await g.page.waitForTimeout(2500);
   await g.shot('c07-revelado');
   await typeGuess(g, secret);
-  await g.tap(...g.pos.codeKey('submit'), 2400);
+  await g.tap(...await g.codeKey('submit'), 2400);
   await g.shot('c08-abierta');
   await g.page.waitForTimeout(2500);
   await g.shot('c09-victoria');
@@ -51,13 +51,13 @@ try {
   await g.page.waitForTimeout(3500);
   for (const guess of [[1, 2, 3, 4], [5, 6, 7, 8], [0, 9, 1, 5], [2, 4, 6, 8], [3, 1, 0, 7]]) {
     await typeGuess(g, guess);
-    await g.tap(...g.pos.codeKey('submit'), 3200);
+    await g.tap(...await g.codeKey('submit'), 3200);
   }
   await g.shot('c11-varios-intentos');
   await g.tap(...g.pos.reset, 500); // Notas
-  await g.tap(...g.pos.codeKey(9), 200);
-  await g.tap(...g.pos.codeKey(2), 200);
-  await g.tap(...g.pos.codeKey(2), 200);
+  await g.tap(...await g.codeKey(9), 200);
+  await g.tap(...await g.codeKey(2), 200);
+  await g.tap(...await g.codeKey(2), 200);
   await g.shot('c12-notas');
   await g.tap(...g.pos.reset, 500);
   await g.tap(...g.pos.hint, 900);
@@ -81,7 +81,7 @@ try {
   await g.shot('c14-reto-ultimo');
   const s2 = await secretOf(g);
   await typeGuess(g, s2.map((d) => (d + 2) % 10).reverse());
-  await g.tap(...g.pos.codeKey('submit'), 300);
+  await g.tap(...await g.codeKey('submit'), 300);
   // El reloj del juego va lento en un navegador sin pantalla: se espera a que salga la tarjeta
   for (let i = 0; i < 60; i++) {
     const open = await g.page.evaluate(() => window.__game.scene.getScene('GameScene').children.getAll().some((o) => (o.depth ?? 0) >= 100));

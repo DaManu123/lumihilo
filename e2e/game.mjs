@@ -1462,7 +1462,7 @@ export async function runGameScenarios(out) {
       }
       return false;
     };
-    const type = async (g, digits) => { for (const d of digits) await g.tap(...g.pos.codeKey(d), 120); };
+    const type = async (g, digits) => { for (const d of digits) await g.tap(...await g.codeKey(d), 120); };
     const SEEN = { hasSeenTutorial: true, hasSeenLightsTip: true, hasSeenFlowTip: true, hasSeenStonesTip: true };
 
     let g = await openGame({ label: 'claves', out, query: '?debug', menu: true, seed: { user_settings: { ...SEEN } } });
@@ -1483,22 +1483,24 @@ export async function runGameScenarios(out) {
     check('el primer botón de la barra son las «Notas»', tx.includes('Notas'));
 
     // Cifras no permitidas, repetidas, borrar e intento incompleto
-    await g.tap(...g.pos.codeKey(7), 300);
+    check('el teclado solo tiene las cifras del nivel (1 a 4: cuatro teclas, ninguna bloqueada)', JSON.stringify(await sc(g, 'sc.codeBoard.layout.digits.map((r, d) => r ? d : null).filter((d) => d !== null)')) === '[1,2,3,4]');
+    await g.page.keyboard.press('7');
+    await g.page.waitForTimeout(300);
     st = await sc(g, code);
-    check('una cifra fuera del rango no se escribe', st.input.every((d) => d === null), JSON.stringify(st.input));
+    check('una cifra fuera del rango (teclado de la computadora) no se escribe', st.input.every((d) => d === null), JSON.stringify(st.input));
     await type(g, [1, 1]);
     st = await sc(g, code);
     check('sin repetidas: la segunda cifra igual no se escribe', st.input[0] === 1 && st.input[1] === null, JSON.stringify(st.input));
-    await g.tap(...g.pos.codeKey('submit'), 300);
+    await g.tap(...await g.codeKey('submit'), 300);
     check('un intento incompleto no se prueba', (await sc(g, code)).rows === 0);
-    await g.tap(...g.pos.codeKey('erase'), 200);
+    await g.tap(...await g.codeKey('erase'), 200);
     check('«Borrar» quita la última cifra', (await sc(g, code)).input.every((d) => d === null));
 
     // Un intento que falla: se revela y cuenta
     const secret = st.secret;
     const wrong = [1, 2, 3, 4].filter((d) => !secret.includes(d)).slice(0, 1).concat(secret[0]);
     await type(g, wrong);
-    await g.tap(...g.pos.codeKey('submit'), 300);
+    await g.tap(...await g.codeKey('submit'), 300);
     check('mientras se revela no se puede escribir', (await sc(g, 'sc.codeBusy')) === true);
     await settle(g);
     st = await sc(g, code);
@@ -1510,7 +1512,7 @@ export async function runGameScenarios(out) {
     // Notas y deshacer
     const free = [1, 2, 3, 4].find((d) => !wrong.includes(d));
     await g.tap(...g.pos.reset, 400);
-    await g.tap(...g.pos.codeKey(free), 300);
+    await g.tap(...await g.codeKey(free), 300);
     st = await sc(g, code);
     check('con «Notas» la cifra se anota (tachada) y no se escribe', st.notesMode && st.notes[free] === 2 && st.input.every((d) => d === null), JSON.stringify(st));
     await g.tap(...g.pos.undo, 300);
@@ -1534,7 +1536,7 @@ export async function runGameScenarios(out) {
 
     // Abrir la clave
     await type(g, secret.filter((_, i) => i !== pos));
-    await g.tap(...g.pos.codeKey('submit'), 300);
+    await g.tap(...await g.codeKey('submit'), 300);
     await settle(g, 'sc.isWon');
     await g.page.waitForTimeout(2500);
     st = await sc(g, code);
@@ -1574,7 +1576,7 @@ export async function runGameScenarios(out) {
     const last = st.secret.map((d) => (d + 2) % 10);
     if (new Set(last).size === last.length) await type(g, last);
     else await sc(g, `(() => { sc.codeInput = ${JSON.stringify(st.secret.map((d) => (d + 5) % 10))}; return true; })()`);
-    await g.tap(...g.pos.codeKey('submit'), 300);
+    await g.tap(...await g.codeKey('submit'), 300);
     await settle(g, `sc.children.getAll().some((o) => (o.depth ?? 0) >= 100)`);
     await g.page.waitForTimeout(600);
     tx = await texts(g);

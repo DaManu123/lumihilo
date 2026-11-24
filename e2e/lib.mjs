@@ -214,6 +214,13 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     g.menuScreen = 'home';
     if (!menu) await g.enter();
   };
+  /** Centro de una tecla de Claves (cifra, 'erase' o 'submit'), leído del juego (necesita `?debug`): el teclado depende del nivel. */
+  g.codeKey = (key) => page.evaluate((k) => {
+    const l = window.__game.scene.getScene('GameScene').codeBoard.layout;
+    const r = k === 'erase' ? l.erase : k === 'submit' ? l.submit : l.digits[k];
+    if (!r) throw new Error('Claves: no hay tecla para ' + k);
+    return [r.x, r.y];
+  }, key);
   g.audio = () => page.evaluate(() => ({ osc: window.__osc, vib: window.__vib, src: window.__src }));
   g.meter = () => page.evaluate(() => (window.__meter ? window.__meter() : null));
   g.shot = (name) => page.screenshot({ path: `${out}/${name}.png` });
@@ -261,18 +268,6 @@ export async function openGame({ width = 393, height = 808, mobile = true, reduc
     // Diagnóstico de vibración (tarjeta de 1150 px)
     modeAll: [136, H / 2 + 199], modeSystem: [248, H / 2 + 199], modeMotor: [360, H / 2 + 199], modeTouch: [472, H / 2 + 199], modeAlarm: [584, H / 2 + 199],
     hapticsTest: [360 - 144.5, H / 2 + 491], hapticsDone: [360 + 144.5, H / 2 + 491],
-    // Teclado de Claves (computeCodeLayout): `1 2 3 4 5 Borrar` y `6 7 8 9 0 Probar`, anclado abajo
-    codeKey: (key) => {
-      const keyW = (672 - 150 - 50) / 5;
-      const row2 = H - 24 - 48;
-      const row1 = row2 - 106;
-      const at = (col, y) => [24 + keyW / 2 + col * (keyW + 10), y];
-      if (key === 'erase') return [24 + 672 - 75, row1];
-      if (key === 'submit') return [24 + 672 - 75, row2];
-      if (key >= 1 && key <= 5) return at(key - 1, row1);
-      if (key >= 6) return at(key - 6, row2);
-      return at(4, row2);
-    },
   };
   // Menú principal: la app siempre abre en él. Salvo `menu: true`, se entra al puzzle guardado para jugar
   const PUZZLE_ORDER = ['circuits', 'lights', 'flow', 'code'];

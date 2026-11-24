@@ -2,6 +2,11 @@
 
 Todas las versiones publicadas del juego. El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/). Las notas completas de cada versión están en `docs/releases/`.
 
+## [Sin publicar]
+
+### Cambiado
+- **Claves, pantalla más clara y centrada:** el teclado solo tiene las cifras que se usan en el nivel (con «del 1 al 4» hay cuatro teclas, no diez con seis apagadas), y ninguna tecla se ve bloqueada: si ya se sabe que una cifra no está, solo lleva una equis pequeña en la esquina y se puede seguir probando. Abajo van «Borrar» y un «Probar» ancho. La lista de intentos, las casillas y el teclado forman un bloque centrado en la pantalla (antes pegado abajo), y cada intento es una franja centrada.
+
 ## [0.2.0-beta.17] - 2026-11-23
 
 ### Añadido
